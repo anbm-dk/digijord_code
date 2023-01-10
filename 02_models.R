@@ -1,0 +1,600 @@
+# 02: Train models
+
+# Cubist
+# Use all observations, including NA (OK)
+# Fractions:
+# - Clay
+# - Silt
+# - Fine sand
+# - Coarse sand
+# - SOM (log)
+# Topsoil
+# Start with a small model for the test area
+# Expand from there
+
+# 1: Start up
+
+library(Cubist)
+library(terra)
+library(magrittr)
+library(raster)
+library(tools)
+library(dplyr)
+library(caret)
+library(tibble)
+library(tidyr)
+
+library(doParallel)
+
+root <- getwd()
+
+testn <- 4
+
+# 2: Load observations
+
+dsc <- root %>%
+  paste0(
+    .
+    , '/observations/DanishSoilClassification/DLJ/DLJmDecimaler_DKBH.shp'
+  ) %>%
+  vect
+
+
+
+# 3: Load folds
+
+folds <- root %>%
+  paste0(., "/dsc_folds_all.csv") %>%
+  read.table(
+    header = TRUE,
+    sep = ";",
+  )
+
+
+# 4: Load covariates
+# (Use existing extract as a start)
+
+cov_dir <- root %>% paste0(., '/covariates')
+
+cov_cats <- root %>%
+  paste0(., '/cov_categories_20221003.csv') %>%
+  read.table(sep = ';'
+             , header = TRUE
+  )
+
+cov_cats$name %<>%
+  file_path_sans_ext() %>%
+  gsub('\\.', '_', .) %>%
+  gsub('-', '_', .) %>%
+  tolower() %>%
+  paste0(., ".tif")
+    
+
+cov_files <- cov_dir %>% list.files
+
+cov_names <- cov_files %>% tools::file_path_sans_ext()
+
+cov_files[!cov_files %in% cov_cats$name]
+
+cov <- paste0(cov_dir, "/", cov_files) %>%
+  rast()
+
+names(cov) <- cov_names
+
+# 5: Extract covariates
+
+extr <- root %>%
+  paste0(., "/extracts/dsc_extr_all.csv") %>%
+  read.table(
+    header = TRUE,
+    sep = ";",
+  ) %>%
+  select(!1)
+
+names(extr) %<>% 
+  gsub('\\.', '_', .) %>%
+  gsub('-', '_', .) %>%
+  gsub('__', '_', .) %>%
+  tolower()
+
+names(extr)[!names(extr) %in% cov_names]
+# [1] "s2_geomedian_20180501_20180731_b3"  "s2_geomedian_20210501_20210731_b11" "s2_geomedian_20210501_20210731_b12"
+# [4] "s2_geomedian_20210501_20210731_b2"  "s2_geomedian_20210501_20210731_b3"  "s2_geomedian_20210501_20210731_b4" 
+# [7] "s2_geomedian_20210501_20210731_b5"  "s2_geomedian_20210501_20210731_b6"  "s2_geomedian_20210501_20210731_b7" 
+# [10] "s2_geomedian_20210501_20210731_b8"  "s2_geomedian_20210501_20210731_b8a"
+cov_names[!cov_names %in% names(extr)]
+# [1] "bluespot_10m_mean"      "flooded_depth_10m_mean" "gw_summer_predict"      "gw_winter_predict"     
+# [5] "rvb_bios"               "rvb_fot"                "volume_10m_mean" 
+
+# 6: Correct and transform the target variables
+# Make English names
+
+fractions <- c("clay", "silt", "fine_sand", "coarse_sand", "logSOM", "logCaCO3")
+
+bounds_lower <- c(0, 0, 0, 0, NA, NA)
+bounds_upper <- c(100, 100, 100, 100, log(100), log(100))
+
+obs <- dsc %>%
+  values() %>%
+  mutate(
+    clay = Ler * 100 / (Ler + Silt + FinSD + GrovSD),
+    silt = Silt * 100 / (Ler + Silt + FinSD + GrovSD),
+    fine_sand = FinSD * 100 / (Ler + Silt + FinSD + GrovSD),
+    coarse_sand = GrovSD * 100 / (Ler + Silt + FinSD + GrovSD),
+    logSOM = log(Humus),
+    logCaCO3 = log(CaCO3)
+    )
+
+# 7: Make training data
+  
+obs <- cbind(obs, extr, folds)
+
+obs_top <- obs %>%
+  filter(DybFra == 0 & DybTil == 20)
+
+
+# 8: Set up models
+# Small random sample for testing
+
+#Correct this expression when I have the new extract
+cov_c <- names(extr)[names(extr) %in% cov_names] %>%
+  paste0(collapse = " + ")
+
+covs <- names(extr)[names(extr) %in% cov_names]
+
+tgrid <- data.frame(
+  committees = 20,
+  neighbors = 0
+)
+
+n <- 1000
+
+# 9: Train models
+
+models <- list()
+
+for (i in 1:length(fractions))
+{
+  frac <- fractions[i]
+  
+  print(frac)
+  
+  formula_i <- paste0(frac, " ~ ", cov_c) %>%
+    as.formula()
+  
+  # trdat <- obs_top %>%
+  #   filter(is.finite(.data[[frac]])) %>%
+  #   sample_n(n)
+  # Remember to include full dataset in the final model
+  
+  trdat <- obs_top %>%
+    filter(is.finite(.data[[frac]]))
+  
+  folds_i <- lapply(
+    1:10,
+    function(x) {
+      out <- trdat %>%
+        mutate(
+          is_j = fold != x,
+          rnum = row_number(),
+          ind_j = is_j*rnum
+        ) %>%
+        filter(ind_j != 0) %>%
+        select(ind_j) %>%
+        unlist() %>%
+        unname()
+    }
+  )
+  
+  showConnections()
+  
+  cl <- makePSOCKcluster(10)
+  registerDoParallel(cl)
+  
+  set.seed(1)
+  
+  models[[i]] <- caret::train(
+    form = formula_i,
+    data = trdat,
+    method = "cubist",
+    na.action = na.pass,
+    tuneGrid = tgrid,
+    trControl = trainControl(
+      index = folds_i,
+      savePredictions = 'final',
+      predictionBounds = c(bounds_lower[i], bounds_upper[i])
+    )
+  )
+  
+  registerDoSEQ()
+  rm(cl)
+}
+
+names(models) <- fractions
+
+models %>% lapply(
+  function(x) {
+    varImp(x)
+  }
+)
+
+models %>% lapply(
+  function(x) {
+    x %>%
+      varImp %>%
+      .$importance %>%
+      rownames_to_column(var = 'covariate') %>%
+      arrange(-Overall)
+  }
+)
+
+# 10: Make maps
+# Start with the test area
+
+outfolder <- root %>%
+  paste0(., '/testarea_10km/covariates/')
+
+cov_10km <- outfolder %>%
+  list.files(full.names = TRUE) %>%
+  rast
+
+names(cov_10km) <- names(cov)
+
+predfolder <- root %>%
+  paste0(., '/testarea_10km/predictions_', testn, '/') %T>%
+  dir.create()
+
+rfun <- function(mod, dat, ...) {
+  library(caret)
+  library(Cubist)
+  
+  rfun2 <- function(mod2, dat2, ...) {
+    notallnas <- rowSums(is.na(dat2)) != ncol(dat2)
+    out2 <- numeric(nrow(dat2))
+    if (sum(notallnas) > 0) {
+      out2[notallnas] <- predict(
+        object = mod2,
+        newdata = dat2[notallnas, ],
+        na.action = na.pass,
+        ...
+      )
+    }
+    return(out2)
+  }
+  
+  out <- rfun2(mod, dat, ...)
+  return(out)
+}
+
+# 10 km area
+
+maps_10km <- list()
+
+showConnections()
+
+for(i in 1:length(fractions))
+{
+  frac <- fractions[i]
+
+  maps_10km[[i]] <- predict(
+    cov_10km,
+    models[[i]],
+    fun = rfun,
+    na.rm = FALSE,
+    cores = 2,
+    filename = paste0(predfolder, frac,  "_10km.tif"),
+    overwrite = TRUE
+  )
+}
+
+# All of Denmark
+
+predfolder2 <- paste0(root, "/predictions_", testn, '/') %T>% dir.create()
+
+tmpfolder <- paste0(root, "/Temp/")
+
+terraOptions(memfrac = 0.3, tempdir = tmpfolder)
+
+maps <- list()
+
+for(i in 1:length(fractions))
+{
+  frac <- fractions[i]
+  
+  maps[[i]] <- predict(
+    cov,
+    models[[i]],
+    fun = rfun,
+    na.rm = FALSE,
+    cores = 12,
+    filename = paste0(predfolder2, frac,  ".tif"),
+    overwrite = TRUE
+  )
+}
+
+# Inspect models
+
+get_acc <- function(x2, i2) {
+  df <- x2$pred %>%
+    arrange(rowIndex) %>%
+    select(c(pred, obs))
+  if (i2 > 4) df %<>% exp
+  df %<>% bind_cols(x2$trainingData)
+  
+  r2_all <- df %$% cor(pred, obs)^2
+  r2_bare <- df %>%
+    filter(!is.na(s2_geomedian_b2)) %$%
+    cor(pred, obs)^2
+  r2_covered <- df %>%
+    filter(is.na(s2_geomedian_b2)) %$%
+    cor(pred, obs)^2
+  
+  rmse_all <- df %$% RMSE(pred, obs)
+  rmse_bare <- df %>%
+    filter(!is.na(s2_geomedian_b2)) %$%
+    RMSE(pred, obs)
+  rmse_covered <- df %>%
+    filter(is.na(s2_geomedian_b2)) %$%
+    RMSE(pred, obs)
+  out <- data.frame(
+    r2_all,
+    r2_bare,
+    r2_covered,
+    rmse_all,
+    rmse_bare,
+    rmse_covered
+  )
+  
+  return(out)
+}
+  
+acc_all <- foreach(i = 1:6, .combine=rbind) %do%
+  get_acc(models[[i]], i)
+
+acc_all %<>% mutate(fraction = fractions, .before = 1)
+ 
+getpred <- function(x2, i2) {
+  df <- x2$pred %>%
+    arrange(rowIndex) %>%
+    select(c(pred, obs))
+  if (i2 > 4) df %<>% exp
+  df %<>% mutate(
+    fraction = fractions[i2],
+    upper = quantile(obs, 0.99)
+    ) %>%
+    filter(obs < upper) %>%
+    filter(pred < upper) %>%
+    filter(obs >= 0)
+  return(df)
+}
+
+allpred <- foreach(i = 1:6, .combine=rbind) %do%
+  getpred(models[[i]], i)
+
+allpred$fraction %<>% factor(levels = fractions)
+
+levels(allpred$fraction) <- c(
+  "Clay", "Silt", "Fine sand", "Coarse sand", "SOM", "CaCO3"
+  )
+
+tiff(
+  "accuracy_test4.tiff",
+  width = 15,
+  height = 10,
+  units = "cm",
+  res = 300
+)
+
+allpred %>%
+  ggplot(aes(x = obs, y = pred)) +
+  geom_point(alpha = .01, shape = 16) +
+  facet_wrap(~ fraction, nrow = 2, scales = 'free') +
+  theme(aspect.ratio = 1) +
+  scale_x_continuous(expand = c(0, 0)) +
+  scale_y_continuous(expand = c(0, 0)) +
+  geom_abline(col = "red") +
+  geom_blank(aes(y = upper)) +
+  geom_blank(aes(x = upper)) +
+  geom_blank(aes(y = 0)) +
+  geom_blank(aes(x = 0)) +
+  xlab("Observation (%)") +
+  ylab("Prediction (%)")
+
+dev.off()
+dev.off()
+
+# Looking at maps
+
+library(viridisLite)
+
+maps_10km_stack <- maps_10km %>% rast
+
+plot(maps_10km_stack, col = cividis(100))
+
+maps_10km_stack2 <- c(
+  maps_10km_stack[[1:4]],
+  exp(maps_10km_stack[[5]]),
+  exp(maps_10km_stack[[6]])
+)
+
+names(maps_10km_stack2) <- c(
+  "Clay", "Silt", "Fine sand", "Coarse sand", "SOM", "CaCO3"
+)
+
+tiff(
+  "maps_test4.tiff",
+  width = 24,
+  height = 16,
+  units = "cm",
+  res = 300
+)
+
+plot(maps_10km_stack2, col = cividis(100))
+
+dev.off()
+dev.off()
+
+JB <- function(clay, silt, sand_f, SOM, CaCO3)
+{
+  out<-rep(0,length(clay))
+  out[CaCO3 > 10] <- 12
+  out[out == 0 & SOM > 10] <- 11
+  out[out == 0 & clay < 5 & silt < 20 & sand_f < 50] <- 1
+  out[out == 0 & clay < 5 & silt < 20] <- 2
+  out[out == 0 & clay < 10 & silt < 25 & sand_f < 40] <- 3
+  out[out == 0 & clay < 10 & silt < 25]<-4
+  out[out == 0 & clay < 15 & silt < 30 & sand_f < 40] <- 5
+  out[out == 0 & clay < 15 & silt < 30] <- 6
+  out[out == 0 & clay < 25 & silt < 35] <- 7
+  out[out == 0 & clay < 45 & silt < 45] <- 8
+  out[out == 0 & silt < 50] <- 9
+  out[out == 0] <- 10
+  return(out)
+}
+
+maps_10km_s2 <- c(maps_10km[[1]], maps_10km[[2]], maps_10km[[3]], exp(maps_10km[[5]]), exp(maps_10km[[6]]))
+
+maps_10km_jb <- lapp(maps_10km_s2, JB) %>% as.factor()
+
+library(colorRamps)
+
+# allcol <- expand.grid(
+#   r = seq.int(0, 1, length.out = 7),
+#   g = seq.int(0, 1, length.out = 7),
+#   b = seq.int(0, 1, length.out = 7)
+# )
+# 
+# ncenters <- 12
+# set.seed(1)
+# mycolors_df <- kmeans(allcol, ncenters)$centers %>%
+#   as.data.frame() %>%
+#   mutate(sumall = r + g + b) %>%
+#   arrange(-sumall)
+# mycolors <- rgb(
+#   r = mycolors_df[, 1],
+#   g = mycolors_df[, 2],
+#   b = mycolors_df[, 3],
+#   )
+
+library(rcartocolor) # for colorblind palette
+
+mycolors <- carto_pal(12, "Safe") %>% sort()
+
+library(TSP)
+myrgb <- col2rgb(mycolors)
+tsp <- as.TSP(dist(t(myrgb)))
+set.seed(1)
+sol <- solve_TSP(tsp, control = list(repetitions = 1e3))
+ordered_cols <- mycolors[sol]
+
+ggplot2::qplot(x = 1:12, y = 1, fill = I(ordered_cols), geom = 'col', width = 1) + ggplot2::theme_void()
+
+tiff(
+  "JB_test4.tiff",
+  width = 15,
+  height = 10,
+  units = "cm",
+  res = 300
+)
+
+plot(
+  maps_10km_jb,
+  col = ordered_cols[levels(maps_10km_jb)[[1]]$ID],
+  main = "JB-nummer"
+)
+
+dev.off()
+dev.off()
+
+
+# Covariate importance
+
+l <- list()
+
+ntop <- 20
+
+for(i in 1:length(models))
+{
+  l[[i]] <- varImp(models[[i]])$importance %>%
+    as_tibble(rownames = 'covariate') %>%
+    drop_na %>%
+    arrange(- Overall) %>%
+    slice_head(n = ntop) %>%
+    mutate(target = fractions[i]) %>%
+    mutate(rank = 1:ntop)
+}
+
+l %<>% bind_rows() %>%
+  mutate(target = factor(target, levels = fractions))
+
+l_cat <- cov_cats
+
+l_cat %<>%
+  mutate(
+    covariate = file_path_sans_ext(name)
+  )
+
+l_cat$category[l_cat$category == "basic"] <- l_cat$scorpan[l_cat$category == "basic"]
+
+l %<>%
+  left_join(l_cat)
+
+l %<>%
+  ungroup() %>%
+  arrange(target, Overall) %>%
+  mutate(order = row_number())
+
+l$category %<>% as.factor()
+
+levels(l$category) <- c(
+  "Bare soil",
+  "Spatial position",
+  "Parent materials",
+  "Topography",
+  "S2 time series"
+)
+
+catcolors <- carto_pal(5, "Safe")
+names(catcolors) <- levels(l$category)
+colScale <- scale_fill_manual(name = "category", values = catcolors)
+
+
+tiff(
+  "importance_test4.tiff",
+  width = 40,
+  height = 20,
+  units = "cm",
+  res = 300
+)
+
+l %>%
+  ggplot(aes(x = order, y = Overall, bg = category)) +
+  geom_col() +
+  facet_wrap(
+    ~ target,
+    ncol = 3,
+    scales = 'free'
+  ) +
+  # xlim(1, ntop) +
+  ylim(0, NA) +
+  coord_flip() +
+  scale_x_continuous(
+    breaks = l$order,
+    labels = l$covariate,
+    expand = c(0, 0)
+  ) +
+  colScale
+
+dev.off()
+dev.off()
+
+
+# To do:
+# Use all observations
+# Use new extract
+# Save models to disk
+# Analyze importance
+# Make maps
+# Drop gw maps for clay
+
+# END
