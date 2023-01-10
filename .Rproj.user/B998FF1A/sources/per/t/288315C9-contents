@@ -37,7 +37,7 @@ testn <- 4
 dsc <- dir_dat %>%
   paste0(
     .
-    , '/observations/DanishSoilClassification/DLJ/DLJmDecimaler_DKBH.shp'
+    , "/observations/DanishSoilClassification/DLJ/DLJmDecimaler_DKBH.shp"
   ) %>%
   vect
 
@@ -55,18 +55,19 @@ folds <- dir_code %>%
 # 4: Load covariates
 # (Use existing extract as a start)
 
-cov_dir <- dir_dat %>% paste0(., '/covariates')
+cov_dir <- dir_dat %>% paste0(., "/covariates")
 
 cov_cats <- dir_code %>%
-  paste0(., '/cov_categories_20221003.csv') %>%
-  read.table(sep = ';'
-             , header = TRUE
+  paste0(., "/cov_categories_20221003.csv") %>%
+  read.table(
+    sep = ";",
+    header = TRUE
   )
 
 cov_cats$name %<>%
   file_path_sans_ext() %>%
-  gsub('\\.', '_', .) %>%
-  gsub('-', '_', .) %>%
+  gsub("\\.", "_", .) %>%
+  gsub("-", "_", .) %>%
   tolower() %>%
   paste0(., ".tif")
     
@@ -93,9 +94,9 @@ extr <- dir_dat %>%
   select(!1)
 
 names(extr) %<>% 
-  gsub('\\.', '_', .) %>%
-  gsub('-', '_', .) %>%
-  gsub('__', '_', .) %>%
+  gsub("\\.", "_", .) %>%
+  gsub("-", "_", .) %>%
+  gsub("__", "_", .) %>%
   tolower()
 
 names(extr)[!names(extr) %in% cov_names]
@@ -202,7 +203,7 @@ for (i in 1:length(fractions))
     tuneGrid = tgrid,
     trControl = trainControl(
       index = folds_i,
-      savePredictions = 'final',
+      savePredictions = "final",
       predictionBounds = c(bounds_lower[i], bounds_upper[i])
     )
   )
@@ -224,7 +225,7 @@ models %>% lapply(
     x %>%
       varImp %>%
       .$importance %>%
-      rownames_to_column(var = 'covariate') %>%
+      rownames_to_column(var = "covariate") %>%
       arrange(-Overall)
   }
 )
@@ -233,7 +234,7 @@ models %>% lapply(
 # Start with the test area
 
 outfolder <- dir_dat %>%
-  paste0(., '/testarea_10km/covariates/')
+  paste0(., "/testarea_10km/covariates/")
 
 cov_10km <- outfolder %>%
   list.files(full.names = TRUE) %>%
@@ -242,7 +243,7 @@ cov_10km <- outfolder %>%
 names(cov_10km) <- names(cov)
 
 predfolder <- dir_dat %>%
-  paste0(., '/testarea_10km/predictions_', testn, '/') %T>%
+  paste0(., "/testarea_10km/predictions_", testn, "/") %T>%
   dir.create()
 
 rfun <- function(mod, dat, ...) {
@@ -290,7 +291,7 @@ for(i in 1:length(fractions))
 
 # All of Denmark
 
-predfolder2 <- paste0(dir_dat, "/predictions_", testn, '/') %T>% dir.create()
+predfolder2 <- paste0(dir_dat, "/predictions_", testn, "/") %T>% dir.create()
 
 tmpfolder <- paste0(dir_dat, "/Temp/")
 
@@ -389,7 +390,7 @@ tiff(
 allpred %>%
   ggplot(aes(x = obs, y = pred)) +
   geom_point(alpha = .01, shape = 16) +
-  facet_wrap(~ fraction, nrow = 2, scales = 'free') +
+  facet_wrap(~ fraction, nrow = 2, scales = "free") +
   theme(aspect.ratio = 1) +
   scale_x_continuous(expand = c(0, 0)) +
   scale_y_continuous(expand = c(0, 0)) +
@@ -488,7 +489,7 @@ set.seed(1)
 sol <- solve_TSP(tsp, control = list(repetitions = 1e3))
 ordered_cols <- mycolors[sol]
 
-ggplot2::qplot(x = 1:12, y = 1, fill = I(ordered_cols), geom = 'col', width = 1) + ggplot2::theme_void()
+ggplot2::qplot(x = 1:12, y = 1, fill = I(ordered_cols), geom = "col", width = 1) + ggplot2::theme_void()
 
 tiff(
   "JB_test4.tiff",
@@ -517,7 +518,7 @@ ntop <- 20
 for(i in 1:length(models))
 {
   l[[i]] <- varImp(models[[i]])$importance %>%
-    as_tibble(rownames = 'covariate') %>%
+    as_tibble(rownames = "covariate") %>%
     drop_na %>%
     arrange(- Overall) %>%
     slice_head(n = ntop) %>%
@@ -574,7 +575,7 @@ l %>%
   facet_wrap(
     ~ target,
     ncol = 3,
-    scales = 'free'
+    scales = "free"
   ) +
   # xlim(1, ntop) +
   ylim(0, NA) +

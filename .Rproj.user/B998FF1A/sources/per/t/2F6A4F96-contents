@@ -1,0 +1,110 @@
+# Process and merge datasets
+
+# To do :
+# 1: Load datasets
+# - DSC (OK)
+# - SEGES (OK)
+# - SINKS (OK)
+# - Profiles: Texture (not right now)
+# - Profiles: Water retention (later)
+# - Profiles: Drainage (later)
+# - Lucas database?
+# 2: Standardize
+# - Uniform column names
+# - Scale texture fractions to a sum of 100.
+# 3: Merge
+# 4: Extract covariates
+# 5: Get folds
+# 6: Write to table
+
+# What fields should the final dataset contain?
+# - General ID, "ID_new"
+# - Database origin, "db"
+# - Original ID "ID_old"
+# - Date "date"
+# - UTMX
+# - UTMY
+# - Upper boundary "upper"
+# - Lower boundary "lower"
+# - Clay
+# - Silt
+# - Fine sand
+# - Coarse sand
+# - SOC
+# - CaCO3
+# - Indicate removal of SOM for texture analyses
+# - BD (later)
+# - pH (later)
+# - Nutrients: Pt, Kt, Mgt, CUT (later)
+# - Water retention (later)
+# - Texture sub-fractions: Gsilt, GfinSD (later)
+
+mycolnames <- c(
+  "ID_new",
+  "db",
+  "ID_old",
+  "date",
+  "UTMX",
+  "UTMY",
+  "upper",
+  "lower",
+  "clay",
+  "silt",
+  "fine_sand",
+  "coarse_sand",
+  "SOC",
+  "CaCO3",
+  "SOM_removed"
+)
+
+# Start up
+
+library(terra)
+library(magrittr)
+library(RODBC)
+library(dplyr)
+library(tidyr)
+
+dir_code <- getwd()
+root <- dirname(dir_code)
+dir_dat <- paste0(root, "/digijord_data/")
+
+
+# 1.1: Load DSC observations
+
+dsc <- dir_dat %>%
+  paste0(
+    .,
+    "/observations/DanishSoilClassification/DLJ/DLJmDecimaler_DKBH.shp"
+  ) %>%
+  vect
+
+# 1.2: Load SEGES samples
+
+SEGES <- dir_dat %>%
+  paste0(
+    .,
+    "/observations/SEGES_samples/SEGES_samples_cleaned.csv"
+  ) %>% 
+  read.table(
+    sep = ";",
+    header = TRUE
+  )
+
+# 1.3: Load SINKS data
+# In the long run I should use all the data.
+# However, I will use the topsoil until the dataset has been fixed.
+# Use pivot_longer to get a row for each sample.
+
+SINKS_db <- dir_dat %>%
+  paste0(., "/observations/SINKS/SinksDatabase_V2.mdb")
+
+con2 <- odbcConnectAccess2007(SINKS_db)
+
+SINKS <- sqlFetch(con2, "bMHG_RODALTDETDUVIL_01JAN2011")
+
+
+
+
+
+# END
