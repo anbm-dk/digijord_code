@@ -26,13 +26,15 @@ library(tidyr)
 
 library(doParallel)
 
-root <- getwd()
+dir_code <- getwd()
+root <- dirname(dir_code)
+dir_dat <- paste0(root, "/digijord_data/")
 
 testn <- 4
 
 # 2: Load observations
 
-dsc <- root %>%
+dsc <- dir_dat %>%
   paste0(
     .
     , '/observations/DanishSoilClassification/DLJ/DLJmDecimaler_DKBH.shp'
@@ -40,10 +42,9 @@ dsc <- root %>%
   vect
 
 
-
 # 3: Load folds
 
-folds <- root %>%
+folds <- dir_code %>%
   paste0(., "/dsc_folds_all.csv") %>%
   read.table(
     header = TRUE,
@@ -54,9 +55,9 @@ folds <- root %>%
 # 4: Load covariates
 # (Use existing extract as a start)
 
-cov_dir <- root %>% paste0(., '/covariates')
+cov_dir <- dir_dat %>% paste0(., '/covariates')
 
-cov_cats <- root %>%
+cov_cats <- dir_code %>%
   paste0(., '/cov_categories_20221003.csv') %>%
   read.table(sep = ';'
              , header = TRUE
@@ -83,7 +84,7 @@ names(cov) <- cov_names
 
 # 5: Extract covariates
 
-extr <- root %>%
+extr <- dir_dat %>%
   paste0(., "/extracts/dsc_extr_all.csv") %>%
   read.table(
     header = TRUE,
@@ -231,7 +232,7 @@ models %>% lapply(
 # 10: Make maps
 # Start with the test area
 
-outfolder <- root %>%
+outfolder <- dir_dat %>%
   paste0(., '/testarea_10km/covariates/')
 
 cov_10km <- outfolder %>%
@@ -240,7 +241,7 @@ cov_10km <- outfolder %>%
 
 names(cov_10km) <- names(cov)
 
-predfolder <- root %>%
+predfolder <- dir_dat %>%
   paste0(., '/testarea_10km/predictions_', testn, '/') %T>%
   dir.create()
 
@@ -289,9 +290,9 @@ for(i in 1:length(fractions))
 
 # All of Denmark
 
-predfolder2 <- paste0(root, "/predictions_", testn, '/') %T>% dir.create()
+predfolder2 <- paste0(dir_dat, "/predictions_", testn, '/') %T>% dir.create()
 
-tmpfolder <- paste0(root, "/Temp/")
+tmpfolder <- paste0(dir_dat, "/Temp/")
 
 terraOptions(memfrac = 0.3, tempdir = tmpfolder)
 

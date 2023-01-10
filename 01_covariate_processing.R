@@ -5,14 +5,15 @@ library(magrittr)
 library(raster)
 library(tools)
 
-root <- getwd()
-
+dir_code <- getwd()
+root <- dirname(dir_code)
+dir_dat <- paste0(root, "/digijord_data/")
 
 # 1: Mask to coastline (done)
 
 mycrs <- "EPSG:25832"
 
-dir_cov <- root %>%
+dir_cov <- dir_dat %>%
   paste0(., "/covariates/")
 
 cov_files <- dir_cov %>%
@@ -32,7 +33,7 @@ cov_files <- dir_cov %>%
 # 
 # not_dem <- cov_files[!dem_ind]
 # 
-# dir_masked <- root %>%
+# dir_masked <- dir_dat %>%
 #   paste0(., "/covariates_masked/") %T>%
 #   dir.create()
 # 
@@ -80,7 +81,7 @@ newnames <- basenames %>%
 
 # 3: Crop to test area
 
-squareshape <- root %>%
+squareshape <- dir_dat %>%
   paste0(., '/testarea_10km/square10km.shp') %>%
   vect
 
@@ -88,7 +89,7 @@ square_ext <- squareshape %>%
   ext %>%
   round(-1)
 
-outfolder <- root %>%
+outfolder <- dir_dat %>%
   paste0(., '/testarea_10km/covariates/')
 
 outfolder %>% dir.create
