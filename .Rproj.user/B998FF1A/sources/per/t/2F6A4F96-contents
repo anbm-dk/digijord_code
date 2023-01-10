@@ -2,7 +2,7 @@
 
 # To do :
 # 1: Load datasets
-# - DSC (OK)
+# - Danish Soil Classification [DSC] (OK)
 # - SEGES (OK)
 # - SINKS (OK)
 # - Profiles: Texture (not right now)
@@ -103,8 +103,30 @@ con2 <- odbcConnectAccess2007(SINKS_db)
 
 SINKS <- sqlFetch(con2, "bMHG_RODALTDETDUVIL_01JAN2011")
 
+# 1.4: Profiles: Texture (not right now)
+# 1.5: Profiles: Water retention (later)
+# 1.6: Profiles: Drainage (later)
+# 1.7 Lucas database?
 
+# 2: Data standardization
+# 2.1: DSC
 
+# Remove negative texture fraction measurements
 
+dsc2 <- dsc %>%
+  values() %>%
+  mutate(
+    db = "Danish Soil Classification",
+    ID_old = provenr,
+    date = paste0("19", Dato),
+    upper = DybFra,
+    lower = DybTil,
+    clay = Ler * 100 / (Ler + Silt + FinSD + GrovSD),
+    silt = Silt * 100 / (Ler + Silt + FinSD + GrovSD),
+    fine_sand = FinSD * 100 / (Ler + Silt + FinSD + GrovSD),
+    coarse_sand = GrovSD * 100 / (Ler + Silt + FinSD + GrovSD),
+    logSOM = log(Humus),
+    logCaCO3 = log(CaCO3)
+  )
 
 # END
