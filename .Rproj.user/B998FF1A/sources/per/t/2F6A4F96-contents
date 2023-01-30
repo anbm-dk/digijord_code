@@ -54,7 +54,9 @@ mycolnames <- c(
   "coarse_sand",
   "SOC",
   "CaCO3",
-  "SOM_removed"
+  "SOM_removed",
+  "pH",
+  "N"
 )
 
 # Start up
@@ -64,6 +66,7 @@ library(magrittr)
 library(RODBC)
 library(dplyr)
 library(tidyr)
+library(stringi)
 
 dir_code <- getwd()
 root <- dirname(dir_code)
@@ -111,10 +114,13 @@ SINKS <- sqlFetch(con2, "bMHG_RODALTDETDUVIL_01JAN2011")
 # 2: Data standardization
 # 2.1: DSC
 
-# Remove negative texture fraction measurements
-
 dsc2 <- dsc %>%
   values() %>%
+  mutate(
+    across(
+      where(is.numeric),
+      function(x) replace(x, x == -1, NA))  # Remove negative texture fraction measurements
+    ) %>%
   mutate(
     db = "Danish Soil Classification",
     ID_old = provenr,
@@ -125,8 +131,202 @@ dsc2 <- dsc %>%
     silt = Silt * 100 / (Ler + Silt + FinSD + GrovSD),
     fine_sand = FinSD * 100 / (Ler + Silt + FinSD + GrovSD),
     coarse_sand = GrovSD * 100 / (Ler + Silt + FinSD + GrovSD),
-    logSOM = log(Humus),
-    logCaCO3 = log(CaCO3)
+    SOC = Humus*0.587,
+    SOM_removed = FALSE
+  ) %>%
+  select(any_of(mycolnames))
+
+# 2.2 SEGES
+
+seges2 <- SEGES %>%
+  mutate(
+    db = "SEGES",
+    date = as.character(date),
+    ID_old = as.character(ID),
+    UTMX = UTME,
+    UTMY = UTMN,
+    upper = 0,
+    lower = 25,
+    tsum = LerPct + SiltPct + FinsandPct + GrovsandPct,
+    clay = case_when(
+      is.na(tsum) ~ LerPct,
+      !is.na(tsum) ~ LerPct*100 / tsum
+    ),
+    silt = case_when(
+      is.na(tsum) ~ SiltPct,
+      !is.na(tsum) ~ SiltPct*100 / tsum
+    ),
+    fine_sand = case_when(
+      is.na(tsum) ~ FinsandPct,
+      !is.na(tsum) ~ FinsandPct*100 / tsum
+    ),
+    coarse_sand = case_when(
+      is.na(tsum) ~ GrovsandPct,
+      !is.na(tsum) ~ GrovsandPct*100 / tsum
+    ),
+    SOM_removed = TRUE,
+    pH = Rt,
+    N = TotalNPct
+  ) %>%
+  select(any_of(mycolnames))
+
+# 2.3 SINKS
+
+depths_A <- c("A1", "A2", "A3", "A4")
+depths_S <- c("S1", "S2", "S3", "S4")
+depths_D <- c("D1", "D2", "D3", "D4")
+
+new_names <- stri_replace_all_fixed(
+  names(SINKS),
+  c(depths_A, depths_S),
+  c(depths_D, depths_D), 
+  vectorize_all = FALSE
   )
+
+new_names <- stri_replace_all_fixed(
+  new_names,
+  "ID_DJF",
+  "IDDJF", 
+  vectorize_all = FALSE
+)
+
+new_names <- stri_replace_all_fixed(new_names, "__", "_", vectorize_all = FALSE)
+
+SINKS_newnames <- SINKS
+names(SINKS_newnames) <- new_names
+
+DX <- paste0(depths_D, "_")
+
+D_cols <- depths_D %>%
+  paste(collapse = "|") %>%
+  grep(
+    names(SINKS_newnames),
+    value = TRUE
+  ) %>%
+  unique() %>%
+  setdiff(DX)
+
+newcols <- D_cols %>%
+  strsplit("_") %>%
+  unlist() %>%
+  unique() %>%
+  setdiff(depths_D)
+  
+sinks2 <- SINKS_newnames %>%
+  select(-any_of(DX)) %>%
+  pivot_longer(
+    all_of(D_cols),
+    names_to = c("depth", ".value"),
+    names_sep = "_"
+  )
+  
+rownas <- apply(sinks2, 1, function(x) sum(is.na(x)))
+
+lapply(sinks2, function(x) sum(!is.na(x))) %>% unlist()
+lapply(sinks2, function(x) length(unique(x))) %>% unlist()
+
+sinks2 %>%
+  filter(!is.na(KunPro)) %>%
+  select(depth, PH, TOC1, TOC2, TOC3, NTotal)
+# Field "KunPro" is the closest thing to a unique ID for each depth sample
+
+sinks3 <- sinks2 %>%
+  filter(!is.na(KunPro))
+
+sinks3 %>%
+  group_by(depth) %>%
+  summarise(
+    mean_TOC1 = mean(TOC1, na.rm = TRUE),
+    mean_TOC2 = mean(TOC2, na.rm = TRUE),
+    mean_TOC3 = mean(TOC3, na.rm = TRUE)
+  )
+
+sinks3 %>% filter(!is.na(TOC2) & !is.na(TOC3))
+# ^ None
+
+sinks3 %>%
+  filter(!is.na(TOC1) & !is.na(TOC3)) %>%
+  select(depth, TOC1, TOC2, TOC3, NTotal) %>%
+  print(n = 100)
+# ^ All depth one
+# C/N OK, but one C value may be N
+
+sinks3 %>%
+  filter(!is.na(TOC1) & !is.na(TOC2)) %>%
+  select(depth, TOC1, TOC2, TOC3, NTotal) %>%
+  print(n = 100)
+# ^ Never depth one
+# C/N OK, but one C value may be N
+
+sinks3 %>%
+  filter(TOC1 != TOC3) %>%
+  select(depth, TOC1, TOC2, TOC3, NTotal) %>%
+  print(n = 100)
+# Only two values, TOC3 is N
+
+sinks3 %>%
+  filter(TOC1 != TOC2) %>%
+  select(depth, TOC1, TOC2, TOC3, NTotal) %>%
+  print(n = 100)
+# Only one value, TOC2 is N
+
+sinks3 %>% filter(
+  TOC1 < NTotal | TOC2 < NTotal | TOC3 < NTotal
+) %>%
+  select(depth, TOC1, TOC2, TOC3, NTotal) %>%
+  print(n = 100)
+
+n_unique <- sinks3 %>% 
+  select(TOC1, TOC2, TOC3, NTotal) %>%
+  apply(1, function(x) length(unique(x)))
+# All points have three unique values
+
+maxvalue <- sinks3 %>% 
+  select(TOC1, TOC2, TOC3, NTotal) %>%
+  apply(1, function(x) max(x, na.rm = TRUE))
+
+minvalue <- sinks3 %>% 
+  select(TOC1, TOC2, TOC3, NTotal) %>%
+  apply(1, function(x) min(x, na.rm = TRUE))
+
+plot(log(minvalue), log(maxvalue))
+
+plot(maxvalue/minvalue)
+
+# I assume that maxvalue is always SOC, and minvalue is always N
+
+sinks3$SOC <- maxvalue
+sinks3$N <- minvalue
+sinks3$date <- as.character(sinks3$SD_Dato) %>%
+  stri_replace_all_fixed("-", "") %>%
+  strsplit(" ") %>%
+  unlist() %>%
+  matrix(nrow = 2) %>%
+  .[1, ]
+
+uppers <- c(0:3)*34
+lowers <- uppers + 30
+
+sinks_upperlower <- data.frame(
+  depth = depths_D,
+  upper = uppers,
+  lower = lowers
+)
+
+sinks4 <- sinks3 %>%
+  mutate(
+    db = "SINKS",
+    ID_old = as.character(KunPro),
+    UTMX = SD_X,
+    UTMY = SD_Y,
+    pH = PH,
+    SOM_removed = TRUE
+  ) %>% 
+  right_join(sinks_upperlower) %>%
+  select(any_of(mycolnames))
+
+allmydata <- bind_rows(dsc2, seges2, sinks4)
+
+
 
 # END

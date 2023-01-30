@@ -65,15 +65,16 @@ cov_files <- dir_cov %>%
 # only underscores
 # all lowercase
 
-basenames <- cov_files %>%
-  basename() %>%
-  file_path_sans_ext() %>%
-  gsub('\\.', '_', .) %>%
-  tolower()
-
-newnames <- basenames %>%
-  paste0(dir_cov, . , ".tif")
-
+# basenames <- cov_files %>%
+#   basename() %>%
+#   file_path_sans_ext() %>%
+#   gsub("\\.", "_", .) %>%
+#   gsub("-", "_", .) %>%
+#   tolower()
+# 
+# newnames <- basenames %>%
+#   paste0(dir_cov, . , ".tif")
+# 
 # file.rename(
 #   cov_files,
 #   newnames
@@ -81,50 +82,56 @@ newnames <- basenames %>%
 
 # 3: Crop to test area
 
-squareshape <- dir_dat %>%
-  paste0(., '/testarea_10km/square10km.shp') %>%
-  vect
-
-square_ext <- squareshape %>%
-  ext %>%
-  round(-1)
-
-outfolder <- dir_dat %>%
-  paste0(., '/testarea_10km/covariates/')
-
-outfolder %>% dir.create
-
-cropstack <- function(
-    x,  # list of files
-    y,  # extent
-    folder # target folder
-) {
-  for(i in 1:length(x)) {
-    r <- x[i] %>% rast
-    dtype <- r %>%
-      sources %>%
-      raster::raster(.) %>%
-      raster::dataType(.)
-    outname <- r %>%
-      sources %>%
-      basename %>%
-      tools::file_path_sans_ext(.) %>%
-      make.names %>%
-      paste0(folder, ., '.tif')
-    r %>%
-      crop(y = y) %>%
-      writeRaster(
-        datatype = dtype,
-        filename = outname,
-        overwrite = TRUE
-      )
-  }
-}
-
-cov_files %>%
-  cropstack(
-    y = square_ext,
-    folder = outfolder
-  )
+# cov_files <- dir_cov %>%
+#   list.files(
+#     pattern = ".tif",
+#     full.names = TRUE
+#   )
+# 
+# squareshape <- dir_dat %>%
+#   paste0(., "/testarea_10km/square10km.shp") %>%
+#   vect
+# 
+# square_ext <- squareshape %>%
+#   ext %>%
+#   round(-1)
+# 
+# outfolder <- dir_dat %>%
+#   paste0(., "/testarea_10km/covariates/")
+# 
+# outfolder %>% dir.create
+# 
+# cropstack <- function(
+#     x,  # list of files
+#     y,  # extent
+#     folder # target folder
+# ) {
+#   for(i in 1:length(x)) {
+#     r <- x[i] %>% rast
+#     dtype <- r %>%
+#       sources %>%
+#       raster::raster(.) %>%
+#       raster::dataType(.)
+#     outname <- r %>%
+#       sources %>%
+#       basename %>%
+#       tools::file_path_sans_ext(.) %>%
+#       make.names %>%
+#       paste0(folder, ., ".tif")
+#     r %>%
+#       crop(y = y) %>%
+#       writeRaster(
+#         datatype = dtype,
+#         filename = outname,
+#         overwrite = TRUE
+#       )
+#   }
+# }
+# 
+# cov_files %>%
+#   cropstack(
+#     y = square_ext,
+#     folder = outfolder
+#   )
 
 # END
