@@ -114,6 +114,14 @@ SINKS <- sqlFetch(con2, "bMHG_RODALTDETDUVIL_01JAN2011")
 # 2: Data standardization
 # 2.1: DSC
 
+dsc_coords <- geom(dsc) %>%
+  as.data.frame() %>%
+  select(c(x, y))
+
+dsc_oldcoords <- dsc %>%
+  values() %>%
+  select(c(UTMX, UTMY))
+
 dsc2 <- dsc %>%
   values() %>%
   mutate(
@@ -121,8 +129,12 @@ dsc2 <- dsc %>%
       where(is.numeric),
       function(x) replace(x, x == -1, NA))  # Remove negative texture fraction measurements
     ) %>%
+  bind_cols(dsc_coords) %>%
+  select(-c(UTMX, UTMY)) %>%
   mutate(
     db = "Danish Soil Classification",
+    UTMX = x,
+    UTMY = y,
     ID_old = provenr,
     date = paste0("19", Dato),
     upper = DybFra,
@@ -316,17 +328,44 @@ sinks_upperlower <- data.frame(
 sinks4 <- sinks3 %>%
   mutate(
     db = "SINKS",
-    ID_old = as.character(KunPro),
+    ID_old = paste0(IDBID, "_", depth),
     UTMX = SD_X,
     UTMY = SD_Y,
     pH = PH,
-    SOM_removed = TRUE
+    SOM_removed = NA
   ) %>% 
   right_join(sinks_upperlower) %>%
   select(any_of(mycolnames))
 
 allmydata <- bind_rows(dsc2, seges2, sinks4)
 
+plot(allmydata$UTMX, allmydata$UTMY)
 
+# Write files
+
+dir_obs_proc <- dir_dat %>%
+  paste0(., "/observations/processed/") %T>%
+  dir.create()
+
+write.table(
+  dsc2,
+  paste0(dir_obs_proc, "dsc.csv"),
+  row.names = FALSE,
+  sep = ";"
+  )
+
+write.table(
+  seges2,
+  paste0(dir_obs_proc, "seges.csv"),
+  row.names = FALSE,
+  sep = ";"
+)
+
+write.table(
+  sinks4,
+  paste0(dir_obs_proc, "SINKS.csv"),
+  row.names = FALSE,
+  sep = ";"
+)
 
 # END

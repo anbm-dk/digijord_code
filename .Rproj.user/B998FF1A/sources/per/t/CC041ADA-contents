@@ -5,6 +5,8 @@ library(magrittr)
 library(raster)
 library(tools)
 
+# TO DO: Assign layer names that match the file names
+
 dir_code <- getwd()
 root <- dirname(dir_code)
 dir_dat <- paste0(root, "/digijord_data/")

@@ -76,11 +76,11 @@ cov_files <- cov_dir %>% list.files
 
 cov_names <- cov_files %>% tools::file_path_sans_ext()
 
-cov_names %>%
-  write.table(
-    paste0("cov_names_", Sys.Date(), ".csv")
-    
-  )
+# cov_names %>%
+#   write.table(
+#     paste0("cov_names_", Sys.Date(), ".csv")
+#     
+#   )
 
 cov_files[!cov_files %in% cov_cats$name]
 

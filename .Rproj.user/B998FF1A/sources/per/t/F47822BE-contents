@@ -1,0 +1,117 @@
+# Extract covariates
+
+library(terra)
+library(magrittr)
+
+dir_code <- getwd()
+root <- dirname(dir_code)
+dir_dat <- paste0(root, "/digijord_data/")
+
+mycrs <- "EPSG:25832"
+
+# 1 Load observations
+
+dir_obs_proc <- dir_dat %>%
+  paste0(., "/observations/processed/")
+
+dsc <- dir_obs_proc %>%
+  paste0(., "dsc.csv") %>%
+  read.table(
+    header = TRUE,
+    sep = ";",
+  ) %>%
+  vect(
+    geom = c("UTMX", "UTMY"),
+    crs = mycrs,
+    keepgeom = TRUE
+  )
+
+SEGES <- dir_obs_proc %>%
+  paste0(., "SEGES.csv") %>%
+  read.table(
+    header = TRUE,
+    sep = ";",
+  ) %>%
+  vect(
+    geom = c("UTMX", "UTMY"),
+    crs = mycrs,
+    keepgeom = TRUE
+  )
+
+SINKS <- dir_obs_proc %>%
+  paste0(., "SINKS.csv") %>%
+  read.table(
+    header = TRUE,
+    sep = ";",
+  ) %>%
+  vect(
+    geom = c("UTMX", "UTMY"),
+    crs = mycrs,
+    keepgeom = TRUE
+  )
+
+# 2 Load covariates
+
+cov_dir <- dir_dat %>% paste0(., "/covariates")
+
+cov_files <- cov_dir %>% list.files
+
+cov_names <- cov_files %>% tools::file_path_sans_ext()
+
+cov <- paste0(cov_dir, "/", cov_files) %>%
+  rast()
+
+names(cov) <- cov_names
+
+crs(cov) <- mycrs
+
+# 3 Extract
+
+dsc_extr <- dsc %>%
+  extract(
+    cov,
+    .,
+    ID = FALSE,
+  )
+
+SEGES_extr <- SEGES %>%
+  extract(
+    cov,
+    .,
+    ID = FALSE,
+  )
+
+SINKS_extr <- SEGES %>%
+  extract(
+    cov,
+    .,
+    ID = FALSE,
+  )
+
+# 4 Write to file
+
+dir_extr <- dir_dat %>%
+  paste0(., "/extracts/")
+
+write.table(
+  dsc_extr,
+  paste0(dir_extr, "dsc_extr.csv"),
+  row.names = FALSE,
+  sep = ";"
+)
+
+write.table(
+  SEGES_extr,
+  paste0(dir_extr, "SEGES_extr.csv"),
+  row.names = FALSE,
+  sep = ";"
+)
+
+write.table(
+  SINKS_extr,
+  paste0(dir_extr, "SINKS_extr.csv"),
+  row.names = FALSE,
+  sep = ";"
+)
+
+# END
