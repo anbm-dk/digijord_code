@@ -67,24 +67,21 @@ crs(cov) <- mycrs
 
 # 3 Extract
 
-dsc_extr <- dsc %>%
-  extract(
-    cov,
-    .,
+dsc_extr <- terra::extract(
+  x = cov,
+  y = dsc,
+  ID = FALSE,
+)
+
+SEGES_extr <- terra::extract(
+    x = cov,
+    y = SEGES,
     ID = FALSE,
   )
 
-SEGES_extr <- SEGES %>%
-  extract(
-    cov,
-    .,
-    ID = FALSE,
-  )
-
-SINKS_extr <- SEGES %>%
-  extract(
-    cov,
-    .,
+SINKS_extr <- terra::extract(
+    x = cov,
+    y = SINKS,
     ID = FALSE,
   )
 
