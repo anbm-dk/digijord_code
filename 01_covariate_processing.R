@@ -1,4 +1,4 @@
-# Crop and rename covariates
+# 01: Crop and rename covariates
 
 library(terra)
 library(magrittr)

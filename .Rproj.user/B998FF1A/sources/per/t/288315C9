@@ -1,26 +1,26 @@
 {
     "id": "288315C9",
-    "path": "C:/Users/au542768/digijord/digijord_code/04_models.R",
-    "project_path": "04_models.R",
+    "path": "C:/Users/au542768/digijord/digijord_code/05_models.R",
+    "project_path": "05_models.R",
     "type": "r_source",
-    "hash": "1089865737",
+    "hash": "4280862668",
     "contents": "",
     "dirty": false,
     "created": 1673338393487.0,
     "source_on_save": false,
-    "relative_order": 4,
+    "relative_order": 5,
     "properties": {
         "source_window_id": "",
         "Source": "Source",
-        "cursorPosition": "71,19",
+        "cursorPosition": "0,4",
         "scrollLine": "0"
     },
     "folds": "",
-    "lastKnownWriteTime": 1675155701,
+    "lastKnownWriteTime": 1675240739,
     "encoding": "UTF-8",
     "collab_server": "",
     "source_window": "",
-    "last_content_update": 1675155701527,
+    "last_content_update": 1675240739,
     "read_only": false,
     "read_only_alternatives": []
 }

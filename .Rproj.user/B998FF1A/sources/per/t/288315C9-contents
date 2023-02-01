@@ -1,4 +1,4 @@
-# 02: Train models
+# 05: Train texture models
 
 # Cubist
 # Use all observations, including NA (OK)
@@ -7,9 +7,10 @@
 # - Silt
 # - Fine sand
 # - Coarse sand
-# - SOM (log)
+# - SOC (log)
+# - CaCO3 (log)
 # Topsoil
-# Start with a small model for the test area
+# Start with a small map for the test area
 # Expand from there
 
 # 1: Start up
@@ -30,16 +31,48 @@ dir_code <- getwd()
 root <- dirname(dir_code)
 dir_dat <- paste0(root, "/digijord_data/")
 
-testn <- 4
+testn <- 5
 
 # 2: Load observations
 
-dsc <- dir_dat %>%
-  paste0(
-    .
-    , "/observations/DanishSoilClassification/DLJ/DLJmDecimaler_DKBH.shp"
+dir_obs_proc <- dir_dat %>%
+  paste0(., "/observations/processed/")
+
+dsc <- dir_obs_proc %>%
+  paste0(., "dsc.csv") %>%
+  read.table(
+    header = TRUE,
+    sep = ";",
   ) %>%
-  vect
+  vect(
+    geom = c("UTMX", "UTMY"),
+    crs = mycrs,
+    keepgeom = TRUE
+  )
+
+SEGES <- dir_obs_proc %>%
+  paste0(., "SEGES.csv") %>%
+  read.table(
+    header = TRUE,
+    sep = ";",
+  ) %>%
+  vect(
+    geom = c("UTMX", "UTMY"),
+    crs = mycrs,
+    keepgeom = TRUE
+  )
+
+SINKS <- dir_obs_proc %>%
+  paste0(., "SINKS.csv") %>%
+  read.table(
+    header = TRUE,
+    sep = ";",
+  ) %>%
+  vect(
+    geom = c("UTMX", "UTMY"),
+    crs = mycrs,
+    keepgeom = TRUE
+  )
 
 
 # 3: Load folds

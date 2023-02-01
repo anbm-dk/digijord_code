@@ -1,4 +1,4 @@
-# Extract covariates
+# 03: Extract covariates
 
 library(terra)
 library(magrittr)
