@@ -18,7 +18,6 @@
 library(Cubist)
 library(terra)
 library(magrittr)
-library(raster)
 library(tools)
 library(dplyr)
 library(caret)
@@ -26,12 +25,14 @@ library(tibble)
 library(tidyr)
 
 library(doParallel)
+library(spatstat)  # weights
 
 dir_code <- getwd()
 root <- dirname(dir_code)
 dir_dat <- paste0(root, "/digijord_data/")
 
 testn <- 5
+mycrs <- "EPSG:25832"
 
 # 2: Load observations
 
@@ -77,8 +78,25 @@ SINKS <- dir_obs_proc %>%
 
 # 3: Load folds
 
-folds <- dir_code %>%
-  paste0(., "/dsc_folds_all.csv") %>%
+dir_folds <- dir_dat %>%
+  paste0(., "/folds/")
+
+dsc_folds <- dir_folds %>%
+  paste0(., "dsc_folds.csv") %>%
+  read.table(
+    header = TRUE,
+    sep = ";",
+  )
+
+SEGES_folds <- dir_folds %>%
+  paste0(., "SEGES_folds.csv") %>%
+  read.table(
+    header = TRUE,
+    sep = ";",
+  )
+
+SINKS_folds <- dir_folds %>%
+  paste0(., "SINKS_folds.csv") %>%
   read.table(
     header = TRUE,
     sep = ";",
@@ -86,102 +104,105 @@ folds <- dir_code %>%
 
 
 # 4: Load covariates
-# (Use existing extract as a start)
 
 cov_dir <- dir_dat %>% paste0(., "/covariates")
 
 cov_cats <- dir_code %>%
-  paste0(., "/cov_categories_20221003.csv") %>%
+  paste0(., "/cov_categories_20230124.csv") %>%
   read.table(
     sep = ";",
     header = TRUE
   )
 
-cov_cats$name %<>%
-  file_path_sans_ext() %>%
-  gsub("\\.", "_", .) %>%
-  gsub("-", "_", .) %>%
-  tolower() %>%
-  paste0(., ".tif")
-    
-
 cov_files <- cov_dir %>% list.files
 
 cov_names <- cov_files %>% tools::file_path_sans_ext()
 
-# cov_names %>%
-#   write.table(
-#     paste0("cov_names_", Sys.Date(), ".csv")
-#     
-#   )
+cov_names %>%
+  write.table(
+    paste0("cov_names_", Sys.Date(), ".csv")
 
-cov_files[!cov_files %in% cov_cats$name]
+  )
+
+cov_names[!cov_names %in% cov_cats$name]
 
 cov <- paste0(cov_dir, "/", cov_files) %>%
   rast()
 
 names(cov) <- cov_names
 
-# 5: Extract covariates
 
-extr <- dir_dat %>%
-  paste0(., "/extracts/dsc_extr_all.csv") %>%
+# 5: Load extracted covariates
+
+dir_extr <- dir_dat %>%
+  paste0(., "/extracts/")
+
+dsc_extr <- dir_extr %>%
+  paste0(., "dsc_extr.csv") %>%
   read.table(
     header = TRUE,
     sep = ";",
-  ) %>%
-  select(!1)
+  )
 
-names(extr) %<>% 
-  gsub("\\.", "_", .) %>%
-  gsub("-", "_", .) %>%
-  gsub("__", "_", .) %>%
-  tolower()
+SEGES_extr <- dir_extr %>%
+  paste0(., "SEGES_extr.csv") %>%
+  read.table(
+    header = TRUE,
+    sep = ";",
+  )
 
-names(extr)[!names(extr) %in% cov_names]
-# [1] "s2_geomedian_20180501_20180731_b3"  "s2_geomedian_20210501_20210731_b11" "s2_geomedian_20210501_20210731_b12"
-# [4] "s2_geomedian_20210501_20210731_b2"  "s2_geomedian_20210501_20210731_b3"  "s2_geomedian_20210501_20210731_b4" 
-# [7] "s2_geomedian_20210501_20210731_b5"  "s2_geomedian_20210501_20210731_b6"  "s2_geomedian_20210501_20210731_b7" 
-# [10] "s2_geomedian_20210501_20210731_b8"  "s2_geomedian_20210501_20210731_b8a"
-cov_names[!cov_names %in% names(extr)]
-# [1] "bluespot_10m_mean"      "flooded_depth_10m_mean" "gw_summer_predict"      "gw_winter_predict"     
-# [5] "rvb_bios"               "rvb_fot"                "volume_10m_mean" 
+SINKS_extr <- dir_extr %>%
+  paste0(., "SINKS_extr.csv") %>%
+  read.table(
+    header = TRUE,
+    sep = ";",
+  )
 
-# 6: Correct and transform the target variables
-# Make English names
 
-fractions <- c("clay", "silt", "fine_sand", "coarse_sand", "logSOM", "logCaCO3")
+# 6: Merge data and transform the target variables
+
+obs <- list(dsc, SEGES, SINKS) %>%
+  vect() %>%
+  values() %>%
+  mutate(
+    logSOC = log(SOC),
+    logCaCO3 = log(CaCO3)
+  )
+
+fractions <- c("clay", "silt", "fine_sand", "coarse_sand", "logSOC", "logCaCO3")
 
 bounds_lower <- c(0, 0, 0, 0, NA, NA)
 bounds_upper <- c(100, 100, 100, 100, log(100), log(100))
 
-obs <- dsc %>%
-  values() %>%
-  mutate(
-    clay = Ler * 100 / (Ler + Silt + FinSD + GrovSD),
-    silt = Silt * 100 / (Ler + Silt + FinSD + GrovSD),
-    fine_sand = FinSD * 100 / (Ler + Silt + FinSD + GrovSD),
-    coarse_sand = GrovSD * 100 / (Ler + Silt + FinSD + GrovSD),
-    logSOM = log(Humus),
-    logCaCO3 = log(CaCO3)
-    )
 
 # 7: Make training data
-  
+
+folds <- bind_rows(
+  dsc_folds,
+  SEGES_folds,
+  SINKS_folds
+)
+
+names(folds) <- "fold"
+
+extr <- bind_rows(
+  dsc_extr,
+  SEGES_extr,
+  SINKS_extr
+)
+
 obs <- cbind(obs, extr, folds)
 
 obs_top <- obs %>%
-  filter(DybFra == 0 & DybTil == 20)
+  filter(upper == 0)
 
 
 # 8: Set up models
 # Small random sample for testing
 
-#Correct this expression when I have the new extract
-cov_c <- names(extr)[names(extr) %in% cov_names] %>%
+cov_c <- extr %>%
+  names() %>%
   paste0(collapse = " + ")
-
-covs <- names(extr)[names(extr) %in% cov_names]
 
 tgrid <- data.frame(
   committees = 20,
@@ -189,6 +210,56 @@ tgrid <- data.frame(
 )
 
 n <- 1000
+
+# Remember to include full dataset in the final model
+use_all_points <- TRUE
+
+# Weighted RMSE
+RMSEw <- function(d, w)
+{
+  sqe <- w*(d[, 1] - d[, 2])^2
+  msqe <- sum(sqe)/sum(w)
+  out <- sqrt(msqe)
+  return(out)
+}
+
+
+# Weighted R^2
+R2w <- function(d, w)
+{
+  require(boot)
+  out <- boot::corr(d[, 1:2], w)^2
+  return(out)
+}
+
+
+# Weighted summary function
+
+WeightedSummary <- function(data, lev = NULL, model = NULL, ...)
+{
+  out <- numeric()
+  # Weighted RMSE
+  RMSEw <- function(d, w)
+  {
+    sqe <- w*(d[, 1] - d[, 2])^2
+    msqe <- sum(sqe)/sum(w)
+    out <- sqrt(msqe)
+    return(out)
+  }
+  out[1] <- RMSEw(data[, 1:2], data$weights)
+  
+  # Weighted R^2
+  require(boot)
+  out[2] <- boot::corr(data[, 1:2], data$weights)^2
+  names(out) <- c('RMSEw', 'R2w')
+  return(out)
+}
+
+# Results folder
+
+dir_results <- dir_dat %>%
+  paste0(., "/results_test_", testn, "/") %T>%
+  dir.create()
 
 # 9: Train models
 
@@ -200,16 +271,49 @@ for (i in 1:length(fractions))
   
   print(frac)
   
-  formula_i <- paste0(frac, " ~ ", cov_c) %>%
-    as.formula()
+  if(frac == "clay") {
+    cov_c_i <- extr %>%
+      names() %>%
+      grep(
+        "gw",
+        ., value = TRUE,
+        invert = TRUE
+      ) %>%
+      paste0(collapse = " + ")
+    formula_i <- paste0(frac, " ~ ", cov_c_i) %>%
+      as.formula()
+  } else {
+    formula_i <- paste0(frac, " ~ ", cov_c) %>%
+      as.formula()
+  }
   
-  # trdat <- obs_top %>%
-  #   filter(is.finite(.data[[frac]])) %>%
-  #   sample_n(n)
-  # Remember to include full dataset in the final model
+  if (use_all_points) {
+    trdat <- obs_top %>%
+      filter(is.finite(.data[[frac]]))
+  } else {
+    trdat <- obs_top %>%
+      filter(is.finite(.data[[frac]])) %>%
+      sample_n(n)
+  }
   
-  trdat <- obs_top %>%
-    filter(is.finite(.data[[frac]]))
+  # Calculate weights
+  dens <- ppp(
+    trdat$UTMX,
+    trdat$UTMY,
+    c(441000, 894000),
+    c(6049000, 6403000)
+  ) %>%
+    density(
+      sigma = 250,
+      at = 'points',
+      leaveoneout = FALSE
+    )
+  
+  trdat %<>%
+    mutate(
+      density = dens,
+      w = min(dens) / dens
+    )
   
   folds_i <- lapply(
     1:10,
@@ -243,12 +347,21 @@ for (i in 1:length(fractions))
     trControl = trainControl(
       index = folds_i,
       savePredictions = "final",
-      predictionBounds = c(bounds_lower[i], bounds_upper[i])
-    )
+      predictionBounds = c(bounds_lower[i], bounds_upper[i]),
+      summaryFunction = WeightedSummary
+    ),
+    metric = 'RMSEw',
+    maximize = FALSE,
+    weights = trdat$w
   )
   
   registerDoSEQ()
   rm(cl)
+  
+  saveRDS(
+    models[[i]],
+    paste0(dir_results, "/model_", frac, ".rds")
+  )
 }
 
 names(models) <- fractions
@@ -259,15 +372,15 @@ models %>% lapply(
   }
 )
 
-models %>% lapply(
-  function(x) {
-    x %>%
-      varImp %>%
-      .$importance %>%
-      rownames_to_column(var = "covariate") %>%
-      arrange(-Overall)
-  }
-)
+# models %>% lapply(
+#   function(x) {
+#     x %>%
+#       varImp %>%
+#       .$importance %>%
+#       rownames_to_column(var = "covariate") %>%
+#       arrange(-Overall)
+#   }
+# )
 
 # 10: Make maps
 # Start with the test area
@@ -628,6 +741,34 @@ l %>%
 
 dev.off()
 dev.off()
+
+# Density calculation and plot
+
+pts <- ppp(
+  obs_top$UTMX,
+  obs_top$UTMY,
+  c(441000, 894000),
+  c(6049000, 6403000)
+)
+
+dens <- density(
+  pts,
+  sigma = 250,
+  at = 'points',
+  leaveoneout = FALSE,
+)
+
+pts_v <- obs_top %>%
+  mutate(
+    density = dens,
+    w = min(dens) / dens
+  ) %>%
+  vect(
+    geom = c("UTMX", "UTMY"),
+    crs = mycrs
+  )
+
+plot(pts_v, "w")
 
 
 # To do:
