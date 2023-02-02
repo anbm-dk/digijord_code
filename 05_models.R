@@ -171,6 +171,10 @@ obs <- list(dsc, SEGES, SINKS) %>%
 
 fractions <- c("clay", "silt", "fine_sand", "coarse_sand", "logSOC", "logCaCO3")
 
+fraction_names <- c(
+  "Clay", "Silt", "Fine sand", "Coarse sand", "SOC", "CaCO3"
+)
+
 bounds_lower <- c(0, 0, 0, 0, NA, NA)
 bounds_upper <- c(100, 100, 100, 100, log(100), log(100))
 
@@ -263,114 +267,118 @@ dir_results <- dir_dat %>%
 
 # 9: Train models
 
-models <- list()
+# models <- list()
+# 
+# for (i in 1:length(fractions))
+# {
+#   frac <- fractions[i]
+#   
+#   print(frac)
+#   
+#   if(frac == "clay") {
+#     cov_c_i <- extr %>%
+#       names() %>%
+#       grep(
+#         "gw",
+#         ., value = TRUE,
+#         invert = TRUE
+#       ) %>%
+#       paste0(collapse = " + ")
+#     formula_i <- paste0(frac, " ~ ", cov_c_i) %>%
+#       as.formula()
+#   } else {
+#     formula_i <- paste0(frac, " ~ ", cov_c) %>%
+#       as.formula()
+#   }
+#   
+#   trdat <- obs_top %>%
+#     filter(is.finite(.data[[frac]]), is.finite(fold))
+#   
+#   if (!use_all_points) {
+#     trdat %<>% sample_n(n)
+#   }
+#   
+#   # Calculate weights
+#   dens <- ppp(
+#     trdat$UTMX,
+#     trdat$UTMY,
+#     c(441000, 894000),
+#     c(6049000, 6403000)
+#   ) %>%
+#     density(
+#       sigma = 250,
+#       at = 'points',
+#       leaveoneout = FALSE
+#     )
+#   
+#   trdat %<>%
+#     mutate(
+#       density = dens,
+#       w = min(dens) / dens
+#     )
+#   
+#   folds_i <- lapply(
+#     1:10,
+#     function(x) {
+#       out <- trdat %>%
+#         mutate(
+#           is_j = fold != x,
+#           rnum = row_number(),
+#           ind_j = is_j*rnum
+#         ) %>%
+#         filter(ind_j != 0) %>%
+#         select(ind_j) %>%
+#         unlist() %>%
+#         unname()
+#     }
+#   )
+#   
+#   showConnections()
+#   
+#   cl <- makePSOCKcluster(10)
+#   registerDoParallel(cl)
+#   
+#   set.seed(1)
+#   
+#   models[[i]] <- caret::train(
+#     form = formula_i,
+#     data = trdat,
+#     method = "cubist",
+#     na.action = na.pass,
+#     tuneGrid = tgrid,
+#     trControl = trainControl(
+#       index = folds_i,
+#       savePredictions = "final",
+#       predictionBounds = c(bounds_lower[i], bounds_upper[i]),
+#       summaryFunction = WeightedSummary
+#     ),
+#     metric = 'RMSEw',
+#     maximize = FALSE,
+#     weights = trdat$w
+#   )
+#   
+#   registerDoSEQ()
+#   rm(cl)
+#   
+#   saveRDS(
+#     models[[i]],
+#     paste0(dir_results, "/model_", frac, ".rds")
+#   )
+# }
 
-for (i in 1:length(fractions))
-{
-  frac <- fractions[i]
-  
-  print(frac)
-  
-  if(frac == "clay") {
-    cov_c_i <- extr %>%
-      names() %>%
-      grep(
-        "gw",
-        ., value = TRUE,
-        invert = TRUE
-      ) %>%
-      paste0(collapse = " + ")
-    formula_i <- paste0(frac, " ~ ", cov_c_i) %>%
-      as.formula()
-  } else {
-    formula_i <- paste0(frac, " ~ ", cov_c) %>%
-      as.formula()
+models_loaded <- lapply(
+  1:6,
+  function(x) {
+    out <- fractions[x] %>%
+      paste0(dir_results, "/model_", ., ".rds") %>%
+      readRDS()
+    return(out)
   }
-  
-  if (use_all_points) {
-    trdat <- obs_top %>%
-      filter(is.finite(.data[[frac]]))
-  } else {
-    trdat <- obs_top %>%
-      filter(is.finite(.data[[frac]])) %>%
-      sample_n(n)
-  }
-  
-  # Calculate weights
-  dens <- ppp(
-    trdat$UTMX,
-    trdat$UTMY,
-    c(441000, 894000),
-    c(6049000, 6403000)
-  ) %>%
-    density(
-      sigma = 250,
-      at = 'points',
-      leaveoneout = FALSE
-    )
-  
-  trdat %<>%
-    mutate(
-      density = dens,
-      w = min(dens) / dens
-    )
-  
-  folds_i <- lapply(
-    1:10,
-    function(x) {
-      out <- trdat %>%
-        mutate(
-          is_j = fold != x,
-          rnum = row_number(),
-          ind_j = is_j*rnum
-        ) %>%
-        filter(ind_j != 0) %>%
-        select(ind_j) %>%
-        unlist() %>%
-        unname()
-    }
-  )
-  
-  showConnections()
-  
-  cl <- makePSOCKcluster(10)
-  registerDoParallel(cl)
-  
-  set.seed(1)
-  
-  models[[i]] <- caret::train(
-    form = formula_i,
-    data = trdat,
-    method = "cubist",
-    na.action = na.pass,
-    tuneGrid = tgrid,
-    trControl = trainControl(
-      index = folds_i,
-      savePredictions = "final",
-      predictionBounds = c(bounds_lower[i], bounds_upper[i]),
-      summaryFunction = WeightedSummary
-    ),
-    metric = 'RMSEw',
-    maximize = FALSE,
-    weights = trdat$w
-  )
-  
-  registerDoSEQ()
-  rm(cl)
-  
-  saveRDS(
-    models[[i]],
-    paste0(dir_results, "/model_", frac, ".rds")
-  )
-}
+)
 
 names(models) <- fractions
 
-models %>% lapply(
-  function(x) {
-    varImp(x)
-  }
-)
+models %>% lapply(function(x) varImp(x))
 
 # models %>% lapply(
 #   function(x) {
@@ -420,7 +428,7 @@ rfun <- function(mod, dat, ...) {
   return(out)
 }
 
-# 10 km area
+# Maps for 10 km area
 
 maps_10km <- list()
 
@@ -440,6 +448,8 @@ for(i in 1:length(fractions))
     overwrite = TRUE
   )
 }
+
+# Run until here (2023-02-01)
 
 # All of Denmark
 
@@ -471,25 +481,33 @@ for(i in 1:length(fractions))
 get_acc <- function(x2, i2) {
   df <- x2$pred %>%
     arrange(rowIndex) %>%
-    select(c(pred, obs))
+    distinct(rowIndex, .keep_all = TRUE) %>%
+    select(c(pred, obs, weights))
+  
   if (i2 > 4) df %<>% exp
+  
   df %<>% bind_cols(x2$trainingData)
   
-  r2_all <- df %$% cor(pred, obs)^2
+  r2_all <- df %$% R2w(cbind(pred, obs), weights)
+  
   r2_bare <- df %>%
     filter(!is.na(s2_geomedian_b2)) %$%
-    cor(pred, obs)^2
+    R2w(cbind(pred, obs), weights)
+  
   r2_covered <- df %>%
     filter(is.na(s2_geomedian_b2)) %$%
-    cor(pred, obs)^2
+    R2w(cbind(pred, obs), weights)
   
-  rmse_all <- df %$% RMSE(pred, obs)
+  rmse_all <- df %$% RMSEw(cbind(pred, obs), weights)
+  
   rmse_bare <- df %>%
     filter(!is.na(s2_geomedian_b2)) %$%
-    RMSE(pred, obs)
+    RMSEw(cbind(pred, obs), weights)
+  
   rmse_covered <- df %>%
     filter(is.na(s2_geomedian_b2)) %$%
-    RMSE(pred, obs)
+    RMSEw(cbind(pred, obs), weights)
+  
   out <- data.frame(
     r2_all,
     r2_bare,
@@ -501,15 +519,23 @@ get_acc <- function(x2, i2) {
   
   return(out)
 }
-  
-acc_all <- foreach(i = 1:6, .combine=rbind) %do%
+
+acc_all <- foreach(i = 1:6, .combine = rbind) %do%
   get_acc(models[[i]], i)
 
-acc_all %<>% mutate(fraction = fractions, .before = 1)
- 
+acc_all %<>% mutate(fraction = fraction_names, .before = 1)
+
+write.table(
+  acc_all,
+  paste0(dir_results, "/acc_all_test", testn, ".csv"),
+  sep = ";",
+  row.names = FALSE
+  )
+
 getpred <- function(x2, i2) {
   df <- x2$pred %>%
     arrange(rowIndex) %>%
+    distinct(rowIndex, .keep_all = TRUE) %>%
     select(c(pred, obs))
   if (i2 > 4) df %<>% exp
   df %<>% mutate(
@@ -528,11 +554,11 @@ allpred <- foreach(i = 1:6, .combine=rbind) %do%
 allpred$fraction %<>% factor(levels = fractions)
 
 levels(allpred$fraction) <- c(
-  "Clay", "Silt", "Fine sand", "Coarse sand", "SOM", "CaCO3"
+  "Clay", "Silt", "Fine sand", "Coarse sand", "SOC", "CaCO3"
   )
 
 tiff(
-  "accuracy_test4.tiff",
+  paste0(dir_results, "/accuracy_test", testn, ".tiff"),
   width = 15,
   height = 10,
   units = "cm",
@@ -557,7 +583,7 @@ allpred %>%
 dev.off()
 dev.off()
 
-# Looking at maps
+# Looking at 10 km maps
 
 library(viridisLite)
 
@@ -571,12 +597,10 @@ maps_10km_stack2 <- c(
   exp(maps_10km_stack[[6]])
 )
 
-names(maps_10km_stack2) <- c(
-  "Clay", "Silt", "Fine sand", "Coarse sand", "SOM", "CaCO3"
-)
+names(maps_10km_stack2) <- fraction_names
 
 tiff(
-  "maps_test4.tiff",
+  paste0(dir_results, "/maps_test", testn, ".tiff"),
   width = 24,
   height = 16,
   units = "cm",
@@ -590,7 +614,7 @@ dev.off()
 
 JB <- function(clay, silt, sand_f, SOM, CaCO3)
 {
-  out<-rep(0,length(clay))
+  out <- rep(0, length(clay))
   out[CaCO3 > 10] <- 12
   out[out == 0 & SOM > 10] <- 11
   out[out == 0 & clay < 5 & silt < 20 & sand_f < 50] <- 1
@@ -606,30 +630,11 @@ JB <- function(clay, silt, sand_f, SOM, CaCO3)
   return(out)
 }
 
-maps_10km_s2 <- c(maps_10km[[1]], maps_10km[[2]], maps_10km[[3]], exp(maps_10km[[5]]), exp(maps_10km[[6]]))
+maps_10km_s2 <- c(maps_10km[[1]], maps_10km[[2]], maps_10km[[3]], exp(maps_10km[[5]])/0.568, exp(maps_10km[[6]]))
 
 maps_10km_jb <- lapp(maps_10km_s2, JB) %>% as.factor()
 
 library(colorRamps)
-
-# allcol <- expand.grid(
-#   r = seq.int(0, 1, length.out = 7),
-#   g = seq.int(0, 1, length.out = 7),
-#   b = seq.int(0, 1, length.out = 7)
-# )
-# 
-# ncenters <- 12
-# set.seed(1)
-# mycolors_df <- kmeans(allcol, ncenters)$centers %>%
-#   as.data.frame() %>%
-#   mutate(sumall = r + g + b) %>%
-#   arrange(-sumall)
-# mycolors <- rgb(
-#   r = mycolors_df[, 1],
-#   g = mycolors_df[, 2],
-#   b = mycolors_df[, 3],
-#   )
-
 library(rcartocolor) # for colorblind palette
 
 mycolors <- carto_pal(12, "Safe") %>% sort()
@@ -644,7 +649,7 @@ ordered_cols <- mycolors[sol]
 ggplot2::qplot(x = 1:12, y = 1, fill = I(ordered_cols), geom = "col", width = 1) + ggplot2::theme_void()
 
 tiff(
-  "JB_test4.tiff",
+  paste0(dir_results, "/JB_test", testn, ".tiff"),
   width = 15,
   height = 10,
   units = "cm",
@@ -681,12 +686,8 @@ for(i in 1:length(models))
 l %<>% bind_rows() %>%
   mutate(target = factor(target, levels = fractions))
 
-l_cat <- cov_cats
-
-l_cat %<>%
-  mutate(
-    covariate = file_path_sans_ext(name)
-  )
+l_cat <- cov_cats %>%
+  mutate(covariate = name)
 
 l_cat$category[l_cat$category == "basic"] <- l_cat$scorpan[l_cat$category == "basic"]
 
@@ -714,7 +715,7 @@ colScale <- scale_fill_manual(name = "category", values = catcolors)
 
 
 tiff(
-  "importance_test4.tiff",
+  paste0(dir_results, "/importance_test", testn, ".tiff"),
   width = 40,
   height = 20,
   units = "cm",
