@@ -108,7 +108,7 @@ SINKS_folds <- dir_folds %>%
 cov_dir <- dir_dat %>% paste0(., "/covariates")
 
 cov_cats <- dir_code %>%
-  paste0(., "/cov_categories_20230124.csv") %>%
+  paste0(., "/cov_categories_20230202.csv") %>%
   read.table(
     sep = ";",
     header = TRUE
@@ -376,19 +376,13 @@ models_loaded <- lapply(
   }
 )
 
+# models <- models_loaded
+
 names(models) <- fractions
 
 models %>% lapply(function(x) varImp(x))
 
-# models %>% lapply(
-#   function(x) {
-#     x %>%
-#       varImp %>%
-#       .$importance %>%
-#       rownames_to_column(var = "covariate") %>%
-#       arrange(-Overall)
-#   }
-# )
+
 
 # 10: Make maps
 # Start with the test area
@@ -684,12 +678,22 @@ for(i in 1:length(models))
 }
 
 l %<>% bind_rows() %>%
-  mutate(target = factor(target, levels = fractions))
+  mutate(
+    target = factor(
+      target,
+      levels = fractions
+      )
+    )
 
 l_cat <- cov_cats %>%
-  mutate(covariate = name)
-
-l_cat$category[l_cat$category == "basic"] <- l_cat$scorpan[l_cat$category == "basic"]
+  mutate(
+    covariate = name,
+    category = ifelse(
+      category == "basic",
+      scorpan,
+      category
+    )
+  )
 
 l %<>%
   left_join(l_cat)
@@ -706,10 +710,14 @@ levels(l$category) <- c(
   "Spatial position",
   "Parent materials",
   "Topography",
-  "S2 time series"
+  "S2 time series",
+  "Soil"
 )
 
-catcolors <- carto_pal(5, "Safe")
+catcolors <- l$category %>%
+  levels() %>%
+  length() %>%
+  carto_pal(., "Safe")
 names(catcolors) <- levels(l$category)
 colScale <- scale_fill_manual(name = "category", values = catcolors)
 
@@ -743,41 +751,150 @@ l %>%
 dev.off()
 dev.off()
 
-# Density calculation and plot
 
-pts <- ppp(
-  obs_top$UTMX,
-  obs_top$UTMY,
-  c(441000, 894000),
-  c(6049000, 6403000)
-)
+# Plot most important covariates
+# First find covariates with the highest general importance
 
-dens <- density(
-  pts,
-  sigma = 250,
-  at = 'points',
-  leaveoneout = FALSE,
-)
+imp_list <- list()
 
-pts_v <- obs_top %>%
+for (i in 1:length(fractions)) {
+  imp_list[[i]] <- models[[i]] %>%
+    varImp() %>%
+    .$importance %>%
+    rownames_to_column(var = "covariate") %>%
+    mutate(fraction = fractions[[i]])
+}
+
+imp_list %>%
+  bind_rows() %>%
+  pivot_wider(
+    id_cols = covariate,
+    names_from = fraction,
+    values_from = Overall
+    ) %>%
+  rowwise() %>%
   mutate(
-    density = dens,
-    w = min(dens) / dens
+    mean = mean(c_across(-covariate), na.rm = TRUE)
   ) %>%
-  vect(
-    geom = c("UTMX", "UTMY"),
-    crs = mycrs
+  arrange(-mean) %>%
+  print(n = 20)
+
+figure_covariates <- c(
+  "ogc_lite_pi0000",
+  "s2_geomedian_b3",
+  "s1_baresoil_composite_vh_8_days",
+  "s2_geomedian_20180501_20180731_b7",
+  "dhm2015_terraen_10m"
   )
 
-plot(pts_v, "w")
+short_names <- c(
+  "DEM",
+  "UTMX",
+  "S1_bare_vh",
+  "S2_summer_b7",
+  "S2_bare_b3"
+)
 
+figure_cols <- c(figure_covariates, fractions)
+
+library(scales)  # For number formats
+
+tiff(
+  paste0(dir_results, "/covariate_effects_test", testn, ".tiff"),
+  width = 16,
+  height = 10,
+  units = "cm",
+  res = 300
+)
+
+obs_top %>%
+  select(all_of(figure_cols)) %>%
+  # sample_frac(0.1) %>%
+  mutate(
+    s1_baresoil_composite_vh_8_days = ifelse(
+      s1_baresoil_composite_vh_8_days == 0 | s1_baresoil_composite_vh_8_days < -3000,
+      NA,
+      s1_baresoil_composite_vh_8_days
+    ),
+    s2_geomedian_b3 = ifelse(
+      s2_geomedian_b3 > 2000,
+      NA,
+      s2_geomedian_b3
+    ),
+    logCaCO3 = ifelse(
+      is.finite(logCaCO3),
+      logCaCO3,
+      NA
+    ),
+    logSOC = ifelse(
+      logSOC > -2.5,
+      logSOC,
+      NA
+    ),
+    clay = ifelse(
+      clay < 30,
+      clay,
+      NA
+    ),
+    silt = ifelse(
+      silt < 30,
+      silt,
+      NA
+    )
+  ) %>%
+  rename(
+    DEM = dhm2015_terraen_10m,
+    UTMX = ogc_lite_pi0000,
+    S1_bare_vh = s1_baresoil_composite_vh_8_days,
+    S2_summer_b7 = s2_geomedian_20180501_20180731_b7,
+    S2_bare_b3 = s2_geomedian_b3
+  ) %>%
+  pivot_longer(
+    all_of(short_names),
+    names_to = "Covariate",
+    values_to = "x_value"
+  ) %>%
+  pivot_longer(
+    all_of(fractions),
+    names_to = "Fraction",
+    values_to = "y_value",
+  ) %>%
+  ggplot(
+    aes(
+      x = x_value,
+      y = y_value
+    )
+  ) +
+  geom_point(alpha = .01, shape = 16) +
+  facet_grid(
+    factor(Fraction, levels = fractions) ~ Covariate,
+    scales = "free"
+  ) +
+  geom_smooth(
+    se = FALSE,
+    color = "red"
+    ) +
+  labs(
+    x = "Covariate value",
+    y = "Observation (%)"
+  ) +
+  scale_x_continuous(
+    n.breaks = 3,
+    labels = label_number(scale_cut = cut_short_scale())
+    ) +
+  scale_y_continuous(n.breaks = 3) +
+  theme(strip.text.y.right = element_text(angle = 0))
+
+dev.off()
+dev.off()
 
 # To do:
 # Use all observations
-# Use new extract
-# Save models to disk
-# Analyze importance
+# Use new extract [ok]
+# Save models to disk [ok]
+# Analyze importance [ok]
 # Make maps
-# Drop gw maps for clay
+# Drop gw maps for clay [ok]
+# Drop gw maps entirely
 
 # END

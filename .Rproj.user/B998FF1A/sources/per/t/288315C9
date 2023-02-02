@@ -3,7 +3,7 @@
     "path": "C:/Users/au542768/digijord/digijord_code/05_models.R",
     "project_path": "05_models.R",
     "type": "r_source",
-    "hash": "1574621061",
+    "hash": "1532831476",
     "contents": "",
     "dirty": false,
     "created": 1673338393487.0,
@@ -12,15 +12,15 @@
     "properties": {
         "source_window_id": "",
         "Source": "Source",
-        "cursorPosition": "366,3",
-        "scrollLine": "253"
+        "cursorPosition": "889,0",
+        "scrollLine": "869"
     },
     "folds": "",
-    "lastKnownWriteTime": 1675335669,
+    "lastKnownWriteTime": 1675366794,
     "encoding": "UTF-8",
     "collab_server": "",
     "source_window": "",
-    "last_content_update": 1675335669684,
+    "last_content_update": 1675366794021,
     "read_only": false,
     "read_only_alternatives": []
 }

@@ -5,7 +5,9 @@ library(magrittr)
 library(raster)
 library(tools)
 
-# TO DO: Assign layer names that match the file names
+# TO DO:
+# Assign layer names that match the file names
+# Set 0 values to NA for S1 bare composite
 
 dir_code <- getwd()
 root <- dirname(dir_code)
