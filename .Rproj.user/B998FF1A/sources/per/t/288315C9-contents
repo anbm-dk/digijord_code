@@ -34,6 +34,12 @@ dir_dat <- paste0(root, "/digijord_data/")
 testn <- 5
 mycrs <- "EPSG:25832"
 
+# Results folder
+
+dir_results <- dir_dat %>%
+  paste0(., "/results_test_", testn, "/") %T>%
+  dir.create()
+
 # 2: Load observations
 
 dir_obs_proc <- dir_dat %>%
@@ -200,6 +206,25 @@ obs <- cbind(obs, extr, folds)
 obs_top <- obs %>%
   filter(upper == 0)
 
+obs_top_v <- obs_top %>% vect(geom = c("UTMX", "UTMY"))
+
+library(viridisLite)
+
+
+tiff(
+  paste0(dir_results, "/obs_map_test", testn, ".tiff"),
+  width = 15,
+  height = 10,
+  units = "cm",
+  res = 300
+)
+
+plot(obs_top_v, "clay", breaks = 5, breakby = "cases", col = cividis(5))
+
+dev.off()
+dev.off()
+
+plot(obs_top_v, "clay", breaks = 5, breakby = "cases", col = cividis(5))
 
 # 8: Set up models
 # Small random sample for testing
@@ -259,11 +284,7 @@ WeightedSummary <- function(data, lev = NULL, model = NULL, ...)
   return(out)
 }
 
-# Results folder
 
-dir_results <- dir_dat %>%
-  paste0(., "/results_test_", testn, "/") %T>%
-  dir.create()
 
 # 9: Train models
 
