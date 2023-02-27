@@ -401,8 +401,31 @@ models_loaded <- lapply(
 
 names(models) <- fractions
 
-models %>% lapply(function(x) varImp(x))
-
+models %>%
+  seq_along() %>%
+  lapply(
+    function(x) {
+      out <- varImp(models[[x]])$importance %>%
+        as.data.frame() %>%
+        rownames_to_column(var = "covariate") %>%
+        mutate(fraction = names(models)[x])
+      return(out)
+    }
+  ) %>%
+  bind_rows() %>%
+  pivot_wider(
+    id_cols = covariate,
+    names_from = fraction,
+    values_from = Overall
+    ) %>%
+  rowwise() %>%
+  mutate(mean_imp = mean(c_across(-covariate))) %>%
+  arrange(-mean_imp) %T>%
+  write.table(
+    file = paste0(dir_results, "/var_imp.csv"),
+    sep = ";",
+    row.names = FALSE
+  )
 
 
 # 10: Make maps

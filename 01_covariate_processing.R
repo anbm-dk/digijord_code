@@ -7,7 +7,6 @@ library(tools)
 
 # TO DO:
 # Assign layer names that match the file names
-# Set 0 values to NA for S1 bare composite
 
 dir_code <- getwd()
 root <- dirname(dir_code)
@@ -26,14 +25,14 @@ cov_files <- dir_cov %>%
     full.names = TRUE
   )
 
-# dem_ind <- grepl(
-#   "DHM",
-#   cov_files
-# )
-# 
-# dem <- cov_files[dem_ind] %>% rast
-# 
-# crs(dem) <- mycrs
+dem_ind <- grepl(
+  "dhm",
+  cov_files
+)
+
+dem <- cov_files[dem_ind] %>% rast
+
+crs(dem) <- mycrs
 # 
 # not_dem <- cov_files[!dem_ind]
 # 
@@ -84,58 +83,187 @@ cov_files <- dir_cov %>%
 #   newnames
 # )
 
-# 3: Crop to test area
 
-# cov_files <- dir_cov %>%
-#   list.files(
-#     pattern = ".tif",
-#     full.names = TRUE
+# 3: Processing new images
+
+# 3.1: S1  (2023-02-22)
+
+# Load files
+
+# dir_s1 <- dir_dat %>%
+#   paste0(., "/new_s1/")
+# 
+# files_s1 <- dir_s1 %>%
+#   list.files(full.names = TRUE) 
+# 
+# names_s1 <- files_s1 %>%
+#   basename()
+# 
+# tmpfolder <- paste0(dir_dat, "/Temp/")
+# 
+# terraOptions(tempdir = tmpfolder)
+# 
+# for (i in 1:length(files_s1)) {
+#   dtyp <- files_s1[i] %>%
+#     raster() %>%
+#     dataType()
+# 
+#   cov_i <- files_s1[i] %>%
+#     terra::rast()
+# 
+#   crs(cov_i) <- mycrs
+#   
+#   # Crop to coast
+#   r1 <- terra::mask(
+#     cov_i,
+#     mask = dem
 #   )
-# 
-# squareshape <- dir_dat %>%
-#   paste0(., "/testarea_10km/square10km.shp") %>%
-#   vect
-# 
-# square_ext <- squareshape %>%
-#   ext %>%
-#   round(-1)
-# 
-# outfolder <- dir_dat %>%
-#   paste0(., "/testarea_10km/covariates/")
-# 
-# outfolder %>% dir.create
-# 
-# cropstack <- function(
-#     x,  # list of files
-#     y,  # extent
-#     folder # target folder
-# ) {
-#   for(i in 1:length(x)) {
-#     r <- x[i] %>% rast
-#     dtype <- r %>%
-#       sources %>%
-#       raster::raster(.) %>%
-#       raster::dataType(.)
-#     outname <- r %>%
-#       sources %>%
-#       basename %>%
-#       tools::file_path_sans_ext(.) %>%
-#       make.names %>%
-#       paste0(folder, ., ".tif")
-#     r %>%
-#       crop(y = y) %>%
-#       writeRaster(
-#         datatype = dtype,
-#         filename = outname,
-#         overwrite = TRUE
-#       )
-#   }
+#   
+#   # Replace 0 and above
+#   ifel(
+#     r1 < 0,
+#     r1,
+#     NA,
+#     filename = paste0(
+#       dir_cov,
+#       names_s1[i]
+#     ),
+#     overwrite = TRUE,
+#     datatype = dtyp
+#   )
 # }
+
+
+# 3.2: S2 (2023-02-24)
+
+# Load files
+
+# dir_s2 <- dir_dat %>%
+#   paste0(., "/new_s2/")
 # 
-# cov_files %>%
-#   cropstack(
-#     y = square_ext,
-#     folder = outfolder
+# files_s2 <- dir_s2 %>%
+#   list.files(full.names = TRUE)
+# 
+# names_s2 <- files_s2 %>%
+#   basename()
+# 
+# tmpfolder <- paste0(dir_dat, "/Temp/")
+# 
+# terraOptions(tempdir = tmpfolder)
+# 
+# for (i in 1:length(files_s2)) {
+#   dtyp <- files_s2[i] %>%
+#     raster() %>%
+#     dataType()
+# 
+#   cov_i <- files_s2[i] %>%
+#     terra::rast()
+# 
+#   crs(cov_i) <- mycrs
+# 
+#   # Crop to coast
+#   r1 <- terra::mask(
+#     cov_i,
+#     mask = dem,
+#     filename = paste0(
+#       tmpfolder,
+#       "temp1.tif"
+#     ),
+#     overwrite = TRUE
 #   )
+# 
+#   # Keep only 0 - 10000
+#   ifel(
+#     r1 > 0 & r1 <= 10000,
+#     r1,
+#     NA,
+#     filename = paste0(
+#       dir_cov,
+#       names_s2[i]
+#     ),
+#     overwrite = TRUE,
+#     datatype = dtyp
+#   )
+# }
+
+
+# 4: Crop to test area
+
+cov_files <- dir_cov %>%
+  list.files(
+    pattern = ".tif",
+    full.names = TRUE
+  )
+
+squareshape <- dir_dat %>%
+  paste0(., "/testarea_10km/square10km.shp") %>%
+  vect
+
+square_ext <- squareshape %>%
+  ext %>%
+  round(-1)
+
+outfolder <- dir_dat %>%
+  paste0(., "/testarea_10km/covariates/")
+
+outfolder %>% dir.create
+
+cropstack <- function(
+    x,  # list of files
+    y,  # extent
+    folder # target folder
+) {
+  for(i in 1:length(x)) {
+    r <- x[i] %>% rast
+    dtype <- r %>%
+      sources %>%
+      raster::raster(.) %>%
+      raster::dataType(.)
+    outname <- r %>%
+      sources %>%
+      basename %>%
+      tools::file_path_sans_ext(.) %>%
+      make.names %>%
+      paste0(folder, ., ".tif")
+    r %>%
+      crop(y = y) %>%
+      writeRaster(
+        datatype = dtype,
+        filename = outname,
+        overwrite = TRUE
+      )
+  }
+}
+
+cov_files %>%
+  cropstack(
+    y = square_ext,
+    folder = outfolder
+  )
+
+# 5: Update names in covariate table (2023-02-27)
+
+cov_cats <- dir_code %>%
+  paste0(., "/cov_categories_20230202.csv") %>%
+  read.table(
+    sep = ";",
+    header = TRUE,
+    encoding = "latin1"
+  )
+
+newnames <- cov_cats$name %>%
+  gsub("\\.", "_", .) %>%
+  gsub("-", "_", .) %>%
+  tolower()
+
+cov_cats$name <- newnames
+
+write.table(
+  cov_cats,
+  file = paste0(dir_code, "/cov_categories_20230227.csv"),
+  row.names = FALSE,
+  sep = ";",
+  fileEncoding = "latin1"
+)
 
 # END
