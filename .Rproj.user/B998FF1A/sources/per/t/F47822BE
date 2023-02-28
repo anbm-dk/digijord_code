@@ -3,7 +3,7 @@
     "path": "C:/Users/au542768/digijord/digijord_code/03_extract_covariates.R",
     "project_path": "03_extract_covariates.R",
     "type": "r_source",
-    "hash": "1972221950",
+    "hash": "4013752547",
     "contents": "",
     "dirty": false,
     "created": 1675154429912.0,
@@ -13,15 +13,15 @@
         "tempName": "Untitled1",
         "source_window_id": "",
         "Source": "Source",
-        "cursorPosition": "89,0",
-        "scrollLine": "0"
+        "cursorPosition": "160,0",
+        "scrollLine": "131"
     },
     "folds": "",
-    "lastKnownWriteTime": 1675240557,
+    "lastKnownWriteTime": 1677508780,
     "encoding": "UTF-8",
     "collab_server": "",
     "source_window": "",
-    "last_content_update": 1675240557206,
+    "last_content_update": 1677508780895,
     "read_only": false,
     "read_only_alternatives": []
 }

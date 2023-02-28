@@ -2,6 +2,8 @@
 
 library(terra)
 library(magrittr)
+library(exactextractr)
+library(sf)
 
 dir_code <- getwd()
 root <- dirname(dir_code)
@@ -65,19 +67,51 @@ names(cov) <- cov_names
 
 crs(cov) <- mycrs
 
-# 3 Extract
+# 3 Create buffers (40 m = ~ 0.5 ha)
 
-dsc_extr <- terra::extract(
+buffer_dsc <- terra::buffer(
+  dsc,
+  width = 40
+) %>%
+  st_as_sf()
+
+buffer_SEGES <- terra::buffer(
+  SEGES,
+  width = 40
+) %>%
+  st_as_sf()
+
+# 4 Extract
+
+# dsc_extr <- terra::extract(
+#   x = cov,
+#   y = dsc,
+#   ID = FALSE,
+# )
+
+buffer_dsc_extr <- exact_extract(
+    x = cov,
+    y = buffer_dsc,
+    fun = "mean",
+    progress = TRUE
+  )
+
+names(buffer_dsc_extr) <- names(cov)
+
+# SEGES_extr <- terra::extract(
+#     x = cov,
+#     y = SEGES,
+#     ID = FALSE,
+#   )
+
+buffer_SEGES_extr <- exact_extract(
   x = cov,
-  y = dsc,
-  ID = FALSE,
+  y = buffer_SEGES,
+  fun = "mean",
+  progress = TRUE
 )
 
-SEGES_extr <- terra::extract(
-    x = cov,
-    y = SEGES,
-    ID = FALSE,
-  )
+names(buffer_SEGES_extr) <- names(cov)
 
 SINKS_extr <- terra::extract(
     x = cov,
@@ -85,21 +119,35 @@ SINKS_extr <- terra::extract(
     ID = FALSE,
   )
 
-# 4 Write to file
+# 5 Write to file
 
 dir_extr <- dir_dat %>%
   paste0(., "/extracts/")
 
+# write.table(
+#   dsc_extr,
+#   paste0(dir_extr, "dsc_extr.csv"),
+#   row.names = FALSE,
+#   sep = ";"
+# )
+
 write.table(
-  dsc_extr,
-  paste0(dir_extr, "dsc_extr.csv"),
+  buffer_dsc_extr,
+  paste0(dir_extr, "buffer_dsc_extr.csv"),
   row.names = FALSE,
   sep = ";"
 )
 
+# write.table(
+#   SEGES_extr,
+#   paste0(dir_extr, "SEGES_extr.csv"),
+#   row.names = FALSE,
+#   sep = ";"
+# )
+
 write.table(
-  SEGES_extr,
-  paste0(dir_extr, "SEGES_extr.csv"),
+  buffer_SEGES_extr,
+  paste0(dir_extr, "buffer_SEGES_extr.csv"),
   row.names = FALSE,
   sep = ";"
 )
