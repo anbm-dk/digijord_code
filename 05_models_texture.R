@@ -31,7 +31,7 @@ dir_code <- getwd()
 root <- dirname(dir_code)
 dir_dat <- paste0(root, "/digijord_data/")
 
-testn <- 5
+testn <- 6
 mycrs <- "EPSG:25832"
 
 # Results folder
@@ -111,16 +111,16 @@ SINKS_folds <- dir_folds %>%
 
 # 4: Load covariates
 
-cov_dir <- dir_dat %>% paste0(., "/covariates")
+dir_cov <- dir_dat %>% paste0(., "/covariates")
 
 cov_cats <- dir_code %>%
-  paste0(., "/cov_categories_20230202.csv") %>%
+  paste0(., "/cov_categories_20230227.csv") %>%
   read.table(
     sep = ";",
     header = TRUE
   )
 
-cov_files <- cov_dir %>% list.files
+cov_files <- dir_cov %>% list.files()
 
 cov_names <- cov_files %>% tools::file_path_sans_ext()
 
@@ -132,7 +132,7 @@ cov_names %>%
 
 cov_names[!cov_names %in% cov_cats$name]
 
-cov <- paste0(cov_dir, "/", cov_files) %>%
+cov <- paste0(dir_cov, "/", cov_files) %>%
   rast()
 
 names(cov) <- cov_names
@@ -143,22 +143,40 @@ names(cov) <- cov_names
 dir_extr <- dir_dat %>%
   paste0(., "/extracts/")
 
-dsc_extr <- dir_extr %>%
-  paste0(., "dsc_extr.csv") %>%
-  read.table(
-    header = TRUE,
-    sep = ";",
-  )
+usebuffer <- FALSE
 
-SEGES_extr <- dir_extr %>%
-  paste0(., "SEGES_extr.csv") %>%
-  read.table(
-    header = TRUE,
-    sep = ";",
-  )
+if (usebuffer) {
+  dsc_extr <- dir_extr %>%
+    paste0(., "/buffer_dsc_extr.csv") %>%
+    read.table(
+      header = TRUE,
+      sep = ";",
+    )
+  
+  SEGES_extr <- dir_extr %>%
+    paste0(., "/buffer_SEGES_extr.csv") %>%
+    read.table(
+      header = TRUE,
+      sep = ";",
+    )
+} else {
+  dsc_extr <- dir_extr %>%
+    paste0(., "/dsc_extr.csv") %>%
+    read.table(
+      header = TRUE,
+      sep = ";",
+    )
+  
+  SEGES_extr <- dir_extr %>%
+    paste0(., "/SEGES_extr.csv") %>%
+    read.table(
+      header = TRUE,
+      sep = ";",
+    )
+}
 
 SINKS_extr <- dir_extr %>%
-  paste0(., "SINKS_extr.csv") %>%
+  paste0(., "/SINKS_extr.csv") %>%
   read.table(
     header = TRUE,
     sep = ";",
@@ -172,8 +190,12 @@ obs <- list(dsc, SEGES, SINKS) %>%
   values() %>%
   mutate(
     logSOC = log(SOC),
-    logCaCO3 = log(CaCO3)
-  )
+    logCaCO3 = log(CaCO3),
+    year = date %>%
+      as.character() %>%
+      substr(start = 1, stop = 4) %>%
+      as.numeric()
+    )
 
 fractions <- c("clay", "silt", "fine_sand", "coarse_sand", "logSOC", "logCaCO3")
 
@@ -204,12 +226,14 @@ extr <- bind_rows(
 obs <- cbind(obs, extr, folds)
 
 obs_top <- obs %>%
-  filter(upper == 0)
+  filter(
+    upper == 0,
+    is.finite(fold)
+    )
 
 obs_top_v <- obs_top %>% vect(geom = c("UTMX", "UTMY"))
 
 library(viridisLite)
-
 
 tiff(
   paste0(dir_results, "/obs_map_test", testn, ".tiff"),
@@ -222,26 +246,21 @@ tiff(
 plot(obs_top_v, "clay", breaks = 5, breakby = "cases", col = cividis(5))
 
 dev.off()
-dev.off()
 
 plot(obs_top_v, "clay", breaks = 5, breakby = "cases", col = cividis(5))
 
 # 8: Set up models
-# Small random sample for testing
 
-cov_c <- extr %>%
-  names() %>%
-  paste0(collapse = " + ")
+cov_selected <- cov_cats %>%
+  filter(anbm_use == 1) %>%
+  select(name) %>%
+  unlist() %>%
+  unname()
 
 tgrid <- data.frame(
   committees = 20,
   neighbors = 0
 )
-
-n <- 1000
-
-# Remember to include full dataset in the final model
-use_all_points <- TRUE
 
 # Weighted RMSE
 RMSEw <- function(d, w)
@@ -252,7 +271,6 @@ RMSEw <- function(d, w)
   return(out)
 }
 
-
 # Weighted R^2
 R2w <- function(d, w)
 {
@@ -261,15 +279,16 @@ R2w <- function(d, w)
   return(out)
 }
 
-
 # Weighted summary function
-
-WeightedSummary <- function(data, lev = NULL, model = NULL, ...)
-{
+WeightedSummary <- function (
+    data,
+    lev = NULL,
+    model = NULL,
+    ...
+) {
   out <- numeric()
   # Weighted RMSE
-  RMSEw <- function(d, w)
-  {
+  RMSEw <- function(d, w) {
     sqe <- w*(d[, 1] - d[, 2])^2
     msqe <- sum(sqe)/sum(w)
     out <- sqrt(msqe)
@@ -279,11 +298,19 @@ WeightedSummary <- function(data, lev = NULL, model = NULL, ...)
   
   # Weighted R^2
   require(boot)
-  out[2] <- boot::corr(data[, 1:2], data$weights)^2
+  out[2] <- boot::corr(
+    data[, 1:2],
+    data$weights
+  )^2
   names(out) <- c('RMSEw', 'R2w')
   return(out)
 }
 
+# Small random sample for testing
+# Remember to include full dataset in the final model
+n <- 1000
+
+use_all_points <- TRUE
 
 
 # 9: Train models
@@ -293,32 +320,33 @@ WeightedSummary <- function(data, lev = NULL, model = NULL, ...)
 # for (i in 1:length(fractions))
 # {
 #   frac <- fractions[i]
-#   
+# 
 #   print(frac)
-#   
-#   if(frac == "clay") {
-#     cov_c_i <- extr %>%
-#       names() %>%
-#       grep(
-#         "gw",
-#         ., value = TRUE,
-#         invert = TRUE
-#       ) %>%
+# 
+#   cov_c_i <- cov_selected %>% paste0(collapse = " + ")
+# 
+#   if (i %in% 1:4) {
+#     cov_c_i <- cov_selected %>%
+#       c(., "SOM_removed") %>%
 #       paste0(collapse = " + ")
-#     formula_i <- paste0(frac, " ~ ", cov_c_i) %>%
-#       as.formula()
 #   } else {
-#     formula_i <- paste0(frac, " ~ ", cov_c) %>%
-#       as.formula()
+#     if (frac == "logSOC") {
+#       cov_c_i <- cov_selected %>%
+#         c(., "year") %>%
+#         paste0(collapse = " + ")
+#     }
 #   }
-#   
+# 
+#   formula_i <- paste0(frac, " ~ ", cov_c_i) %>%
+#     as.formula()
+# 
 #   trdat <- obs_top %>%
-#     filter(is.finite(.data[[frac]]), is.finite(fold))
-#   
+#     filter(is.finite(.data[[frac]]))
+# 
 #   if (!use_all_points) {
 #     trdat %<>% sample_n(n)
 #   }
-#   
+# 
 #   # Calculate weights
 #   dens <- ppp(
 #     trdat$UTMX,
@@ -331,13 +359,13 @@ WeightedSummary <- function(data, lev = NULL, model = NULL, ...)
 #       at = 'points',
 #       leaveoneout = FALSE
 #     )
-#   
+# 
 #   trdat %<>%
 #     mutate(
 #       density = dens,
 #       w = min(dens) / dens
 #     )
-#   
+# 
 #   folds_i <- lapply(
 #     1:10,
 #     function(x) {
@@ -353,14 +381,14 @@ WeightedSummary <- function(data, lev = NULL, model = NULL, ...)
 #         unname()
 #     }
 #   )
-#   
+# 
 #   showConnections()
-#   
+# 
 #   cl <- makePSOCKcluster(10)
 #   registerDoParallel(cl)
-#   
+# 
 #   set.seed(1)
-#   
+# 
 #   models[[i]] <- caret::train(
 #     form = formula_i,
 #     data = trdat,
@@ -377,10 +405,10 @@ WeightedSummary <- function(data, lev = NULL, model = NULL, ...)
 #     maximize = FALSE,
 #     weights = trdat$w
 #   )
-#   
+# 
 #   registerDoSEQ()
 #   rm(cl)
-#   
+# 
 #   saveRDS(
 #     models[[i]],
 #     paste0(dir_results, "/model_", frac, ".rds")
@@ -397,7 +425,7 @@ models_loaded <- lapply(
   }
 )
 
-# models <- models_loaded
+models <- models_loaded
 
 names(models) <- fractions
 
@@ -468,51 +496,34 @@ rfun <- function(mod, dat, ...) {
 
 # Maps for 10 km area
 
-maps_10km <- list()
+# maps_10km <- list()
+# 
+# showConnections()
+# 
+# for(i in 1:length(fractions))
+# {
+#   frac <- fractions[i]
+# 
+#   maps_10km[[i]] <- predict(
+#     cov_10km,
+#     models[[i]],
+#     fun = rfun,
+#     na.rm = FALSE,
+#     cores = 2,
+#     filename = paste0(predfolder, frac,  "_10km.tif"),
+#     overwrite = TRUE,
+#     const = data.frame(
+#       SOM_removed = TRUE, 
+#       year = 2010
+#       )
+#   )
+# }
 
-showConnections()
+maps_10km <- predfolder %>%
+  paste0(., fractions,  "_10km.tif") %>%
+  rast()
 
-for(i in 1:length(fractions))
-{
-  frac <- fractions[i]
-
-  maps_10km[[i]] <- predict(
-    cov_10km,
-    models[[i]],
-    fun = rfun,
-    na.rm = FALSE,
-    cores = 2,
-    filename = paste0(predfolder, frac,  "_10km.tif"),
-    overwrite = TRUE
-  )
-}
-
-# Run until here (2023-02-01)
-
-# All of Denmark
-
-predfolder2 <- paste0(dir_dat, "/predictions_", testn, "/") %T>% dir.create()
-
-tmpfolder <- paste0(dir_dat, "/Temp/")
-
-terraOptions(memfrac = 0.3, tempdir = tmpfolder)
-
-maps <- list()
-
-for(i in 1:length(fractions))
-{
-  frac <- fractions[i]
-  
-  maps[[i]] <- predict(
-    cov,
-    models[[i]],
-    fun = rfun,
-    na.rm = FALSE,
-    cores = 12,
-    filename = paste0(predfolder2, frac,  ".tif"),
-    overwrite = TRUE
-  )
-}
+names(maps_10km) <- fractions
 
 # Inspect models
 
@@ -619,7 +630,6 @@ allpred %>%
   ylab("Prediction (%)")
 
 dev.off()
-dev.off()
 
 # Looking at 10 km maps
 
@@ -647,7 +657,6 @@ tiff(
 
 plot(maps_10km_stack2, col = cividis(100))
 
-dev.off()
 dev.off()
 
 JB <- function(clay, silt, sand_f, SOM, CaCO3)
@@ -701,7 +710,6 @@ plot(
 )
 
 dev.off()
-dev.off()
 
 
 # Covariate importance
@@ -749,14 +757,14 @@ l %<>%
 
 l$category %<>% as.factor()
 
-levels(l$category) <- c(
-  "Bare soil",
-  "Spatial position",
-  "Parent materials",
-  "Topography",
-  "S2 time series",
-  "Soil"
-)
+# levels(l$category) <- c(
+#   "Bare soil",
+#   "Spatial position",
+#   "Parent materials",
+#   "Topography",
+#   "S2 time series",
+#   "Soil"
+# )
 
 catcolors <- l$category %>%
   levels() %>%
@@ -793,144 +801,180 @@ l %>%
   colScale
 
 dev.off()
-dev.off()
 
 
 # Plot most important covariates
 # First find covariates with the highest general importance
 
-imp_list <- list()
+# imp_list <- list()
+# 
+# for (i in 1:length(fractions)) {
+#   imp_list[[i]] <- models[[i]] %>%
+#     varImp() %>%
+#     .$importance %>%
+#     rownames_to_column(var = "covariate") %>%
+#     mutate(fraction = fractions[[i]])
+# }
+# 
+# imp_list %>%
+#   bind_rows() %>%
+#   pivot_wider(
+#     id_cols = covariate,
+#     names_from = fraction,
+#     values_from = Overall
+#     ) %>%
+#   rowwise() %>%
+#   mutate(
+#     mean = mean(c_across(-covariate), na.rm = TRUE)
+#   ) %>%
+#   arrange(-mean) %>%
+#   print(n = 20)
+# 
+# figure_covariates <- c(
+#   "ogc_lite_pi0000",
+#   "s2_geomedian_b3",
+#   "s1_baresoil_composite_vh_8_days",
+#   "s2_geomedian_20180501_20180731_b7",
+#   "dhm2015_terraen_10m"
+#   )
+# 
+# short_names <- c(
+#   "DEM",
+#   "UTMX",
+#   "S1_bare_vh",
+#   "S2_summer_b7",
+#   "S2_bare_b3"
+# )
+# 
+# figure_cols <- c(figure_covariates, fractions)
+# 
+# library(scales)  # For number formats
+# 
+# tiff(
+#   paste0(dir_results, "/covariate_effects_test", testn, ".tiff"),
+#   width = 16,
+#   height = 10,
+#   units = "cm",
+#   res = 300
+# )
+# 
+# obs_top %>%
+#   select(all_of(figure_cols)) %>%
+#   # sample_frac(0.1) %>%
+#   mutate(
+#     s1_baresoil_composite_vh_8_days = ifelse(
+#       s1_baresoil_composite_vh_8_days == 0 | s1_baresoil_composite_vh_8_days < -3000,
+#       NA,
+#       s1_baresoil_composite_vh_8_days
+#     ),
+#     s2_geomedian_b3 = ifelse(
+#       s2_geomedian_b3 > 2000,
+#       NA,
+#       s2_geomedian_b3
+#     ),
+#     logCaCO3 = ifelse(
+#       is.finite(logCaCO3),
+#       logCaCO3,
+#       NA
+#     ),
+#     logSOC = ifelse(
+#       logSOC > -2.5,
+#       logSOC,
+#       NA
+#     ),
+#     clay = ifelse(
+#       clay < 30,
+#       clay,
+#       NA
+#     ),
+#     silt = ifelse(
+#       silt < 30,
+#       silt,
+#       NA
+#     )
+#   ) %>%
+#   rename(
+#     DEM = dhm2015_terraen_10m,
+#     UTMX = ogc_lite_pi0000,
+#     S1_bare_vh = s1_baresoil_composite_vh_8_days,
+#     S2_summer_b7 = s2_geomedian_20180501_20180731_b7,
+#     S2_bare_b3 = s2_geomedian_b3
+#   ) %>%
+#   pivot_longer(
+#     all_of(short_names),
+#     names_to = "Covariate",
+#     values_to = "x_value"
+#   ) %>%
+#   pivot_longer(
+#     all_of(fractions),
+#     names_to = "Fraction",
+#     values_to = "y_value",
+#   ) %>%
+#   ggplot(
+#     aes(
+#       x = x_value,
+#       y = y_value
+#     )
+#   ) +
+#   geom_point(alpha = .01, shape = 16) +
+#   facet_grid(
+#     factor(Fraction, levels = fractions) ~ Covariate,
+#     scales = "free"
+#   ) +
+#   geom_smooth(
+#     se = FALSE,
+#     color = "red"
+#     ) +
+#   labs(
+#     x = "Covariate value",
+#     y = "Observation (%)"
+#   ) +
+#   scale_x_continuous(
+#     n.breaks = 3,
+#     labels = label_number(scale_cut = cut_short_scale())
+#     ) +
+#   scale_y_continuous(n.breaks = 3) +
+#   theme(strip.text.y.right = element_text(angle = 0))
+# 
+# dev.off()
 
-for (i in 1:length(fractions)) {
-  imp_list[[i]] <- models[[i]] %>%
-    varImp() %>%
-    .$importance %>%
-    rownames_to_column(var = "covariate") %>%
-    mutate(fraction = fractions[[i]])
+# Maps for all of Denmark
+# 2023-03-09: Took 24 hours for less than 25%. Not feasible.
+# Need to test:
+# - Variable selection
+# - Tiles
+
+cov2 <- subset(cov, cov_selected)
+
+predfolder2 <- paste0(dir_dat, "/predictions_", testn, "/") %T>% dir.create()
+
+tmpfolder <- paste0(dir_dat, "/Temp/")
+
+terraOptions(memfrac = 0.15, tempdir = tmpfolder)
+
+maps <- list()
+
+for(i in 1:length(fractions))
+{
+  frac <- fractions[i]
+  
+  showConnections()
+  
+  maps[[i]] <- predict(
+    cov2,
+    models[[i]],
+    fun = rfun,
+    na.rm = FALSE,
+    cores = 19,
+    filename = paste0(predfolder2, frac,  ".tif"),
+    overwrite = TRUE,
+    const = data.frame(
+      SOM_removed = TRUE,
+      year = 2010
+    )
+  )
 }
 
-imp_list %>%
-  bind_rows() %>%
-  pivot_wider(
-    id_cols = covariate,
-    names_from = fraction,
-    values_from = Overall
-    ) %>%
-  rowwise() %>%
-  mutate(
-    mean = mean(c_across(-covariate), na.rm = TRUE)
-  ) %>%
-  arrange(-mean) %>%
-  print(n = 20)
-
-figure_covariates <- c(
-  "ogc_lite_pi0000",
-  "s2_geomedian_b3",
-  "s1_baresoil_composite_vh_8_days",
-  "s2_geomedian_20180501_20180731_b7",
-  "dhm2015_terraen_10m"
-  )
-
-short_names <- c(
-  "DEM",
-  "UTMX",
-  "S1_bare_vh",
-  "S2_summer_b7",
-  "S2_bare_b3"
-)
-
-figure_cols <- c(figure_covariates, fractions)
-
-library(scales)  # For number formats
-
-tiff(
-  paste0(dir_results, "/covariate_effects_test", testn, ".tiff"),
-  width = 16,
-  height = 10,
-  units = "cm",
-  res = 300
-)
-
-obs_top %>%
-  select(all_of(figure_cols)) %>%
-  # sample_frac(0.1) %>%
-  mutate(
-    s1_baresoil_composite_vh_8_days = ifelse(
-      s1_baresoil_composite_vh_8_days == 0 | s1_baresoil_composite_vh_8_days < -3000,
-      NA,
-      s1_baresoil_composite_vh_8_days
-    ),
-    s2_geomedian_b3 = ifelse(
-      s2_geomedian_b3 > 2000,
-      NA,
-      s2_geomedian_b3
-    ),
-    logCaCO3 = ifelse(
-      is.finite(logCaCO3),
-      logCaCO3,
-      NA
-    ),
-    logSOC = ifelse(
-      logSOC > -2.5,
-      logSOC,
-      NA
-    ),
-    clay = ifelse(
-      clay < 30,
-      clay,
-      NA
-    ),
-    silt = ifelse(
-      silt < 30,
-      silt,
-      NA
-    )
-  ) %>%
-  rename(
-    DEM = dhm2015_terraen_10m,
-    UTMX = ogc_lite_pi0000,
-    S1_bare_vh = s1_baresoil_composite_vh_8_days,
-    S2_summer_b7 = s2_geomedian_20180501_20180731_b7,
-    S2_bare_b3 = s2_geomedian_b3
-  ) %>%
-  pivot_longer(
-    all_of(short_names),
-    names_to = "Covariate",
-    values_to = "x_value"
-  ) %>%
-  pivot_longer(
-    all_of(fractions),
-    names_to = "Fraction",
-    values_to = "y_value",
-  ) %>%
-  ggplot(
-    aes(
-      x = x_value,
-      y = y_value
-    )
-  ) +
-  geom_point(alpha = .01, shape = 16) +
-  facet_grid(
-    factor(Fraction, levels = fractions) ~ Covariate,
-    scales = "free"
-  ) +
-  geom_smooth(
-    se = FALSE,
-    color = "red"
-    ) +
-  labs(
-    x = "Covariate value",
-    y = "Observation (%)"
-  ) +
-  scale_x_continuous(
-    n.breaks = 3,
-    labels = label_number(scale_cut = cut_short_scale())
-    ) +
-  scale_y_continuous(n.breaks = 3) +
-  theme(strip.text.y.right = element_text(angle = 0))
-
-dev.off()
-dev.off()
 
 # To do:
 # Use all observations
@@ -939,6 +983,6 @@ dev.off()
 # Analyze importance [ok]
 # Make maps
 # Drop gw maps for clay [ok]
-# Drop gw maps entirely
+# Drop gw maps entirely [ok]
 
 # END

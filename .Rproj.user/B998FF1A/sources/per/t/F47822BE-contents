@@ -83,35 +83,35 @@ buffer_SEGES <- terra::buffer(
 
 # 4 Extract
 
-# dsc_extr <- terra::extract(
-#   x = cov,
-#   y = dsc,
-#   ID = FALSE,
-# )
-
-buffer_dsc_extr <- exact_extract(
-    x = cov,
-    y = buffer_dsc,
-    fun = "mean",
-    progress = TRUE
-  )
-
-names(buffer_dsc_extr) <- names(cov)
-
-# SEGES_extr <- terra::extract(
-#     x = cov,
-#     y = SEGES,
-#     ID = FALSE,
-#   )
-
-buffer_SEGES_extr <- exact_extract(
+dsc_extr <- terra::extract(
   x = cov,
-  y = buffer_SEGES,
-  fun = "mean",
-  progress = TRUE
+  y = dsc,
+  ID = FALSE,
 )
 
-names(buffer_SEGES_extr) <- names(cov)
+# buffer_dsc_extr <- exact_extract(
+#     x = cov,
+#     y = buffer_dsc,
+#     fun = "mean",
+#     progress = TRUE
+#   )
+
+# names(buffer_dsc_extr) <- names(cov)
+
+SEGES_extr <- terra::extract(
+    x = cov,
+    y = SEGES,
+    ID = FALSE,
+  )
+
+# buffer_SEGES_extr <- exact_extract(
+#   x = cov,
+#   y = buffer_SEGES,
+#   fun = "mean",
+#   progress = TRUE
+# )
+
+# names(buffer_SEGES_extr) <- names(cov)
 
 SINKS_extr <- terra::extract(
     x = cov,
@@ -124,33 +124,33 @@ SINKS_extr <- terra::extract(
 dir_extr <- dir_dat %>%
   paste0(., "/extracts/")
 
-# write.table(
-#   dsc_extr,
-#   paste0(dir_extr, "dsc_extr.csv"),
-#   row.names = FALSE,
-#   sep = ";"
-# )
-
 write.table(
-  buffer_dsc_extr,
-  paste0(dir_extr, "buffer_dsc_extr.csv"),
+  dsc_extr,
+  paste0(dir_extr, "dsc_extr.csv"),
   row.names = FALSE,
   sep = ";"
 )
 
 # write.table(
-#   SEGES_extr,
-#   paste0(dir_extr, "SEGES_extr.csv"),
+#   buffer_dsc_extr,
+#   paste0(dir_extr, "buffer_dsc_extr.csv"),
 #   row.names = FALSE,
 #   sep = ";"
 # )
 
 write.table(
-  buffer_SEGES_extr,
-  paste0(dir_extr, "buffer_SEGES_extr.csv"),
+  SEGES_extr,
+  paste0(dir_extr, "SEGES_extr.csv"),
   row.names = FALSE,
   sep = ";"
 )
+
+# write.table(
+#   buffer_SEGES_extr,
+#   paste0(dir_extr, "buffer_SEGES_extr.csv"),
+#   row.names = FALSE,
+#   sep = ";"
+# )
 
 write.table(
   SINKS_extr,

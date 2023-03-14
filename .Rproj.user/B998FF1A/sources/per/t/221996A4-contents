@@ -1,0 +1,167 @@
+# 08: Clustering of raster cells
+
+# 1: Startup
+
+library(terra)
+library(magrittr)
+library(graphics)
+library(cluster)
+library(randomcoloR)
+library(dplyr)
+library(MultivariateRandomForest)
+
+dir_code <- getwd()
+root <- dirname(dir_code)
+dir_dat <- paste0(root, "/digijord_data/")
+dir_cov <- dir_dat %>% paste0(., "/covariates")
+
+testn <- 6
+mycrs <- "EPSG:25832"
+
+dem <- dir_cov %>%
+  paste0('/dhm2015_terraen_10m.tif') %>%
+  rast()
+
+# dem1km <- dem %>%
+#   aggregate(
+#     fact = 100
+#     , na.rm = TRUE
+#     , cores = 20
+#     , filename = paste0(dir_dat, '/layers/dhm2015_terraen_1km.tif')
+#     , overwrite = TRUE
+#   )
+
+dem1km <- dir_dat %>%
+  paste0(., '/layers/dhm2015_terraen_1km.tif') %>%
+  rast()
+
+coords <- crds(dem1km)
+
+
+# 2: Distance-based clustering for islands
+
+distances <- dist(coords, method = 'maximum')
+
+clustering <- hclust(distances, method = 'single')
+
+groups <- cutree(clustering, k = 5)
+
+groups_df <- cbind(coords, groups) %>%
+  as.data.frame()
+
+groups_r <- rast(groups_df)
+
+set.seed(1)
+
+myrandomcolors <- randomColor(length(unique(groups)))
+
+plot(groups_r, col = myrandomcolors)
+
+
+# 3: 4-km raster for MRF
+
+dem4km <- dem1km %>%
+  is.na(.) %>%
+  ifel(., NA, 1) %>%
+    aggregate(
+      fact = 4,
+      na.rm = TRUE,
+      overwrite = TRUE,
+      fun = 'sum'
+    ) %T>%
+  plot
+
+dem4km_df <- as.data.frame(dem4km, xy = TRUE, cells = TRUE)
+
+coords_4km <- dem4km_df %>%
+  select(c(x, y)) %>%
+  as.matrix()
+
+
+# Multivariate decision tree
+
+nrows <- nrow(coords_4km)
+
+# nrows <- 1000
+
+mytree <- build_single_tree(
+  coords_4km[1:nrows, ],
+  coords_4km[1:nrows, ],
+  min_leaf = nrows/40,
+  m_feature = 2,
+  Command = 2,
+  Inv_Cov_Y = solve(cov(coords_4km[1:nrows, ]))
+  )
+
+mypred <- single_tree_prediction(
+  mytree,
+  coords,
+  2
+  )
+
+mypred <- paste(mypred[, 1], mypred[, 2])
+
+mydf <- as.data.frame(coords)
+
+mydf$pred <- as.factor(mypred) %>% as.numeric()
+
+set.seed(1)
+
+myrandomcolors2 <- randomColor(length(unique(mydf$pred)))
+
+mydf %>% rast %>% plot(col = myrandomcolors2)
+
+# Combine groups
+
+df_all <- mydf %>%
+  select(pred) %>%
+  bind_cols(groups_df, .) %>%
+  mutate(
+    group_final = ifelse(
+      groups == 1,
+      pred,
+      groups*100
+    )
+  ) %>% select(
+    c(x, y, group_final)
+  ) %>%
+  mutate(
+    group_final = group_final %>% as.factor() %>% as.numeric()
+  )
+
+myrandomcolors3 <- randomColor(max(df_all$group_final))
+
+df_all %>% rast() %>% as.factor() %>% plot(col = myrandomcolors3)
+
+# Turn into polygons
+
+rast_all <- rast(df_all)
+
+crs(rast_all) <- mycrs
+
+polygons_all <- as.polygons(rast_all) %T>% plot("group_final")
+
+exts <- list()
+
+for (i in 1:length(unique(df_all$group_final))) {
+  exts[[i]] <- ext(polygons_all[i]) %>% as.polygons(crs = mycrs)
+}
+
+final_boxes <- vect(exts)
+
+plot(rast_all, col = myrandomcolors3)
+plot(final_boxes, add = TRUE)
+
+# Write to shapefile
+
+dir_tiles <- dir_dat %>%
+  paste0(., "/tiles_", length(myrandomcolors3), "/") %T>%
+  dir.create()
+
+writeVector(
+  final_boxes,
+  filename = paste0(dir_tiles, "tiles.shp"),
+  filetype = "ESRI Shapefile"
+)
+
+# END

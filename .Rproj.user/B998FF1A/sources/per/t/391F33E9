@@ -1,27 +1,27 @@
 {
-    "id": "79849D8C",
-    "path": "C:/Users/au542768/digijord/digijord_code/04_folds.R",
-    "project_path": "04_folds.R",
+    "id": "391F33E9",
+    "path": "C:/Users/au542768/digijord/digijord_code/09_tiles_cov.R",
+    "project_path": "09_tiles_cov.R",
     "type": "r_source",
-    "hash": "1564218560",
+    "hash": "413946502",
     "contents": "",
     "dirty": false,
-    "created": 1675240750672.0,
+    "created": 1678372345831.0,
     "source_on_save": false,
-    "relative_order": 4,
+    "relative_order": 9,
     "properties": {
         "tempName": "Untitled1",
         "source_window_id": "",
         "Source": "Source",
-        "cursorPosition": "149,0",
-        "scrollLine": "0"
+        "cursorPosition": "95,0",
+        "scrollLine": "68"
     },
     "folds": "",
-    "lastKnownWriteTime": 1675246188,
+    "lastKnownWriteTime": 1678373625,
     "encoding": "UTF-8",
     "collab_server": "",
     "source_window": "",
-    "last_content_update": 1675246188315,
+    "last_content_update": 1678373625427,
     "read_only": false,
     "read_only_alternatives": []
 }
