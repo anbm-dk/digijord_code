@@ -477,7 +477,7 @@ rfun <- function(mod, dat, ...) {
   library(Cubist)
   
   rfun2 <- function(mod2, dat2, ...) {
-    notallnas <- rowSums(is.na(dat2)) != ncol(dat2)
+    notallnas <- rowSums(is.na(dat2)) < (ncol(dat2) - 2)  # NB: Edit this line
     out2 <- numeric(nrow(dat2))
     if (sum(notallnas) > 0) {
       out2[notallnas] <- predict(
@@ -944,37 +944,167 @@ dev.off()
 # - Variable selection
 # - Tiles
 
-cov2 <- subset(cov, cov_selected)
+# cov2 <- subset(cov, cov_selected)
+# 
+# predfolder2 <- paste0(dir_dat, "/predictions_", testn, "/") %T>% dir.create()
+# 
+# tmpfolder <- paste0(dir_dat, "/Temp/")
+# 
+# terraOptions(memfrac = 0.15, tempdir = tmpfolder)
+# 
+# maps <- list()
+# 
+# for(i in 1:length(fractions))
+# {
+#   frac <- fractions[i]
+#   
+#   showConnections()
+#   
+#   maps[[i]] <- predict(
+#     cov2,
+#     models[[i]],
+#     fun = rfun,
+#     na.rm = FALSE,
+#     cores = 19,
+#     filename = paste0(predfolder2, frac,  ".tif"),
+#     overwrite = TRUE,
+#     const = data.frame(
+#       SOM_removed = TRUE,
+#       year = 2010
+#     )
+#   )
+# }
 
-predfolder2 <- paste0(dir_dat, "/predictions_", testn, "/") %T>% dir.create()
 
-tmpfolder <- paste0(dir_dat, "/Temp/")
+# Test tiles
 
-terraOptions(memfrac = 0.15, tempdir = tmpfolder)
+dir_tiles <- dir_dat %>%
+  paste0(., "/tiles_60/")
 
-maps <- list()
+subdir_tiles <- dir_tiles %>% list.dirs() %>% .[-1]
 
-for(i in 1:length(fractions))
-{
-  frac <- fractions[i]
-  
-  showConnections()
-  
-  maps[[i]] <- predict(
-    cov2,
-    models[[i]],
-    fun = rfun,
-    na.rm = FALSE,
-    cores = 19,
-    filename = paste0(predfolder2, frac,  ".tif"),
-    overwrite = TRUE,
-    const = data.frame(
-      SOM_removed = TRUE,
-      year = 2010
+library(parallel)
+
+showConnections()
+
+detectCores()
+
+numCores <- detectCores()
+numCores
+
+dir_pred_all <- dir_results %>%
+  paste0(., "/predictions/") %T>%
+  dir.create()
+
+dir_pred_tiles <- dir_pred_all  %>%
+  paste0(., "/tiles/") %T>%
+  dir.create()
+
+i <- 1
+
+frac <- fractions[i]
+
+dir_pred_tiles_frac <- dir_pred_tiles %>%
+  paste0(., "/", names(models)[i], "/") %T>%
+  dir.create()
+
+
+model_i <- models[[i]]
+
+cl <- makeCluster(numCores)
+
+
+
+clusterEvalQ(
+  cl,
+  {
+    library(terra)
+    library(caret)
+    library(Cubist)
+    library(magrittr)
+    library(dplyr)
+  }
+)
+
+clusterExport(
+  cl,
+  c("model_i",
+    "subdir_tiles",
+    "dir_pred_tiles_frac",
+    "frac",
+    "cov_names",
+    "cov_selected",
+    "rfun",
+    "dir_dat"
     )
   )
-}
 
+# Use parSapplyLB instead
+
+# March 16, 2023: 60 tiles, 121 predictors, clay: 32 hours
+
+parSapplyLB(
+  cl,
+  1:length(subdir_tiles),
+  function(x) {
+    tmpfolder <- paste0(dir_dat, "/Temp/")
+    
+    terraOptions(memfrac = 0.02, tempdir = tmpfolder)
+    
+    cov_i <- subdir_tiles[x] %>%
+      list.files(full.names = TRUE) %>%
+      rast()
+    
+    names(cov_i) <- cov_names
+    
+    cov_i2 <- subset(cov_i, cov_selected)
+    
+    outname_i <- dir_pred_tiles_frac %>%
+      paste0(., "/", frac, "_tile_", x, ".tif")
+    
+    predict(
+      cov_i2,
+      model_i,
+      fun = rfun,
+      na.rm = FALSE,
+      filename = outname_i,
+      overwrite = TRUE,
+      const = data.frame(
+        SOM_removed = TRUE,
+        year = 2010
+      )
+    )
+  }
+)
+
+stopCluster(cl)
+registerDoSEQ()
+rm(cl)
+
+outfiles_table <- dir_pred_tiles_frac %>%
+  list.files(full.names = TRUE) %>%
+  file.info() %>%
+  rownames_to_column()
+
+outfiles_dims <- dir_pred_tiles_frac %>%
+  list.files(full.names = TRUE) %>%
+  lapply(
+    function(x) {
+      r <- rast(x)
+      out <- dim(r)
+      return(out)
+    }
+  ) %>%
+  unlist() %>%
+  matrix(nrow = 3) %>%
+  t()
+
+cbind(outfiles_table, outfiles_dims) %>%
+  write.table(
+    file = "out_tiles.csv",
+    sep = ";",
+    row.names = FALSE
+    )
 
 # To do:
 # Use all observations
@@ -984,5 +1114,10 @@ for(i in 1:length(fractions))
 # Make maps
 # Drop gw maps for clay [ok]
 # Drop gw maps entirely [ok]
+
+# Implement forward feature selection
+# Include forest samples
+# Include profile database
+# Include depth
 
 # END
