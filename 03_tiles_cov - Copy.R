@@ -58,22 +58,26 @@ cropstack <- function(
 ) {
   for(i in 1:length(x)) {
     r <- x[i] %>% rast()
-    dtype <- x %>%
+    dtype <- r %>%
+      sources %>%
       raster::raster(.) %>%
       raster::dataType(.)
-    outname_base <- x %>%
-      basename() %>%
+    outname <- r %>%
+      sources %>%
+      basename %>%
+      tools::file_path_sans_ext(.) %>%
+      make.names() %>%
+      paste0(folder, ., ".tif")
+    names(r) <- r %>%
+      sources %>%
+      basename %>%
       tools::file_path_sans_ext(.) %>%
       make.names()
-    outfile <- outname_base %>%
-      paste0(folder, "/", ., ".tif")
-    crop_r <- r %>%
-      crop(y = y)
-    names(crop_r) <- outname_base
-    crop_r %>%
+    r %>%
+      crop(y = y) %>%
       writeRaster(
         datatype = dtype,
-        filename = outfile,
+        filename = outname,
         overwrite = TRUE
       )
   }
@@ -81,19 +85,17 @@ cropstack <- function(
 
 # Loop for tile creation
 
-# Include parallel operation
-
-for (j in 1:length(tile_shapes)) {
-  print(j)
+for (i in 1:length(tile_shapes)) {
+  print(i)
   
-  dir_tile_j <- dir_tiles %>%
-    paste0(., "/tile_", tile_numbers[j], "/") %T>%
+  dir_tile_i <- dir_tiles %>%
+    paste0(., "/tile_", tile_numbers[i], "/") %T>%
     dir.create()
   
   cov_files %>%
     cropstack(
-      y = tile_shapes[j],
-      folder = dir_tile_j
+      y = tile_shapes[i],
+      folder = dir_tile_i
     )
 }
 

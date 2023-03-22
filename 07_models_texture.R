@@ -979,7 +979,7 @@ dev.off()
 # Test tiles
 
 dir_tiles <- dir_dat %>%
-  paste0(., "/tiles_60/")
+  paste0(., "/tiles_591/")
 
 subdir_tiles <- dir_tiles %>% list.dirs() %>% .[-1]
 
@@ -1008,12 +1008,11 @@ dir_pred_tiles_frac <- dir_pred_tiles %>%
   paste0(., "/", names(models)[i], "/") %T>%
   dir.create()
 
-
 model_i <- models[[i]]
 
+showConnections()
+
 cl <- makeCluster(numCores)
-
-
 
 clusterEvalQ(
   cl,
@@ -1051,23 +1050,25 @@ parSapplyLB(
     
     terraOptions(memfrac = 0.02, tempdir = tmpfolder)
     
-    cov_i <- subdir_tiles[x] %>%
+    cov_x <- subdir_tiles[x] %>%
       list.files(full.names = TRUE) %>%
       rast()
     
-    names(cov_i) <- cov_names
+    names(cov_x) <- cov_names
     
-    cov_i2 <- subset(cov_i, cov_selected)
+    cov_x2 <- subset(cov_x, cov_selected)
     
-    outname_i <- dir_pred_tiles_frac %>%
-      paste0(., "/", frac, "_tile_", x, ".tif")
+    tilename_x <- basename(subdir_tiles[x])
+    
+    outname_x <- dir_pred_tiles_frac %>%
+      paste0(., "/", frac, "_", tilename_x, ".tif")
     
     predict(
-      cov_i2,
+      cov_x2,
       model_i,
       fun = rfun,
       na.rm = FALSE,
-      filename = outname_i,
+      filename = outname_x,
       overwrite = TRUE,
       const = data.frame(
         SOM_removed = TRUE,
