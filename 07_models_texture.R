@@ -978,19 +978,16 @@ dev.off()
 
 # Test tiles
 
+library(parallel)
+
+numCores <- detectCores()
+numCores
+
 dir_tiles <- dir_dat %>%
   paste0(., "/tiles_591/")
 
 subdir_tiles <- dir_tiles %>% list.dirs() %>% .[-1]
 
-library(parallel)
-
-showConnections()
-
-detectCores()
-
-numCores <- detectCores()
-numCores
 
 dir_pred_all <- dir_results %>%
   paste0(., "/predictions/") %T>%
