@@ -12,7 +12,6 @@ root <- dirname(dir_code)
 dir_dat <- paste0(root, "/digijord_data/")
 dir_cov <- dir_dat %>% paste0(., "/covariates")
 
-testn <- 6
 mycrs <- "EPSG:25832"
 
 dir_tiles <- dir_dat %>%
@@ -51,50 +50,86 @@ tile_numbers <- length(tile_shapes) %>%
 
 # Cropping function
 
-cropstack <- function(
-    x,  # list of files
-    y,  # extent
-    folder # target folder
-) {
-  for(i in 1:length(x)) {
-    r <- x[i] %>% rast()
-    dtype <- x %>%
-      raster::raster(.) %>%
-      raster::dataType(.)
-    outname_base <- x %>%
-      basename() %>%
-      tools::file_path_sans_ext(.) %>%
-      make.names()
-    outfile <- outname_base %>%
-      paste0(folder, "/", ., ".tif")
-    crop_r <- r %>%
-      crop(y = y)
-    names(crop_r) <- outname_base
-    crop_r %>%
-      writeRaster(
-        datatype = dtype,
-        filename = outfile,
-        overwrite = TRUE
-      )
-  }
-}
+source("f_cropstack.R")
 
 # Loop for tile creation
 
 # Include parallel operation
 
-for (j in 1:length(tile_shapes)) {
-  print(j)
-  
-  dir_tile_j <- dir_tiles %>%
-    paste0(., "/tile_", tile_numbers[j], "/") %T>%
-    dir.create()
-  
-  cov_files %>%
+# for (j in 1:length(tile_shapes)) {
+# for (j in 1) {
+#   print(j)
+# 
+#   dir_tile_j <- dir_tiles %>%
+#     paste0(., "/tile_", tile_numbers[j], "/") %T>%
+#     dir.create()
+# 
+#   cropstack(
+#     x = cov_files,
+#     y = tile_shapes[j],
+#     folder = dir_tile_j
+#   )
+# }
+
+library(parallel)
+
+numCores <- detectCores()
+numCores
+
+showConnections()
+
+cl <- makeCluster(numCores)
+
+clusterEvalQ(
+  cl,
+  {
+    library(raster)
+    library(terra)
+    library(magrittr)
+    library(dplyr)
+    library(tools)
+  }
+)
+
+clusterExport(
+  cl,
+  c("dir_dat",
+    "dir_tiles",
+    "dir_code",
+    "tile_numbers",
+    "cov_files"
+  )
+)
+
+parSapplyLB(
+  cl,
+  1:length(tile_shapes),
+  function(j) {
+    tmpfolder <- paste0(dir_dat, "/Temp/")
+    
+    terraOptions(memfrac = 0.02, tempdir = tmpfolder)
+    
+    dir_tile_j <- dir_tiles %>%
+      paste0(., "/tile_", tile_numbers[j], "/") %T>%
+      dir.create()
+    
+    tile_shapes <- dir_tiles %>%
+      base::paste0(., "/tiles.shp") %>%
+      terra::vect()
+    
+    source(paste0(dir_code, "/f_cropstack.R"))
+    
     cropstack(
+      x = cov_files,
       y = tile_shapes[j],
       folder = dir_tile_j
     )
-}
+  }
+)
+
+stopCluster(cl)
+foreach::registerDoSEQ()
+rm(cl)
+
 
 # END

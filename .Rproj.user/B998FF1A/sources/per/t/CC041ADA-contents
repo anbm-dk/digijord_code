@@ -1,12 +1,11 @@
 # 01: Crop and rename covariates
 
+# 1: Start up
+
 library(terra)
 library(magrittr)
 library(raster)
 library(tools)
-
-# TO DO:
-# Assign layer names that match the file names
 
 dir_code <- getwd()
 root <- dirname(dir_code)
@@ -277,13 +276,27 @@ crs(dem) <- mycrs
 # names(hillyness) <- "hillyness"
 # NAflag(hillyness) <- 128
 # 
-# outname <- dir_cov %>%
+# outname_hillyness <- dir_cov %>%
 #   paste0(., "/hillyness.tif")
 # 
 # terra::crop(
 #   hillyness,
 #   dem,
-#   filename = outname,
+#   filename = outname_hillyness,
+#   datatype = "INT1U",
+#   overwrite = TRUE
+# )
+
+# Edit: Mask hillyness with DEM
+
+# r <- dir_dat %>%
+#   paste0(., "/hillyness.tif") %>%
+#   rast()
+# 
+# terra::mask(
+#   r,
+#   mask = dem,
+#   filename = outname_hillyness,
 #   datatype = "INT1U",
 #   overwrite = TRUE
 # )

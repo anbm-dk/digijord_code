@@ -80,99 +80,99 @@ coords_4km <- dem4km_df %>%
 
 # Multivariate decision tree
 
-nrows <- nrow(coords_4km)
-# my_minleaf <- nrows/40  # 60 tiles
-my_minleaf <- nrows/300  # 440 tiles
-
-# nrows <- 1000
-
-mytree <- build_single_tree(
-  coords_4km[1:nrows, ],
-  coords_4km[1:nrows, ],
-  min_leaf = my_minleaf,
-  m_feature = 2,
-  Command = 2,
-  Inv_Cov_Y = solve(cov(coords_4km[1:nrows, ]))
-  )
-
-mypred <- single_tree_prediction(
-  mytree,
-  coords,
-  2
-  )
-
-mypred <- paste(mypred[, 1], mypred[, 2])
-
-mydf <- as.data.frame(coords)
-
-mydf$pred <- as.factor(mypred) %>% as.numeric()
-
-set.seed(1)
-
-myrandomcolors2 <- randomColor(length(unique(mydf$pred)))
-
-mydf %>% rast %>% plot(col = myrandomcolors2)
-
-# Turn groups into polygons
-
-rast_mygroups <- rast(mydf)
-
-crs(rast_mygroups) <- mycrs
-
-group_polygons <- rast_mygroups %>%
-  as.polygons() %>%
-  disagg()
-
-exts <- list()
-
-for (i in 1:length(group_polygons)) {
-  exts[[i]] <- ext(group_polygons[i]) %>% as.polygons(crs = mycrs)
-  exts[[i]]$pred <- group_polygons$pred[i]
-}
-
-group_boxes <- vect(exts)
-
-crs(group_boxes) <- mycrs
-
-group_boxes_dissolved <- terra::aggregate(group_boxes, by = "pred")
-
-group_polygons2 <- group_boxes_dissolved %>%
-  disagg()
-
-exts2 <- list()
-
-for (i in 1:length(group_polygons2)) {
-  exts2[[i]] <- ext(group_polygons2[i]) %>% as.polygons(crs = mycrs)
-  exts2[[i]]$pred <- group_polygons2$pred[i]
-}
-
-group_boxes2 <- vect(exts2)
-
-group_boxes_dissolved2 <- terra::aggregate(group_boxes2, by = "pred")
-
-group_polygons3 <- group_boxes_dissolved2 %>%
-  disagg()
-
-exts3 <- list()
-
-for (i in 1:length(group_polygons3)) {
-  exts3[[i]] <- ext(group_polygons3[i]) %>% as.polygons(crs = mycrs)
-  exts3[[i]]$pred <- group_polygons3$pred[i]
-  exts3[[i]]$id <- i
-}
-
-group_boxes3 <- vect(exts3)
-
-terra::union(group_boxes3) # no more overlaps
-
-crs(group_boxes3) <- mycrs
-
-myrandomcolors_boxes <- randomColor(length(group_boxes3))
-
-plot(is.na(dem1km))
-plot(group_boxes3, add = TRUE)
-plot(group_boxes3, "id", col = myrandomcolors_boxes)
-plot(final_boxes, add = TRUE)
+# nrows <- nrow(coords_4km)
+# # my_minleaf <- nrows/40  # 60 tiles
+# my_minleaf <- nrows/300  # 440 tiles
+# 
+# # nrows <- 1000
+# 
+# mytree <- build_single_tree(
+#   coords_4km[1:nrows, ],
+#   coords_4km[1:nrows, ],
+#   min_leaf = my_minleaf,
+#   m_feature = 2,
+#   Command = 2,
+#   Inv_Cov_Y = solve(cov(coords_4km[1:nrows, ]))
+#   )
+# 
+# mypred <- single_tree_prediction(
+#   mytree,
+#   coords,
+#   2
+#   )
+# 
+# mypred <- paste(mypred[, 1], mypred[, 2])
+# 
+# mydf <- as.data.frame(coords)
+# 
+# mydf$pred <- as.factor(mypred) %>% as.numeric()
+# 
+# set.seed(1)
+# 
+# myrandomcolors2 <- randomColor(length(unique(mydf$pred)))
+# 
+# mydf %>% rast %>% plot(col = myrandomcolors2)
+# 
+# # Turn groups into polygons
+# 
+# rast_mygroups <- rast(mydf)
+# 
+# crs(rast_mygroups) <- mycrs
+# 
+# group_polygons <- rast_mygroups %>%
+#   as.polygons() %>%
+#   disagg()
+# 
+# exts <- list()
+# 
+# for (i in 1:length(group_polygons)) {
+#   exts[[i]] <- ext(group_polygons[i]) %>% as.polygons(crs = mycrs)
+#   exts[[i]]$pred <- group_polygons$pred[i]
+# }
+# 
+# group_boxes <- vect(exts)
+# 
+# crs(group_boxes) <- mycrs
+# 
+# group_boxes_dissolved <- terra::aggregate(group_boxes, by = "pred")
+# 
+# group_polygons2 <- group_boxes_dissolved %>%
+#   disagg()
+# 
+# exts2 <- list()
+# 
+# for (i in 1:length(group_polygons2)) {
+#   exts2[[i]] <- ext(group_polygons2[i]) %>% as.polygons(crs = mycrs)
+#   exts2[[i]]$pred <- group_polygons2$pred[i]
+# }
+# 
+# group_boxes2 <- vect(exts2)
+# 
+# group_boxes_dissolved2 <- terra::aggregate(group_boxes2, by = "pred")
+# 
+# group_polygons3 <- group_boxes_dissolved2 %>%
+#   disagg()
+# 
+# exts3 <- list()
+# 
+# for (i in 1:length(group_polygons3)) {
+#   exts3[[i]] <- ext(group_polygons3[i]) %>% as.polygons(crs = mycrs)
+#   exts3[[i]]$pred <- group_polygons3$pred[i]
+#   exts3[[i]]$id <- i
+# }
+# 
+# group_boxes3 <- vect(exts3)
+# 
+# terra::union(group_boxes3) # no more overlaps
+# 
+# crs(group_boxes3) <- mycrs
+# 
+# myrandomcolors_boxes <- randomColor(length(group_boxes3))
+# 
+# plot(is.na(dem1km))
+# plot(group_boxes3, add = TRUE)
+# plot(group_boxes3, "id", col = myrandomcolors_boxes)
+# plot(final_boxes, add = TRUE)
 
 # Square tiles
 
@@ -248,7 +248,11 @@ groups_merged_boxes$diagonals_m <- sqrt(
 
 max_diagonal <- 1556*10
 
-groups_merged_boxes <- subset(groups_merged_boxes, diagonals_m < max_diagonal)
+groups_merged_boxes <- subset(
+  groups_merged_boxes,
+  diagonals_m < max_diagonal,
+  NSE = TRUE
+  )
 
 plot(groups_merged_boxes, "diagonals_m")
 

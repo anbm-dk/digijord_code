@@ -1035,8 +1035,6 @@ clusterExport(
     )
   )
 
-# Use parSapplyLB instead
-
 # March 16, 2023: 60 tiles, 121 predictors, clay: 32 hours
 
 parSapplyLB(

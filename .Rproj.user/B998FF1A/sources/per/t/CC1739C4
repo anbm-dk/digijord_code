@@ -1,27 +1,27 @@
 {
-    "id": "391F33E9",
-    "path": "C:/Users/au542768/digijord/digijord_code/03_tiles_cov.R",
-    "project_path": "03_tiles_cov.R",
+    "id": "CC1739C4",
+    "path": "C:/Users/au542768/digijord/digijord_code/f_cropstack.R",
+    "project_path": "f_cropstack.R",
     "type": "r_source",
-    "hash": "4095538093",
+    "hash": "2986894004",
     "contents": "",
     "dirty": false,
-    "created": 1678372345831.0,
+    "created": 1679652306603.0,
     "source_on_save": false,
-    "relative_order": 3,
+    "relative_order": 11,
     "properties": {
         "tempName": "Untitled1",
         "source_window_id": "",
         "Source": "Source",
-        "cursorPosition": "132,0",
-        "scrollLine": "104"
+        "cursorPosition": "27,25",
+        "scrollLine": "4"
     },
     "folds": "",
-    "lastKnownWriteTime": 1679659849,
+    "lastKnownWriteTime": 1679655348,
     "encoding": "UTF-8",
     "collab_server": "",
     "source_window": "",
-    "last_content_update": 1679659849978,
+    "last_content_update": 1679655348037,
     "read_only": false,
     "read_only_alternatives": []
 }
