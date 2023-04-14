@@ -31,7 +31,7 @@ dir_code <- getwd()
 root <- dirname(dir_code)
 dir_dat <- paste0(root, "/digijord_data/")
 
-testn <- 6
+testn <- 8
 mycrs <- "EPSG:25832"
 
 # Results folder
@@ -114,7 +114,7 @@ SINKS_folds <- dir_folds %>%
 dir_cov <- dir_dat %>% paste0(., "/covariates")
 
 cov_cats <- dir_code %>%
-  paste0(., "/cov_categories_20230227.csv") %>%
+  paste0(., "/cov_categories_20230323.csv") %>%
   read.table(
     sep = ";",
     header = TRUE
@@ -311,109 +311,158 @@ WeightedSummary <- function (
 n <- 1000
 
 use_all_points <- TRUE
+# use_all_points <- FALSE
+
+# NB: Weighted cubist
+
+l <- getModelInfo("cubist")
+
+cubist_weighted <- l$cubist
+
+cubist_weighted$label <- "cubist_weighted"
+
+cubist_weighted$fit <- function(x, y, wts, param, lev, last, classProbs, ...) {
+  if(!is.null(wts)) {
+    out <- Cubist::cubist(x,
+                          y,
+                          committees = param$committees,
+                          weights = wts,
+                          ...)
+  } else {
+    out <- Cubist::cubist(x, y, committees =  param$committees,  ...)
+  }
+  if(last) out$tuneValue$neighbors <- param$neighbors
+  out
+}
+
+cubist_weighted$predict <- function(modelFit, newdata, submodels = NULL) {
+  out <- predict(modelFit,
+                 as.data.frame(newdata),
+                 neighbors = modelFit$tuneValue$neighbors)
+  if(!is.null(submodels)) {
+    tmp <- vector(mode = "list", length = nrow(submodels) + 1)
+    tmp[[1]] <- out
+    
+    for(j in seq(along = submodels$neighbors))
+      tmp[[j+1]] <- predict(modelFit,
+                            as.data.frame(newdata),
+                            neighbors = submodels$neighbors[j])
+    
+    out <- tmp
+  }
+  out
+}
+
+cubist_weighted$tags <- c(l$cubist$tags, "Accepts Case Weights")
 
 
 # 9: Train models
 
-# models <- list()
-# 
-# for (i in 1:length(fractions))
-# {
-#   frac <- fractions[i]
-# 
-#   print(frac)
-# 
-#   cov_c_i <- cov_selected %>% paste0(collapse = " + ")
-# 
-#   if (i %in% 1:4) {
-#     cov_c_i <- cov_selected %>%
-#       c(., "SOM_removed") %>%
-#       paste0(collapse = " + ")
-#   } else {
-#     if (frac == "logSOC") {
-#       cov_c_i <- cov_selected %>%
-#         c(., "year") %>%
-#         paste0(collapse = " + ")
-#     }
-#   }
-# 
-#   formula_i <- paste0(frac, " ~ ", cov_c_i) %>%
-#     as.formula()
-# 
-#   trdat <- obs_top %>%
-#     filter(is.finite(.data[[frac]]))
-# 
-#   if (!use_all_points) {
-#     trdat %<>% sample_n(n)
-#   }
-# 
-#   # Calculate weights
-#   dens <- ppp(
-#     trdat$UTMX,
-#     trdat$UTMY,
-#     c(441000, 894000),
-#     c(6049000, 6403000)
-#   ) %>%
-#     density(
-#       sigma = 250,
-#       at = 'points',
-#       leaveoneout = FALSE
-#     )
-# 
-#   trdat %<>%
-#     mutate(
-#       density = dens,
-#       w = min(dens) / dens
-#     )
-# 
-#   folds_i <- lapply(
-#     1:10,
-#     function(x) {
-#       out <- trdat %>%
-#         mutate(
-#           is_j = fold != x,
-#           rnum = row_number(),
-#           ind_j = is_j*rnum
-#         ) %>%
-#         filter(ind_j != 0) %>%
-#         select(ind_j) %>%
-#         unlist() %>%
-#         unname()
-#     }
-#   )
-# 
-#   showConnections()
-# 
-#   cl <- makePSOCKcluster(10)
-#   registerDoParallel(cl)
-# 
-#   set.seed(1)
-# 
-#   models[[i]] <- caret::train(
-#     form = formula_i,
-#     data = trdat,
-#     method = "cubist",
-#     na.action = na.pass,
-#     tuneGrid = tgrid,
-#     trControl = trainControl(
-#       index = folds_i,
-#       savePredictions = "final",
-#       predictionBounds = c(bounds_lower[i], bounds_upper[i]),
-#       summaryFunction = WeightedSummary
-#     ),
-#     metric = 'RMSEw',
-#     maximize = FALSE,
-#     weights = trdat$w
-#   )
-# 
-#   registerDoSEQ()
-#   rm(cl)
-# 
-#   saveRDS(
-#     models[[i]],
-#     paste0(dir_results, "/model_", frac, ".rds")
-#   )
-# }
+models <- list()
+
+for (i in 1:length(fractions))
+{
+  frac <- fractions[i]
+
+  print(frac)
+
+  cov_c_i <- cov_selected %>% paste0(collapse = " + ")
+
+  if (i %in% 1:4) {
+    cov_c_i <- cov_selected %>%
+      c(., "SOM_removed") %>%
+      paste0(collapse = " + ")
+  } else {
+    if (frac == "logSOC") {
+      cov_c_i <- cov_selected %>%
+        c(., "year") %>%
+        paste0(collapse = " + ")
+    }
+  }
+
+  formula_i <- paste0(frac, " ~ ", cov_c_i) %>%
+    as.formula()
+
+  trdat <- obs_top %>%
+    filter(is.finite(.data[[frac]]))
+
+  if (!use_all_points) {
+    trdat %<>% sample_n(n)
+  }
+
+  # Calculate weights
+  dens <- ppp(
+    trdat$UTMX,
+    trdat$UTMY,
+    c(441000, 894000),
+    c(6049000, 6403000)
+  ) %>%
+    density(
+      sigma = 250,
+      at = 'points',
+      leaveoneout = FALSE
+    )
+  
+  attributes(dens) <- NULL
+  
+  min(dens)
+  max(dens)
+
+  trdat %<>%
+    mutate(
+      density = dens,
+      w = min(dens) / dens
+    )
+  
+  folds_i <- lapply(
+    1:10,
+    function(x) {
+      out <- trdat %>%
+        mutate(
+          is_j = fold != x,
+          rnum = row_number(),
+          ind_j = is_j*rnum
+        ) %>%
+        filter(ind_j != 0) %>%
+        select(ind_j) %>%
+        unlist() %>%
+        unname()
+    }
+  )
+
+  showConnections()
+
+  cl <- makePSOCKcluster(10)
+  registerDoParallel(cl)
+
+  set.seed(1)
+
+  models[[i]] <- caret::train(
+    form = formula_i,
+    data = trdat,
+    method = cubist_weighted,
+    # method = "cubist",
+    na.action = na.pass,
+    tuneGrid = tgrid,
+    trControl = trainControl(
+      index = folds_i,
+      savePredictions = "final",
+      predictionBounds = c(bounds_lower[i], bounds_upper[i]),
+      summaryFunction = WeightedSummary
+    ),
+    metric = 'RMSEw',
+    maximize = FALSE,
+    weights = trdat$w
+  )
+
+  registerDoSEQ()
+  rm(cl)
+
+  saveRDS(
+    models[[i]],
+    paste0(dir_results, "/model_", frac, ".rds")
+  )
+}
 
 models_loaded <- lapply(
   1:6,
@@ -425,7 +474,7 @@ models_loaded <- lapply(
   }
 )
 
-models <- models_loaded
+# models <- models_loaded
 
 names(models) <- fractions
 
@@ -454,76 +503,6 @@ models %>%
     sep = ";",
     row.names = FALSE
   )
-
-
-# 10: Make maps
-# Start with the test area
-
-outfolder <- dir_dat %>%
-  paste0(., "/testarea_10km/covariates/")
-
-cov_10km <- outfolder %>%
-  list.files(full.names = TRUE) %>%
-  rast
-
-names(cov_10km) <- names(cov)
-
-predfolder <- dir_dat %>%
-  paste0(., "/testarea_10km/predictions_", testn, "/") %T>%
-  dir.create()
-
-rfun <- function(mod, dat, ...) {
-  library(caret)
-  library(Cubist)
-  
-  rfun2 <- function(mod2, dat2, ...) {
-    notallnas <- rowSums(is.na(dat2)) < (ncol(dat2) - 2)  # NB: Edit this line
-    out2 <- numeric(nrow(dat2))
-    if (sum(notallnas) > 0) {
-      out2[notallnas] <- predict(
-        object = mod2,
-        newdata = dat2[notallnas, ],
-        na.action = na.pass,
-        ...
-      )
-    }
-    return(out2)
-  }
-  
-  out <- rfun2(mod, dat, ...)
-  return(out)
-}
-
-# Maps for 10 km area
-
-# maps_10km <- list()
-# 
-# showConnections()
-# 
-# for(i in 1:length(fractions))
-# {
-#   frac <- fractions[i]
-# 
-#   maps_10km[[i]] <- predict(
-#     cov_10km,
-#     models[[i]],
-#     fun = rfun,
-#     na.rm = FALSE,
-#     cores = 2,
-#     filename = paste0(predfolder, frac,  "_10km.tif"),
-#     overwrite = TRUE,
-#     const = data.frame(
-#       SOM_removed = TRUE, 
-#       year = 2010
-#       )
-#   )
-# }
-
-maps_10km <- predfolder %>%
-  paste0(., fractions,  "_10km.tif") %>%
-  rast()
-
-names(maps_10km) <- fractions
 
 # Inspect models
 
@@ -631,55 +610,7 @@ allpred %>%
 
 dev.off()
 
-# Looking at 10 km maps
-
-library(viridisLite)
-
-maps_10km_stack <- maps_10km %>% rast
-
-plot(maps_10km_stack, col = cividis(100))
-
-maps_10km_stack2 <- c(
-  maps_10km_stack[[1:4]],
-  exp(maps_10km_stack[[5]]),
-  exp(maps_10km_stack[[6]])
-)
-
-names(maps_10km_stack2) <- fraction_names
-
-tiff(
-  paste0(dir_results, "/maps_test", testn, ".tiff"),
-  width = 24,
-  height = 16,
-  units = "cm",
-  res = 300
-)
-
-plot(maps_10km_stack2, col = cividis(100))
-
-dev.off()
-
-JB <- function(clay, silt, sand_f, SOM, CaCO3)
-{
-  out <- rep(0, length(clay))
-  out[CaCO3 > 10] <- 12
-  out[out == 0 & SOM > 10] <- 11
-  out[out == 0 & clay < 5 & silt < 20 & sand_f < 50] <- 1
-  out[out == 0 & clay < 5 & silt < 20] <- 2
-  out[out == 0 & clay < 10 & silt < 25 & sand_f < 40] <- 3
-  out[out == 0 & clay < 10 & silt < 25]<-4
-  out[out == 0 & clay < 15 & silt < 30 & sand_f < 40] <- 5
-  out[out == 0 & clay < 15 & silt < 30] <- 6
-  out[out == 0 & clay < 25 & silt < 35] <- 7
-  out[out == 0 & clay < 45 & silt < 45] <- 8
-  out[out == 0 & silt < 50] <- 9
-  out[out == 0] <- 10
-  return(out)
-}
-
-maps_10km_s2 <- c(maps_10km[[1]], maps_10km[[2]], maps_10km[[3]], exp(maps_10km[[5]])/0.568, exp(maps_10km[[6]]))
-
-maps_10km_jb <- lapp(maps_10km_s2, JB) %>% as.factor()
+# Covariate importance
 
 library(colorRamps)
 library(rcartocolor) # for colorblind palette
@@ -687,32 +618,6 @@ library(rcartocolor) # for colorblind palette
 mycolors <- carto_pal(12, "Safe") %>% sort()
 
 library(TSP)
-myrgb <- col2rgb(mycolors)
-tsp <- as.TSP(dist(t(myrgb)))
-set.seed(1)
-sol <- solve_TSP(tsp, control = list(repetitions = 1e3))
-ordered_cols <- mycolors[sol]
-
-ggplot2::qplot(x = 1:12, y = 1, fill = I(ordered_cols), geom = "col", width = 1) + ggplot2::theme_void()
-
-tiff(
-  paste0(dir_results, "/JB_test", testn, ".tiff"),
-  width = 15,
-  height = 10,
-  units = "cm",
-  res = 300
-)
-
-plot(
-  maps_10km_jb,
-  col = ordered_cols[levels(maps_10km_jb)[[1]]$ID],
-  main = "JB-nummer"
-)
-
-dev.off()
-
-
-# Covariate importance
 
 l <- list()
 
@@ -734,8 +639,8 @@ l %<>% bind_rows() %>%
     target = factor(
       target,
       levels = fractions
-      )
     )
+  )
 
 l_cat <- cov_cats %>%
   mutate(
@@ -799,6 +704,147 @@ l %>%
     expand = c(0, 0)
   ) +
   colScale
+
+dev.off()
+
+# 10: Make maps for the test area
+
+outfolder <- dir_dat %>%
+  paste0(., "/testarea_10km/covariates/")
+
+cov_10km <- outfolder %>%
+  list.files(full.names = TRUE) %>%
+  rast
+
+names(cov_10km) <- names(cov)
+
+predfolder <- dir_dat %>%
+  paste0(., "/testarea_10km/predictions_", testn, "/") %T>%
+  dir.create()
+
+rfun <- function(mod, dat, ...) {
+  library(caret)
+  library(Cubist)
+  
+  rfun2 <- function(mod2, dat2, ...) {
+    notallnas <- rowSums(is.na(dat2)) < (ncol(dat2) - 2)  # NB: Edit this line
+    out2 <- rep(NA, nrow(dat2))
+    if (sum(notallnas) > 0) {
+      out2[notallnas] <- predict(
+        object = mod2,
+        newdata = dat2[notallnas, ],
+        na.action = na.pass,
+        ...
+      )
+    }
+    return(out2)
+  }
+  
+  out <- rfun2(mod, dat, ...)
+  return(out)
+}
+
+# Make the maps
+
+maps_10km <- list()
+
+showConnections()
+
+for(i in 1:length(fractions))
+{
+  frac <- fractions[i]
+  
+  maps_10km[[i]] <- predict(
+    cov_10km,
+    models[[i]],
+    fun = rfun,
+    na.rm = FALSE,
+    cores = 2,
+    filename = paste0(predfolder, frac,  "_10km.tif"),
+    overwrite = TRUE,
+    const = data.frame(
+      SOM_removed = TRUE,
+      year = 2010
+    )
+  )
+}
+
+maps_10km <- predfolder %>%
+  paste0(., fractions,  "_10km.tif") %>%
+  rast()
+
+names(maps_10km) <- fractions
+
+# Looking at 10 km maps
+
+library(viridisLite)
+
+plot(maps_10km, col = cividis(100))
+
+maps_10km_stack2 <- c(
+  maps_10km[[1:4]],
+  exp(maps_10km[[5]]),
+  exp(maps_10km[[6]])
+)
+
+names(maps_10km_stack2) <- fraction_names
+
+tiff(
+  paste0(dir_results, "/maps_test", testn, ".tiff"),
+  width = 24,
+  height = 16,
+  units = "cm",
+  res = 300
+)
+
+plot(maps_10km_stack2, col = cividis(100))
+
+dev.off()
+
+JB <- function(clay, silt, sand_f, SOM, CaCO3)
+{
+  out <- rep(0, length(clay))
+  out[CaCO3 > 10] <- 12
+  out[out == 0 & SOM > 10] <- 11
+  out[out == 0 & clay < 5 & silt < 20 & sand_f < 50] <- 1
+  out[out == 0 & clay < 5 & silt < 20] <- 2
+  out[out == 0 & clay < 10 & silt < 25 & sand_f < 40] <- 3
+  out[out == 0 & clay < 10 & silt < 25]<-4
+  out[out == 0 & clay < 15 & silt < 30 & sand_f < 40] <- 5
+  out[out == 0 & clay < 15 & silt < 30] <- 6
+  out[out == 0 & clay < 25 & silt < 35] <- 7
+  out[out == 0 & clay < 45 & silt < 45] <- 8
+  out[out == 0 & silt < 50] <- 9
+  out[out == 0] <- 10
+  return(out)
+}
+
+maps_10km_s2 <- c(maps_10km[[1]], maps_10km[[2]], maps_10km[[3]], exp(maps_10km[[5]])/0.568, exp(maps_10km[[6]]))
+
+maps_10km_jb <- lapp(maps_10km_s2, JB) %>% as.factor()
+
+
+myrgb <- col2rgb(mycolors)
+tsp <- as.TSP(dist(t(myrgb)))
+set.seed(1)
+sol <- solve_TSP(tsp, control = list(repetitions = 1e3))
+ordered_cols <- mycolors[sol]
+
+ggplot2::qplot(x = 1:12, y = 1, fill = I(ordered_cols), geom = "col", width = 1) + ggplot2::theme_void()
+
+tiff(
+  paste0(dir_results, "/JB_test", testn, ".tiff"),
+  width = 15,
+  height = 10,
+  units = "cm",
+  res = 300
+)
+
+plot(
+  maps_10km_jb,
+  col = ordered_cols[levels(maps_10km_jb)[[1]]$ID],
+  main = "JB-nummer"
+)
 
 dev.off()
 
@@ -976,7 +1022,7 @@ dev.off()
 # }
 
 
-# Test tiles
+# Tiles for model prediction
 
 library(parallel)
 
@@ -988,7 +1034,6 @@ dir_tiles <- dir_dat %>%
 
 subdir_tiles <- dir_tiles %>% list.dirs() %>% .[-1]
 
-
 dir_pred_all <- dir_results %>%
   paste0(., "/predictions/") %T>%
   dir.create()
@@ -997,123 +1042,134 @@ dir_pred_tiles <- dir_pred_all  %>%
   paste0(., "/tiles/") %T>%
   dir.create()
 
-i <- 1
-
-frac <- fractions[i]
-
-dir_pred_tiles_frac <- dir_pred_tiles %>%
-  paste0(., "/", names(models)[i], "/") %T>%
-  dir.create()
-
-model_i <- models[[i]]
-
-showConnections()
-
-cl <- makeCluster(numCores)
-
-clusterEvalQ(
-  cl,
-  {
-    library(terra)
-    library(caret)
-    library(Cubist)
-    library(magrittr)
-    library(dplyr)
-  }
-)
-
-clusterExport(
-  cl,
-  c("model_i",
-    "subdir_tiles",
-    "dir_pred_tiles_frac",
-    "frac",
-    "cov_names",
-    "cov_selected",
-    "rfun",
-    "dir_dat"
+for (i in 1:length(fractions)) {
+  frac <- fractions[i]
+  
+  dir_pred_tiles_frac <- dir_pred_tiles %>%
+    paste0(., "/", names(models)[i], "/") %T>%
+    dir.create()
+  
+  model_i <- models[[i]]
+  
+  showConnections()
+  
+  cl <- makeCluster(numCores)
+  
+  clusterEvalQ(
+    cl,
+    {
+      library(terra)
+      library(caret)
+      library(Cubist)
+      library(magrittr)
+      library(dplyr)
+    }
+  )
+  
+  clusterExport(
+    cl,
+    c("model_i",
+      "subdir_tiles",
+      "dir_pred_tiles_frac",
+      "frac",
+      "cov_names",
+      "cov_selected",
+      "rfun",
+      "dir_dat"
     )
   )
 
-# March 16, 2023: 60 tiles, 121 predictors, clay: 32 hours
-
-parSapplyLB(
-  cl,
-  1:length(subdir_tiles),
-  function(x) {
-    tmpfolder <- paste0(dir_dat, "/Temp/")
-    
-    terraOptions(memfrac = 0.02, tempdir = tmpfolder)
-    
-    cov_x <- subdir_tiles[x] %>%
-      list.files(full.names = TRUE) %>%
-      rast()
-    
-    names(cov_x) <- cov_names
-    
-    cov_x2 <- subset(cov_x, cov_selected)
-    
-    tilename_x <- basename(subdir_tiles[x])
-    
-    outname_x <- dir_pred_tiles_frac %>%
-      paste0(., "/", frac, "_", tilename_x, ".tif")
-    
-    predict(
-      cov_x2,
-      model_i,
-      fun = rfun,
-      na.rm = FALSE,
-      filename = outname_x,
-      overwrite = TRUE,
-      const = data.frame(
-        SOM_removed = TRUE,
-        year = 2010
-      )
-    )
-  }
-)
-
-stopCluster(cl)
-registerDoSEQ()
-rm(cl)
-
-outfiles_table <- dir_pred_tiles_frac %>%
-  list.files(full.names = TRUE) %>%
-  file.info() %>%
-  rownames_to_column()
-
-outfiles_dims <- dir_pred_tiles_frac %>%
-  list.files(full.names = TRUE) %>%
-  lapply(
+  parSapplyLB(
+    cl,
+    1:length(subdir_tiles),
     function(x) {
-      r <- rast(x)
-      out <- dim(r)
-      return(out)
+      tmpfolder <- paste0(dir_dat, "/Temp/")
+      
+      terraOptions(memfrac = 0.02, tempdir = tmpfolder)
+      
+      cov_x <- subdir_tiles[x] %>%
+        list.files(full.names = TRUE) %>%
+        rast()
+      
+      names(cov_x) <- cov_names
+      
+      cov_x2 <- subset(cov_x, cov_selected)
+      
+      tilename_x <- basename(subdir_tiles[x])
+      
+      outname_x <- dir_pred_tiles_frac %>%
+        paste0(., "/", frac, "_", tilename_x, ".tif")
+      
+      predict(
+        cov_x2,
+        model_i,
+        fun = rfun,
+        na.rm = FALSE,
+        filename = outname_x,
+        overwrite = TRUE,
+        const = data.frame(
+          SOM_removed = TRUE,
+          year = 2010
+        )
+      )
     }
-  ) %>%
-  unlist() %>%
-  matrix(nrow = 3) %>%
-  t()
+  )
+  
+  stopCluster(cl)
+  registerDoSEQ()
+  rm(cl)
+  
+  outtiles_frac <- dir_pred_tiles_frac %>%
+    list.files(full.names = TRUE) %>%
+    sprc()
+  
+  merge(
+    outtiles_frac,
+    filename = paste0(dir_pred_all, frac, "_merged.tif"),
+    overwrite = TRUE
+  )
+}
 
-cbind(outfiles_table, outfiles_dims) %>%
-  write.table(
-    file = "out_tiles.csv",
-    sep = ";",
-    row.names = FALSE
-    )
+# March 16, 2023: 60 tiles, 121 predictors, clay: 32 hours
+# March 22, 2023: 591 tiles, 121 predictors, clay: 3 h 48 min
+
+# outfiles_table <- dir_pred_tiles_frac %>%
+#   list.files(full.names = TRUE) %>%
+#   file.info() %>%
+#   rownames_to_column()
+# 
+# outfiles_dims <- dir_pred_tiles_frac %>%
+#   list.files(full.names = TRUE) %>%
+#   lapply(
+#     function(x) {
+#       r <- rast(x)
+#       out <- dim(r)
+#       return(out)
+#     }
+#   ) %>%
+#   unlist() %>%
+#   matrix(nrow = 3) %>%
+#   t()
+# 
+# cbind(outfiles_table, outfiles_dims) %>%
+#   write.table(
+#     file = "out_tiles.csv",
+#     sep = ";",
+#     row.names = FALSE
+#     )
+
+# Post processing
+# Sum texture to 100
+# transform SOC and CaCO3
+# round values
 
 # To do:
 # Use all observations
-# Use new extract [ok]
-# Save models to disk [ok]
-# Analyze importance [ok]
 # Make maps
-# Drop gw maps for clay [ok]
-# Drop gw maps entirely [ok]
-
 # Implement forward feature selection
 # Include forest samples
 # Include profile database
 # Include depth
+# Predictions in separate script
 
 # END
