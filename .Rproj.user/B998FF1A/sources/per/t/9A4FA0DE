@@ -1,7 +1,7 @@
 {
     "id": "9A4FA0DE",
-    "path": "C:/Users/au542768/digijord/digijord_code/09_Vindum.R",
-    "project_path": "09_Vindum.R",
+    "path": "C:/Users/au542768/digijord/digijord_code/10_Vindum_check.R",
+    "project_path": "10_Vindum_check.R",
     "type": "r_source",
     "hash": "3605122675",
     "contents": "",
@@ -21,7 +21,7 @@
     "encoding": "UTF-8",
     "collab_server": "",
     "source_window": "",
-    "last_content_update": 1681475239176,
+    "last_content_update": 1681475239,
     "read_only": false,
     "read_only_alternatives": []
 }

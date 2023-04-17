@@ -23,6 +23,7 @@ library(dplyr)
 library(caret)
 library(tibble)
 library(tidyr)
+library(xgboost)
 
 library(doParallel)
 library(spatstat)  # weights
@@ -31,7 +32,9 @@ dir_code <- getwd()
 root <- dirname(dir_code)
 dir_dat <- paste0(root, "/digijord_data/")
 
-testn <- 8
+# Test 1 - 8: Cubist
+# Test 9: xgboost
+testn <- 9
 mycrs <- "EPSG:25832"
 
 # Results folder
@@ -121,7 +124,6 @@ cov_cats <- dir_code %>%
   )
 
 cov_files <- dir_cov %>% list.files()
-
 cov_names <- cov_files %>% tools::file_path_sans_ext()
 
 cov_names %>%
@@ -257,10 +259,11 @@ cov_selected <- cov_cats %>%
   unlist() %>%
   unname()
 
-tgrid <- data.frame(
-  committees = 20,
-  neighbors = 0
-)
+# Tuning grid
+# tgrid <- data.frame(
+#   committees = 20,
+#   neighbors = 0
+# )
 
 # Weighted RMSE
 RMSEw <- function(d, w)
@@ -310,8 +313,8 @@ WeightedSummary <- function (
 # Remember to include full dataset in the final model
 n <- 1000
 
-use_all_points <- TRUE
-# use_all_points <- FALSE
+# use_all_points <- TRUE
+use_all_points <- FALSE
 
 # NB: Weighted cubist
 
@@ -432,15 +435,16 @@ for (i in 1:length(fractions))
 
   showConnections()
 
-  cl <- makePSOCKcluster(10)
-  registerDoParallel(cl)
+  # cl <- makePSOCKcluster(10)
+  # registerDoParallel(cl)
 
   set.seed(1)
 
   models[[i]] <- caret::train(
     form = formula_i,
     data = trdat,
-    method = cubist_weighted,
+    method = "xgbTree",
+    # method = cubist_weighted,
     # method = "cubist",
     na.action = na.pass,
     tuneGrid = tgrid,
@@ -452,11 +456,12 @@ for (i in 1:length(fractions))
     ),
     metric = 'RMSEw',
     maximize = FALSE,
-    weights = trdat$w
+    weights = trdat$w,
+    allowParallel = FALSE  # for xgboost
   )
 
-  registerDoSEQ()
-  rm(cl)
+  # registerDoSEQ()
+  # rm(cl)
 
   saveRDS(
     models[[i]],
@@ -477,6 +482,8 @@ models_loaded <- lapply(
 # models <- models_loaded
 
 names(models) <- fractions
+
+models
 
 models %>%
   seq_along() %>%
@@ -722,27 +729,7 @@ predfolder <- dir_dat %>%
   paste0(., "/testarea_10km/predictions_", testn, "/") %T>%
   dir.create()
 
-rfun <- function(mod, dat, ...) {
-  library(caret)
-  library(Cubist)
-  
-  rfun2 <- function(mod2, dat2, ...) {
-    notallnas <- rowSums(is.na(dat2)) < (ncol(dat2) - 2)  # NB: Edit this line
-    out2 <- rep(NA, nrow(dat2))
-    if (sum(notallnas) > 0) {
-      out2[notallnas] <- predict(
-        object = mod2,
-        newdata = dat2[notallnas, ],
-        na.action = na.pass,
-        ...
-      )
-    }
-    return(out2)
-  }
-  
-  out <- rfun2(mod, dat, ...)
-  return(out)
-}
+source("f_predict_passna.R")
 
 # Make the maps
 
@@ -757,9 +744,8 @@ for(i in 1:length(fractions))
   maps_10km[[i]] <- predict(
     cov_10km,
     models[[i]],
-    fun = rfun,
+    fun = predict_passna,
     na.rm = FALSE,
-    cores = 2,
     filename = paste0(predfolder, frac,  "_10km.tif"),
     overwrite = TRUE,
     const = data.frame(
@@ -822,7 +808,6 @@ JB <- function(clay, silt, sand_f, SOM, CaCO3)
 maps_10km_s2 <- c(maps_10km[[1]], maps_10km[[2]], maps_10km[[3]], exp(maps_10km[[5]])/0.568, exp(maps_10km[[6]]))
 
 maps_10km_jb <- lapp(maps_10km_s2, JB) %>% as.factor()
-
 
 myrgb <- col2rgb(mycolors)
 tsp <- as.TSP(dist(t(myrgb)))
@@ -984,192 +969,11 @@ dev.off()
 # 
 # dev.off()
 
-# Maps for all of Denmark
-# 2023-03-09: Took 24 hours for less than 25%. Not feasible.
-# Need to test:
-# - Variable selection
-# - Tiles
-
-# cov2 <- subset(cov, cov_selected)
-# 
-# predfolder2 <- paste0(dir_dat, "/predictions_", testn, "/") %T>% dir.create()
-# 
-# tmpfolder <- paste0(dir_dat, "/Temp/")
-# 
-# terraOptions(memfrac = 0.15, tempdir = tmpfolder)
-# 
-# maps <- list()
-# 
-# for(i in 1:length(fractions))
-# {
-#   frac <- fractions[i]
-#   
-#   showConnections()
-#   
-#   maps[[i]] <- predict(
-#     cov2,
-#     models[[i]],
-#     fun = rfun,
-#     na.rm = FALSE,
-#     cores = 19,
-#     filename = paste0(predfolder2, frac,  ".tif"),
-#     overwrite = TRUE,
-#     const = data.frame(
-#       SOM_removed = TRUE,
-#       year = 2010
-#     )
-#   )
-# }
-
-
-# Tiles for model prediction
-
-library(parallel)
-
-numCores <- detectCores()
-numCores
-
-dir_tiles <- dir_dat %>%
-  paste0(., "/tiles_591/")
-
-subdir_tiles <- dir_tiles %>% list.dirs() %>% .[-1]
-
-dir_pred_all <- dir_results %>%
-  paste0(., "/predictions/") %T>%
-  dir.create()
-
-dir_pred_tiles <- dir_pred_all  %>%
-  paste0(., "/tiles/") %T>%
-  dir.create()
-
-for (i in 1:length(fractions)) {
-  frac <- fractions[i]
-  
-  dir_pred_tiles_frac <- dir_pred_tiles %>%
-    paste0(., "/", names(models)[i], "/") %T>%
-    dir.create()
-  
-  model_i <- models[[i]]
-  
-  showConnections()
-  
-  cl <- makeCluster(numCores)
-  
-  clusterEvalQ(
-    cl,
-    {
-      library(terra)
-      library(caret)
-      library(Cubist)
-      library(magrittr)
-      library(dplyr)
-    }
-  )
-  
-  clusterExport(
-    cl,
-    c("model_i",
-      "subdir_tiles",
-      "dir_pred_tiles_frac",
-      "frac",
-      "cov_names",
-      "cov_selected",
-      "rfun",
-      "dir_dat"
-    )
-  )
-
-  parSapplyLB(
-    cl,
-    1:length(subdir_tiles),
-    function(x) {
-      tmpfolder <- paste0(dir_dat, "/Temp/")
-      
-      terraOptions(memfrac = 0.02, tempdir = tmpfolder)
-      
-      cov_x <- subdir_tiles[x] %>%
-        list.files(full.names = TRUE) %>%
-        rast()
-      
-      names(cov_x) <- cov_names
-      
-      cov_x2 <- subset(cov_x, cov_selected)
-      
-      tilename_x <- basename(subdir_tiles[x])
-      
-      outname_x <- dir_pred_tiles_frac %>%
-        paste0(., "/", frac, "_", tilename_x, ".tif")
-      
-      predict(
-        cov_x2,
-        model_i,
-        fun = rfun,
-        na.rm = FALSE,
-        filename = outname_x,
-        overwrite = TRUE,
-        const = data.frame(
-          SOM_removed = TRUE,
-          year = 2010
-        )
-      )
-    }
-  )
-  
-  stopCluster(cl)
-  registerDoSEQ()
-  rm(cl)
-  
-  outtiles_frac <- dir_pred_tiles_frac %>%
-    list.files(full.names = TRUE) %>%
-    sprc()
-  
-  merge(
-    outtiles_frac,
-    filename = paste0(dir_pred_all, frac, "_merged.tif"),
-    overwrite = TRUE
-  )
-}
-
-# March 16, 2023: 60 tiles, 121 predictors, clay: 32 hours
-# March 22, 2023: 591 tiles, 121 predictors, clay: 3 h 48 min
-
-# outfiles_table <- dir_pred_tiles_frac %>%
-#   list.files(full.names = TRUE) %>%
-#   file.info() %>%
-#   rownames_to_column()
-# 
-# outfiles_dims <- dir_pred_tiles_frac %>%
-#   list.files(full.names = TRUE) %>%
-#   lapply(
-#     function(x) {
-#       r <- rast(x)
-#       out <- dim(r)
-#       return(out)
-#     }
-#   ) %>%
-#   unlist() %>%
-#   matrix(nrow = 3) %>%
-#   t()
-# 
-# cbind(outfiles_table, outfiles_dims) %>%
-#   write.table(
-#     file = "out_tiles.csv",
-#     sep = ";",
-#     row.names = FALSE
-#     )
-
-# Post processing
-# Sum texture to 100
-# transform SOC and CaCO3
-# round values
-
 # To do:
 # Use all observations
-# Make maps
 # Implement forward feature selection
 # Include forest samples
 # Include profile database
 # Include depth
-# Predictions in separate script
 
 # END

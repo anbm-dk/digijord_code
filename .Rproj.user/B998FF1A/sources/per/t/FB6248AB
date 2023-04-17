@@ -1,26 +1,26 @@
 {
-    "id": "288315C9",
+    "id": "FB6248AB",
     "path": "C:/Users/au542768/digijord/digijord_code/07_models_texture.R",
     "project_path": "07_models_texture.R",
     "type": "r_source",
-    "hash": "4080676496",
+    "hash": "3257380302",
     "contents": "",
     "dirty": false,
-    "created": 1673338393487.0,
+    "created": 1681739734164.0,
     "source_on_save": false,
-    "relative_order": 7,
+    "relative_order": 11,
     "properties": {
         "source_window_id": "",
         "Source": "Source",
-        "cursorPosition": "1035,0",
-        "scrollLine": "1030"
+        "cursorPosition": "485,6",
+        "scrollLine": "466"
     },
     "folds": "",
-    "lastKnownWriteTime": 1681306257,
+    "lastKnownWriteTime": 1681741057,
     "encoding": "UTF-8",
     "collab_server": "",
     "source_window": "",
-    "last_content_update": 1681306257382,
+    "last_content_update": 1681741057770,
     "read_only": false,
     "read_only_alternatives": []
 }

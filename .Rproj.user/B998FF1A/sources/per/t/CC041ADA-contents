@@ -457,32 +457,7 @@ outfolder <- dir_dat %>%
 
 outfolder %>% dir.create()
 
-cropstack <- function(
-    x,  # list of files
-    y,  # extent
-    folder # target folder
-) {
-  for(i in 1:length(x)) {
-    r <- x[i] %>% rast
-    dtype <- r %>%
-      sources %>%
-      raster::raster(.) %>%
-      raster::dataType(.)
-    outname <- r %>%
-      sources() %>%
-      basename() %>%
-      tools::file_path_sans_ext(.) %>%
-      make.names() %>%
-      paste0(folder, ., ".tif")
-    r %>%
-      crop(y = y) %>%
-      writeRaster(
-        datatype = dtype,
-        filename = outname,
-        overwrite = TRUE
-      )
-  }
-}
+source("f_cropstack.R")
 
 cov_files %>%
   cropstack(
