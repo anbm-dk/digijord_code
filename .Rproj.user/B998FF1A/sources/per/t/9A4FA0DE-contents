@@ -14,7 +14,7 @@ dir_code <- getwd()
 root <- dirname(dir_code)
 dir_dat <- paste0(root, "/digijord_data/")
 
-testn <- 6
+testn <- 8
 mycrs <- "EPSG:25832"
 
 # Results folder
