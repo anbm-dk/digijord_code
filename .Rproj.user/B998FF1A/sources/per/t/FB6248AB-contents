@@ -1,4 +1,4 @@
-# 05: Train texture models
+# 07: Train texture models
 
 # Cubist
 # Use all observations, including NA (OK)
@@ -112,7 +112,7 @@ SINKS_folds <- dir_folds %>%
   )
 
 
-# 4: Load covariates
+# 4: Load covariate data
 
 dir_cov <- dir_dat %>% paste0(., "/covariates")
 
@@ -133,11 +133,6 @@ cov_names %>%
   )
 
 cov_names[!cov_names %in% cov_cats$name]
-
-cov <- paste0(dir_cov, "/", cov_files) %>%
-  rast()
-
-names(cov) <- cov_names
 
 
 # 5: Load extracted covariates
@@ -260,10 +255,25 @@ cov_selected <- cov_cats %>%
   unname()
 
 # Tuning grid
+
+# For cubist:
 # tgrid <- data.frame(
 #   committees = 20,
 #   neighbors = 0
 # )
+
+# For xgboost
+
+tgrid <- expand.grid(
+  nrounds = 100,
+  max_depth = c(1:10),
+  eta = 0.3,
+  gamma = seq(0, 0.4, 0.1),
+  colsample_bytree = 0.8,
+  min_child_weight = c(1, 2, 4, 8),
+  subsample = 0.8
+)
+
 
 # Weighted RMSE
 RMSEw <- function(d, w)
@@ -313,8 +323,8 @@ WeightedSummary <- function (
 # Remember to include full dataset in the final model
 n <- 1000
 
-# use_all_points <- TRUE
-use_all_points <- FALSE
+use_all_points <- TRUE
+# use_all_points <- FALSE
 
 # NB: Weighted cubist
 
@@ -721,9 +731,7 @@ outfolder <- dir_dat %>%
 
 cov_10km <- outfolder %>%
   list.files(full.names = TRUE) %>%
-  rast
-
-names(cov_10km) <- names(cov)
+  rast()
 
 predfolder <- dir_dat %>%
   paste0(., "/testarea_10km/predictions_", testn, "/") %T>%
@@ -815,7 +823,7 @@ set.seed(1)
 sol <- solve_TSP(tsp, control = list(repetitions = 1e3))
 ordered_cols <- mycolors[sol]
 
-ggplot2::qplot(x = 1:12, y = 1, fill = I(ordered_cols), geom = "col", width = 1) + ggplot2::theme_void()
+# ggplot2::qplot(x = 1:12, y = 1, fill = I(ordered_cols), geom = "col", width = 1) + ggplot2::theme_void()
 
 tiff(
   paste0(dir_results, "/JB_test", testn, ".tiff"),
@@ -970,6 +978,7 @@ dev.off()
 # dev.off()
 
 # To do:
+# Further refine xgboost use
 # Use all observations
 # Implement forward feature selection
 # Include forest samples

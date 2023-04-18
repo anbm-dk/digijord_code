@@ -14,7 +14,7 @@ dir_code <- getwd()
 root <- dirname(dir_code)
 dir_dat <- paste0(root, "/digijord_data/")
 
-testn <- 8
+testn <- 9
 mycrs <- "EPSG:25832"
 
 # Results folder
@@ -78,7 +78,7 @@ cor(exp(vindum_extr$logSOC_10km), vindum_obs$SOC, use =  "pairwise.complete.obs"
 plot(exp(predictions[[5]]), ext = ext(vindum_obs))
 plot(vindum_obs, "SOC", add = TRUE)
 
-plot(vindum_extr$logSOC_10km, vindum_obs$SOC)
+plot(vindum_extr$logSOC_10km, log(vindum_obs$SOC))
 abline(1,1)
 
 # END
