@@ -265,15 +265,21 @@ cov_selected <- cov_cats %>%
 # For xgboost
 
 tgrid <- expand.grid(
-  nrounds = 100,
-  max_depth = c(1:10),
-  eta = 0.3,
-  gamma = seq(0, 0.4, 0.1),
+  nrounds = seq(100, 200, 50),
+  eta = seq(0.1, 0.3, 0.1),
+  max_depth = 6,
+  min_child_weight = 1,
+  gamma = 0,
   colsample_bytree = 0.8,
-  min_child_weight = c(1, 2, 4, 8),
   subsample = 0.8
 )
 
+# Template for custom eval
+# evalerror <- function(preds, dtrain) {
+#   labels <- getinfo(dtrain, "label")
+#   err <- as.numeric(sum(labels != (preds > 0)))/length(labels)
+#   return(list(metric = "error", value = err))
+# }
 
 # Weighted RMSE
 RMSEw <- function(d, w)
@@ -371,7 +377,11 @@ cubist_weighted$tags <- c(l$cubist$tags, "Accepts Case Weights")
 
 # 9: Train models
 
+extra_tuning_xgb <- TRUE
+
 models <- list()
+models2 <- list()
+models3 <- list()
 
 for (i in 1:length(fractions))
 {
@@ -427,8 +437,18 @@ for (i in 1:length(fractions))
       w = min(dens) / dens
     )
   
+  # Three folds (placeholder)
+  trdat %<>% mutate(
+    fold = ceiling(fold/3)
+  )
+  holdout_i <- trdat %>%
+    filter(fold == 4)
+  trdat %<>% filter(fold < 4)
+  
+  # List of folds
+  
   folds_i <- lapply(
-    1:10,
+    unique(trdat$fold),
     function(x) {
       out <- trdat %>%
         mutate(
@@ -447,6 +467,9 @@ for (i in 1:length(fractions))
 
   # cl <- makePSOCKcluster(10)
   # registerDoParallel(cl)
+  
+  # xgboost optimization
+  # 1: Fit learning rate (eta) and nrounds
 
   set.seed(1)
 
@@ -472,11 +495,79 @@ for (i in 1:length(fractions))
 
   # registerDoSEQ()
   # rm(cl)
-
+  
   saveRDS(
     models[[i]],
     paste0(dir_results, "/model_", frac, ".rds")
   )
+  
+  if (extra_tuning_xgb) {
+    
+    # 2: Fit max_depth and min_child_weight
+    set.seed(1)
+    
+    models2[[i]] <- caret::train(
+      form = formula_i,
+      data = trdat,
+      method = "xgbTree",
+      na.action = na.pass,
+      tuneGrid = expand.grid(
+        nrounds = models[[i]]$bestTune$nrounds,
+        eta = models[[i]]$bestTune$eta,
+        max_depth = seq(1, 11, 2),
+        min_child_weight = c(1, 2, 4, 8, 16, 32),
+        gamma = 0,
+        colsample_bytree = 0.8,
+        subsample = 0.8
+      ),
+      trControl = trainControl(
+        index = folds_i,
+        savePredictions = "final",
+        predictionBounds = c(bounds_lower[i], bounds_upper[i]),
+        summaryFunction = WeightedSummary
+      ),
+      metric = 'RMSEw',
+      maximize = FALSE,
+      weights = trdat$w,
+      allowParallel = FALSE  # for xgboost
+    )
+    
+    # 3: Tune gamma, 0 to 0.4
+    set.seed(1)
+    
+    models3[[i]] <- caret::train(
+      form = formula_i,
+      data = trdat,
+      method = "xgbTree",
+      na.action = na.pass,
+      tuneGrid = expand.grid(
+        nrounds = models[[i]]$bestTune$nrounds,
+        eta = models[[i]]$bestTune$eta,
+        max_depth = models2[[i]]$bestTune$max_depth,
+        min_child_weight = models2[[i]]$bestTune$min_child_weight,
+        gamma = seq(0, 0.4, 0.1),
+        colsample_bytree = 0.8,
+        subsample = 0.8
+      ),
+      trControl = trainControl(
+        index = folds_i,
+        savePredictions = "final",
+        predictionBounds = c(bounds_lower[i], bounds_upper[i]),
+        summaryFunction = WeightedSummary
+      ),
+      metric = 'RMSEw',
+      maximize = FALSE,
+      weights = trdat$w,
+      allowParallel = FALSE  # for xgboost
+    )
+    
+    saveRDS(
+      models3[[i]],
+      paste0(dir_results, "/model_opt_", frac, ".rds")
+    )
+    
+    models3[[i]]
+  }
 }
 
 models_loaded <- lapply(
@@ -489,11 +580,15 @@ models_loaded <- lapply(
   }
 )
 
+# models
+models3
+models <- models3
+
+# 4: Reduce learning rate, use cv to optimize nrounds, early stopping
+
 # models <- models_loaded
 
 names(models) <- fractions
-
-models
 
 models %>%
   seq_along() %>%
@@ -840,142 +935,6 @@ plot(
 )
 
 dev.off()
-
-
-# Plot most important covariates
-# First find covariates with the highest general importance
-
-# imp_list <- list()
-# 
-# for (i in 1:length(fractions)) {
-#   imp_list[[i]] <- models[[i]] %>%
-#     varImp() %>%
-#     .$importance %>%
-#     rownames_to_column(var = "covariate") %>%
-#     mutate(fraction = fractions[[i]])
-# }
-# 
-# imp_list %>%
-#   bind_rows() %>%
-#   pivot_wider(
-#     id_cols = covariate,
-#     names_from = fraction,
-#     values_from = Overall
-#     ) %>%
-#   rowwise() %>%
-#   mutate(
-#     mean = mean(c_across(-covariate), na.rm = TRUE)
-#   ) %>%
-#   arrange(-mean) %>%
-#   print(n = 20)
-# 
-# figure_covariates <- c(
-#   "ogc_lite_pi0000",
-#   "s2_geomedian_b3",
-#   "s1_baresoil_composite_vh_8_days",
-#   "s2_geomedian_20180501_20180731_b7",
-#   "dhm2015_terraen_10m"
-#   )
-# 
-# short_names <- c(
-#   "DEM",
-#   "UTMX",
-#   "S1_bare_vh",
-#   "S2_summer_b7",
-#   "S2_bare_b3"
-# )
-# 
-# figure_cols <- c(figure_covariates, fractions)
-# 
-# library(scales)  # For number formats
-# 
-# tiff(
-#   paste0(dir_results, "/covariate_effects_test", testn, ".tiff"),
-#   width = 16,
-#   height = 10,
-#   units = "cm",
-#   res = 300
-# )
-# 
-# obs_top %>%
-#   select(all_of(figure_cols)) %>%
-#   # sample_frac(0.1) %>%
-#   mutate(
-#     s1_baresoil_composite_vh_8_days = ifelse(
-#       s1_baresoil_composite_vh_8_days == 0 | s1_baresoil_composite_vh_8_days < -3000,
-#       NA,
-#       s1_baresoil_composite_vh_8_days
-#     ),
-#     s2_geomedian_b3 = ifelse(
-#       s2_geomedian_b3 > 2000,
-#       NA,
-#       s2_geomedian_b3
-#     ),
-#     logCaCO3 = ifelse(
-#       is.finite(logCaCO3),
-#       logCaCO3,
-#       NA
-#     ),
-#     logSOC = ifelse(
-#       logSOC > -2.5,
-#       logSOC,
-#       NA
-#     ),
-#     clay = ifelse(
-#       clay < 30,
-#       clay,
-#       NA
-#     ),
-#     silt = ifelse(
-#       silt < 30,
-#       silt,
-#       NA
-#     )
-#   ) %>%
-#   rename(
-#     DEM = dhm2015_terraen_10m,
-#     UTMX = ogc_lite_pi0000,
-#     S1_bare_vh = s1_baresoil_composite_vh_8_days,
-#     S2_summer_b7 = s2_geomedian_20180501_20180731_b7,
-#     S2_bare_b3 = s2_geomedian_b3
-#   ) %>%
-#   pivot_longer(
-#     all_of(short_names),
-#     names_to = "Covariate",
-#     values_to = "x_value"
-#   ) %>%
-#   pivot_longer(
-#     all_of(fractions),
-#     names_to = "Fraction",
-#     values_to = "y_value",
-#   ) %>%
-#   ggplot(
-#     aes(
-#       x = x_value,
-#       y = y_value
-#     )
-#   ) +
-#   geom_point(alpha = .01, shape = 16) +
-#   facet_grid(
-#     factor(Fraction, levels = fractions) ~ Covariate,
-#     scales = "free"
-#   ) +
-#   geom_smooth(
-#     se = FALSE,
-#     color = "red"
-#     ) +
-#   labs(
-#     x = "Covariate value",
-#     y = "Observation (%)"
-#   ) +
-#   scale_x_continuous(
-#     n.breaks = 3,
-#     labels = label_number(scale_cut = cut_short_scale())
-#     ) +
-#   scale_y_continuous(n.breaks = 3) +
-#   theme(strip.text.y.right = element_text(angle = 0))
-# 
-# dev.off()
 
 # To do:
 # Further refine xgboost use
