@@ -10,29 +10,26 @@
 # - Profiles: Drainage (later)
 # - Lucas database?
 # 2: Standardize
-# - Uniform column names
-# - Scale texture fractions to a sum of 100.
-# 3: Merge
-# 4: Extract covariates
-# 5: Get folds
-# 6: Write to table
+# - Uniform column names (OK)
+# - Scale texture fractions to a sum of 100 (OK)
 
 # What fields should the final dataset contain?
-# - General ID, "ID_new"
-# - Database origin, "db"
-# - Original ID "ID_old"
-# - Date "date"
-# - UTMX
-# - UTMY
-# - Upper boundary "upper"
-# - Lower boundary "lower"
-# - Clay
-# - Silt
-# - Fine sand
-# - Coarse sand
-# - SOC
-# - CaCO3
-# - Indicate removal of SOM for texture analyses
+# - General ID, "ID_new" (OK)
+# - Database origin, "db" (OK)
+# - Original ID "ID_old" (OK)
+# - Date "date" (OK)
+# - UTMX (OK)
+# - UTMY (OK)
+# - Upper boundary "upper" (OK)
+# - Lower boundary "lower" (OK)
+# - Clay (OK)
+# - Silt (OK)
+# - Fine sand (OK)
+# - Coarse sand (OK)
+# - SOC (OK)
+# - CaCO3 (OK)
+# - CaCO3_test (to do)
+# - Indicate removal of SOM for texture analyses (OK)
 # - BD (later)
 # - pH (later)
 # - Nutrients: Pt, Kt, Mgt, CUT (later)
@@ -54,6 +51,7 @@ mycolnames <- c(
   "coarse_sand",
   "SOC",
   "CaCO3",
+  "CaCO3_test",
   "SOM_removed",
   "pH",
   "N"
@@ -144,7 +142,8 @@ dsc2 <- dsc %>%
     fine_sand = FinSD * 100 / (Ler + Silt + FinSD + GrovSD),
     coarse_sand = GrovSD * 100 / (Ler + Silt + FinSD + GrovSD),
     SOC = Humus*0.587,
-    SOM_removed = FALSE
+    SOM_removed = 0,
+    CaCO3_test = as.numeric(CaCO3 > 0)
   ) %>%
   select(any_of(mycolnames))
 
@@ -176,7 +175,7 @@ seges2 <- SEGES %>%
       is.na(tsum) ~ GrovsandPct,
       !is.na(tsum) ~ GrovsandPct*100 / tsum
     ),
-    SOM_removed = TRUE,
+    SOM_removed = 1,
     pH = Rt,
     N = TotalNPct
   ) %>%
@@ -331,8 +330,7 @@ sinks4 <- sinks3 %>%
     ID_old = paste0(IDBID, "_", depth),
     UTMX = SD_X,
     UTMY = SD_Y,
-    pH = PH,
-    SOM_removed = NA
+    pH = PH
   ) %>% 
   right_join(sinks_upperlower) %>%
   select(any_of(mycolnames))

@@ -196,12 +196,18 @@ obs <- list(dsc, SEGES, SINKS) %>%
 
 fractions <- c("clay", "silt", "fine_sand", "coarse_sand", "logSOC", "logCaCO3")
 
+fractions_alt <- c("clay", "silt", "fine_sand", "coarse_sand", "SOC", "CaCO3")
+
+fractions <- fractions_alt
+
 fraction_names <- c(
   "Clay", "Silt", "Fine sand", "Coarse sand", "SOC", "CaCO3"
 )
 
-bounds_lower <- c(0, 0, 0, 0, NA, NA)
-bounds_upper <- c(100, 100, 100, 100, log(100), log(100))
+# bounds_lower <- c(0, 0, 0, 0, NA, NA)
+bounds_lower <- rep(0, 6)
+# bounds_upper <- c(100, 100, 100, 100, log(100), log(100))
+bounds_upper <- rep(100, 6)
 
 
 # 7: Make training data
@@ -227,6 +233,9 @@ obs_top <- obs %>%
     upper == 0,
     is.finite(fold)
     )
+
+# Make new ID
+# Use all observations?
 
 obs_top_v <- obs_top %>% vect(geom = c("UTMX", "UTMY"))
 
@@ -254,25 +263,7 @@ cov_selected <- cov_cats %>%
   unlist() %>%
   unname()
 
-# Tuning grid
 
-# For cubist:
-# tgrid <- data.frame(
-#   committees = 20,
-#   neighbors = 0
-# )
-
-# For xgboost
-
-tgrid <- expand.grid(
-  nrounds = seq(100, 200, 50),
-  eta = seq(0.1, 0.3, 0.1),
-  max_depth = 6,
-  min_child_weight = 1,
-  gamma = 0,
-  colsample_bytree = 0.8,
-  subsample = 0.8
-)
 
 # Template for custom eval
 # evalerror <- function(preds, dtrain) {
@@ -282,7 +273,7 @@ tgrid <- expand.grid(
 # }
 
 # Weighted RMSE
-RMSEw <- function(d, w)
+get_RMSEw <- function(d, w)
 {
   sqe <- w*(d[, 1] - d[, 2])^2
   msqe <- sum(sqe)/sum(w)
@@ -291,7 +282,7 @@ RMSEw <- function(d, w)
 }
 
 # Weighted R^2
-R2w <- function(d, w)
+get_R2w <- function(d, w)
 {
   require(boot)
   out <- boot::corr(d[, 1:2], w)^2
@@ -307,20 +298,21 @@ WeightedSummary <- function (
 ) {
   out <- numeric()
   # Weighted RMSE
-  RMSEw <- function(d, w) {
+  get_RMSEw <- function(d, w) {
     sqe <- w*(d[, 1] - d[, 2])^2
     msqe <- sum(sqe)/sum(w)
     out <- sqrt(msqe)
     return(out)
   }
-  out[1] <- RMSEw(data[, 1:2], data$weights)
-  
   # Weighted R^2
-  require(boot)
-  out[2] <- boot::corr(
-    data[, 1:2],
-    data$weights
-  )^2
+  get_R2w <- function(d, w)
+  {
+    require(boot)
+    out <- boot::corr(d[, 1:2], w)^2
+    return(out)
+  }
+  out[1] <- get_RMSEw(data[, 1:2], data$weights)
+  out[2] <- get_R2w(data[, 1:2], data$weights)
   names(out) <- c('RMSEw', 'R2w')
   return(out)
 }
@@ -374,14 +366,39 @@ cubist_weighted$predict <- function(modelFit, newdata, submodels = NULL) {
 
 cubist_weighted$tags <- c(l$cubist$tags, "Accepts Case Weights")
 
+# Tuning grid
+
+# For cubist:
+# tgrid <- data.frame(
+#   committees = 20,
+#   neighbors = 0
+# )
+
+# For xgboost
+
+tgrid <- expand.grid(
+  nrounds = 20,
+  eta = seq(0.1, 1, 0.1),
+  max_depth = 6,
+  min_child_weight = 1,
+  gamma = 0,
+  colsample_bytree = 0.5,
+  subsample = 0.5
+)
+
+gamma_test <- seq(0, 0.5, 0.1)
+max_depth_test <- seq(1, 20, 3)
+min_child_weight_test <- c(1, 2, 4, 8, 16, 32)
+
+objectives <- c(rep("reg:squarederror", 4), rep("reg:tweedie", 2))
+
+trees_per_round <- 10
 
 # 9: Train models
 
 extra_tuning_xgb <- TRUE
 
 models <- list()
-models2 <- list()
-models3 <- list()
 
 for (i in 1:length(fractions))
 {
@@ -390,13 +407,12 @@ for (i in 1:length(fractions))
   print(frac)
 
   cov_c_i <- cov_selected %>% paste0(collapse = " + ")
-
   if (i %in% 1:4) {
     cov_c_i <- cov_selected %>%
       c(., "SOM_removed") %>%
       paste0(collapse = " + ")
   } else {
-    if (frac == "logSOC") {
+    if (i == 5) {
       cov_c_i <- cov_selected %>%
         c(., "year") %>%
         paste0(collapse = " + ")
@@ -409,11 +425,20 @@ for (i in 1:length(fractions))
   trdat <- obs_top %>%
     filter(is.finite(.data[[frac]]))
 
+  # Three folds (placeholder)
+  trdat %<>% mutate(
+    fold = ceiling(fold/3)
+  )
+  holdout_i <- trdat %>%
+    filter(fold == 4)
+  trdat %<>% filter(fold < 4)
+  
   if (!use_all_points) {
     trdat %<>% sample_n(n)
   }
 
   # Calculate weights
+  # Calculate densities for depth intervals
   dens <- ppp(
     trdat$UTMX,
     trdat$UTMY,
@@ -437,13 +462,7 @@ for (i in 1:length(fractions))
       w = min(dens) / dens
     )
   
-  # Three folds (placeholder)
-  trdat %<>% mutate(
-    fold = ceiling(fold/3)
-  )
-  holdout_i <- trdat %>%
-    filter(fold == 4)
-  trdat %<>% filter(fold < 4)
+
   
   # List of folds
   
@@ -490,23 +509,20 @@ for (i in 1:length(fractions))
     metric = 'RMSEw',
     maximize = FALSE,
     weights = trdat$w,
-    allowParallel = FALSE  # for xgboost
+    # allowParallel = FALSE,  # for xgboost
+    num_parallel_tree = trees_per_round,
+    objective = objectives[i]
   )
 
   # registerDoSEQ()
   # rm(cl)
-  
-  saveRDS(
-    models[[i]],
-    paste0(dir_results, "/model_", frac, ".rds")
-  )
   
   if (extra_tuning_xgb) {
     
     # 2: Fit max_depth and min_child_weight
     set.seed(1)
     
-    models2[[i]] <- caret::train(
+    model2 <- caret::train(
       form = formula_i,
       data = trdat,
       method = "xgbTree",
@@ -514,11 +530,11 @@ for (i in 1:length(fractions))
       tuneGrid = expand.grid(
         nrounds = models[[i]]$bestTune$nrounds,
         eta = models[[i]]$bestTune$eta,
-        max_depth = seq(1, 11, 2),
-        min_child_weight = c(1, 2, 4, 8, 16, 32),
-        gamma = 0,
-        colsample_bytree = 0.8,
-        subsample = 0.8
+        max_depth = max_depth_test,  # NB
+        min_child_weight = min_child_weight_test,  # NB
+        gamma = models[[i]]$bestTune$gamma,        
+        colsample_bytree = models[[i]]$bestTune$colsample_bytree,
+        subsample = models[[i]]$bestTune$subsample
       ),
       trControl = trainControl(
         index = folds_i,
@@ -529,13 +545,14 @@ for (i in 1:length(fractions))
       metric = 'RMSEw',
       maximize = FALSE,
       weights = trdat$w,
-      allowParallel = FALSE  # for xgboost
+      # allowParallel = FALSE,  # for xgboost
+      num_parallel_tree = trees_per_round
     )
     
-    # 3: Tune gamma, 0 to 0.4
+    # 3: Tune gamma
     set.seed(1)
     
-    models3[[i]] <- caret::train(
+    model3 <- caret::train(
       form = formula_i,
       data = trdat,
       method = "xgbTree",
@@ -543,11 +560,11 @@ for (i in 1:length(fractions))
       tuneGrid = expand.grid(
         nrounds = models[[i]]$bestTune$nrounds,
         eta = models[[i]]$bestTune$eta,
-        max_depth = models2[[i]]$bestTune$max_depth,
-        min_child_weight = models2[[i]]$bestTune$min_child_weight,
-        gamma = seq(0, 0.4, 0.1),
-        colsample_bytree = 0.8,
-        subsample = 0.8
+        max_depth = model2$bestTune$max_depth,
+        min_child_weight = model2$bestTune$min_child_weight,
+        gamma = gamma_test,  # NB
+        colsample_bytree = models[[i]]$bestTune$colsample_bytree,
+        subsample = models[[i]]$bestTune$subsample
       ),
       trControl = trainControl(
         index = folds_i,
@@ -558,17 +575,22 @@ for (i in 1:length(fractions))
       metric = 'RMSEw',
       maximize = FALSE,
       weights = trdat$w,
-      allowParallel = FALSE  # for xgboost
+      # allowParallel = FALSE,  # for xgboost
+      num_parallel_tree = trees_per_round
     )
     
-    saveRDS(
-      models3[[i]],
-      paste0(dir_results, "/model_opt_", frac, ".rds")
-    )
-    
-    models3[[i]]
+    models[[i]] <- model3
   }
+  print(models[[i]])
+  
+  saveRDS(
+    models[[i]],
+    paste0(dir_results, "/model_", frac, ".rds")
+  )
 }
+
+# 4: Reduce learning rate, use cv to optimize nrounds, early stopping
+
 
 models_loaded <- lapply(
   1:6,
@@ -580,17 +602,34 @@ models_loaded <- lapply(
   }
 )
 
-# models
-models3
-models <- models3
-
-# 4: Reduce learning rate, use cv to optimize nrounds, early stopping
-
 # models <- models_loaded
 
 names(models) <- fractions
 
-models %>%
+# Model summary
+
+models_sum <- lapply(models, function(x) {
+  out <- x$results %>%
+    filter(RMSEw == min(RMSEw))
+  return(out)
+}
+) %>%
+  bind_rows() %>%
+  mutate(
+    Fraction = fractions,
+    .before = 1
+  ) %T>%
+  write.table(
+    file = paste0(dir_results, "/models_sum.csv"),
+    sep = ";",
+    row.names = FALSE
+  )
+
+models_sum
+
+# Covariate importance
+
+imp_all <- models %>%
   seq_along() %>%
   lapply(
     function(x) {
@@ -616,37 +655,42 @@ models %>%
     row.names = FALSE
   )
 
+imp_all
+
 # Inspect models
 
 get_acc <- function(x2, i2) {
   df <- x2$pred %>%
     arrange(rowIndex) %>%
     distinct(rowIndex, .keep_all = TRUE) %>%
-    select(c(pred, obs, weights))
+    select(c(pred, obs, weights)) %>%
+    mutate(
+      pred = ifelse(pred < 0, 0, pred)
+    )
   
-  if (i2 > 4) df %<>% exp
+  # if (i2 > 4) df %<>% exp
   
   df %<>% bind_cols(x2$trainingData)
   
-  r2_all <- df %$% R2w(cbind(pred, obs), weights)
+  r2_all <- df %$% get_R2w(cbind(pred, obs), weights)
   
   r2_bare <- df %>%
     filter(!is.na(s2_geomedian_b2)) %$%
-    R2w(cbind(pred, obs), weights)
+    get_R2w(cbind(pred, obs), weights)
   
   r2_covered <- df %>%
     filter(is.na(s2_geomedian_b2)) %$%
-    R2w(cbind(pred, obs), weights)
+    get_R2w(cbind(pred, obs), weights)
   
-  rmse_all <- df %$% RMSEw(cbind(pred, obs), weights)
+  rmse_all <- df %$% get_RMSEw(cbind(pred, obs), weights)
   
   rmse_bare <- df %>%
     filter(!is.na(s2_geomedian_b2)) %$%
-    RMSEw(cbind(pred, obs), weights)
+    get_RMSEw(cbind(pred, obs), weights)
   
   rmse_covered <- df %>%
     filter(is.na(s2_geomedian_b2)) %$%
-    RMSEw(cbind(pred, obs), weights)
+    get_RMSEw(cbind(pred, obs), weights)
   
   out <- data.frame(
     r2_all,
@@ -676,8 +720,11 @@ getpred <- function(x2, i2) {
   df <- x2$pred %>%
     arrange(rowIndex) %>%
     distinct(rowIndex, .keep_all = TRUE) %>%
-    select(c(pred, obs))
-  if (i2 > 4) df %<>% exp
+    select(c(pred, obs)) %>%
+    mutate(
+      pred = ifelse(pred < 0, 0, pred)
+    )
+  # if (i2 > 4) df %<>% exp
   df %<>% mutate(
     fraction = fractions[i2],
     upper = quantile(obs, 0.99)
@@ -852,7 +899,7 @@ for(i in 1:length(fractions))
     filename = paste0(predfolder, frac,  "_10km.tif"),
     overwrite = TRUE,
     const = data.frame(
-      SOM_removed = TRUE,
+      SOM_removed = 1,
       year = 2010
     )
   )
@@ -868,13 +915,15 @@ names(maps_10km) <- fractions
 
 library(viridisLite)
 
-plot(maps_10km, col = cividis(100))
+plot(maps_10km, col = cividis(100), box = FALSE)
 
-maps_10km_stack2 <- c(
-  maps_10km[[1:4]],
-  exp(maps_10km[[5]]),
-  exp(maps_10km[[6]])
-)
+# maps_10km_stack2 <- c(
+#   maps_10km[[1:4]],
+#   exp(maps_10km[[5]]),
+#   exp(maps_10km[[6]])
+# )
+
+maps_10km_stack2 <- round(maps_10km, 4)
 
 names(maps_10km_stack2) <- fraction_names
 
@@ -908,7 +957,9 @@ JB <- function(clay, silt, sand_f, SOM, CaCO3)
   return(out)
 }
 
-maps_10km_s2 <- c(maps_10km[[1]], maps_10km[[2]], maps_10km[[3]], exp(maps_10km[[5]])/0.568, exp(maps_10km[[6]]))
+# maps_10km_s2 <- c(maps_10km[[1]], maps_10km[[2]], maps_10km[[3]], exp(maps_10km[[5]])/0.568, exp(maps_10km[[6]]))
+
+maps_10km_s2 <- c(maps_10km[[1]], maps_10km[[2]], maps_10km[[3]], maps_10km[[5]]/0.568, maps_10km[[6]])
 
 maps_10km_jb <- lapp(maps_10km_s2, JB) %>% as.factor()
 

@@ -3,27 +3,34 @@
 library(parallel)
 library(caret)
 library(terra)
+library(magrittr)
+library(dplyr)
+library(xgboost)
+library(foreach)
 
 dir_code <- getwd()
 root <- dirname(dir_code)
 dir_dat <- paste0(root, "/digijord_data/")
 
-testn <- 8
+testn <- 9
 mycrs <- "EPSG:25832"
 
 dir_results <- dir_dat %>%
   paste0(., "/results_test_", testn, "/")
 
-
 fractions <- c("clay", "silt", "fine_sand", "coarse_sand", "logSOC", "logCaCO3")
+
+fractions_alt <- c("clay", "silt", "fine_sand", "coarse_sand", "SOC", "CaCO3")
+
+fractions <- fractions_alt
 
 fraction_names <- c(
   "Clay", "Silt", "Fine sand", "Coarse sand", "SOC", "CaCO3"
 )
 
-
-bounds_lower <- c(0, 0, 0, 0, NA, NA)
-bounds_upper <- c(100, 100, 100, 100, log(100), log(100))
+fraction_names_underscore <- c(
+  "Clay", "Silt", "Fine_sand", "Coarse_sand", "SOC", "CaCO3"
+)
 
 dir_cov <- dir_dat %>% paste0(., "/covariates")
 cov_files <- dir_cov %>% list.files()
@@ -56,6 +63,8 @@ models_loaded <- lapply(
   }
 )
 
+models <- models_loaded
+
 # Tiles for model prediction
 
 numCores <- detectCores()
@@ -74,11 +83,13 @@ dir_pred_tiles <- dir_pred_all  %>%
   paste0(., "/tiles/") %T>%
   dir.create()
 
+n_digits <- 1
+
 for (i in 1:length(fractions)) {
-  frac <- fractions[i]
+  frac <- fraction_names_underscore[i]
   
   dir_pred_tiles_frac <- dir_pred_tiles %>%
-    paste0(., "/", names(models)[i], "/") %T>%
+    paste0(., "/", frac, "/") %T>%
     dir.create()
   
   model_i <- models[[i]]
@@ -92,7 +103,7 @@ for (i in 1:length(fractions)) {
     {
       library(terra)
       library(caret)
-      library(Cubist)
+      library(xgboost)
       library(magrittr)
       library(dplyr)
     }
@@ -100,14 +111,16 @@ for (i in 1:length(fractions)) {
   
   clusterExport(
     cl,
-    c("model_i",
+    c("i",
+      "model_i",
       "subdir_tiles",
       "dir_pred_tiles_frac",
       "frac",
       "cov_names",
       "cov_selected",
       "predict_passna",
-      "dir_dat"
+      "dir_dat",
+      "n_digits"
     )
   )
   
@@ -132,23 +145,34 @@ for (i in 1:length(fractions)) {
       outname_x <- dir_pred_tiles_frac %>%
         paste0(., "/", frac, "_", tilename_x, ".tif")
       
-      predict(
+      outmap <- predict(
         cov_x2,
         model_i,
         fun = predict_passna,
         na.rm = FALSE,
-        filename = outname_x,
-        overwrite = TRUE,
         const = data.frame(
-          SOM_removed = TRUE,
+          SOM_removed = 1,
           year = 2010
         )
       )
+      
+      # if (i > 4) {
+      #   outmap2 <- terra::exp(outmap)
+      #   outmap <- outmap2
+      # }
+      
+      terra::math(
+        outmap,
+        "round",
+        digits = n_digits,
+        filename = outname_x,
+        overwrite = TRUE
+        )
     }
   )
   
   stopCluster(cl)
-  registerDoSEQ()
+  foreach::registerDoSEQ()
   rm(cl)
   
   outtiles_frac <- dir_pred_tiles_frac %>%
@@ -162,8 +186,7 @@ for (i in 1:length(fractions)) {
   )
 }
 
-# March 16, 2023: 60 tiles, 121 predictors, clay: 32 hours
-# March 22, 2023: 591 tiles, 121 predictors, clay: 3 h 48 min
+
 
 # outfiles_table <- dir_pred_tiles_frac %>%
 #   list.files(full.names = TRUE) %>%
@@ -190,44 +213,12 @@ for (i in 1:length(fractions)) {
 #     row.names = FALSE
 #     )
 
-# Old code without tiles:
+# Without tiles:
 # Maps for all of Denmark
 # 2023-03-09: Took 24 hours for less than 25%. Not feasible.
-# Need to test:
-# - Variable selection
-# - Tiles
 
-# cov2 <- subset(cov, cov_selected)
-# 
-# predfolder2 <- paste0(dir_dat, "/predictions_", testn, "/") %T>% dir.create()
-# 
-# tmpfolder <- paste0(dir_dat, "/Temp/")
-# 
-# terraOptions(memfrac = 0.15, tempdir = tmpfolder)
-# 
-# maps <- list()
-# 
-# for(i in 1:length(fractions))
-# {
-#   frac <- fractions[i]
-#   
-#   showConnections()
-#   
-#   maps[[i]] <- predict(
-#     cov2,
-#     models[[i]],
-#     fun = predict_passna,
-#     na.rm = FALSE,
-#     cores = 19,
-#     filename = paste0(predfolder2, frac,  ".tif"),
-#     overwrite = TRUE,
-#     const = data.frame(
-#       SOM_removed = TRUE,
-#       year = 2010
-#     )
-#   )
-# }
-
+# March 16, 2023: 60 tiles, 121 predictors, clay: 32 hours, cubist
+# March 22, 2023: 591 tiles, 121 predictors, clay: 3 h 48 min, cubist
 
 # Post processing
 # Sum texture to 100
