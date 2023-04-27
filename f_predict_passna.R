@@ -1,11 +1,10 @@
 # Function to produce predictions where some, but not all covariates are NA
 
-predict_passna <- function(mod, dat, ...) {
-  library(caret)
-  library(Cubist)
-  
-  rfun2 <- function(mod2, dat2, ...) {
-    notallnas <- rowSums(is.na(dat2)) < (ncol(dat2) - 2)  # NB: Edit this line
+predict_passna <- function(mod, dat, n_const = 0, n_digits = NULL, ...) {
+  # library(caret)  # Passed elsewhere
+  # library(Cubist)  # Passed elsewhere
+  rfun2 <- function(mod2, dat2, n_const2, n_digits2, ...) {
+    notallnas <- rowSums(is.na(dat2)) < (ncol(dat2) - n_const2)
     out2 <- rep(NA, nrow(dat2))
     if (sum(notallnas) > 0) {
       out2[notallnas] <- predict(
@@ -15,10 +14,10 @@ predict_passna <- function(mod, dat, ...) {
         ...
       )
     }
+    if (!is.null(n_digits2)) { out2 <- round(out2, digits = n_digits2) }
     return(out2)
   }
-  
-  out <- rfun2(mod, dat, ...)
+  out <- rfun2(mod, dat, n_const, n_digits, ...)
   return(out)
 }
 

@@ -153,7 +153,8 @@ for (i in 1:length(fractions)) {
         const = data.frame(
           SOM_removed = 1,
           year = 2010
-        )
+        ),
+        n_const = 2
       )
       
       # if (i > 4) {
