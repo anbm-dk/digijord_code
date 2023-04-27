@@ -5,6 +5,7 @@ library(caret)
 library(xgboost)
 library(dplyr)
 library(magrittr)
+library(foreach)
 
 dir_code <- getwd()
 root <- dirname(dir_code)
@@ -37,7 +38,7 @@ cov_selected <- cov_cats %>%
 
 source("f_predict_passna.R")
 
-# Make layers with and y
+# Make layers with and col
 
 dem_ind <- grepl(
   "dhm",
@@ -46,8 +47,23 @@ dem_ind <- grepl(
 
 dem <- rast(cov_files[dem_ind])
 
-x <- init(dem, fun = "x", filename = paste0(tmpfolder, "x_raw.tif"))
-y <- init(dem, fun = "y", filename = paste0(tmpfolder, "y_raw.tif"))
+row <- init(
+  dem,
+  fun = "row",
+  filename = paste0(tmpfolder, "row_raw.tif"),
+  names = "row",
+  overwrite = TRUE,
+  datatype = "INT2U"
+)
+col <- init(
+  dem,
+  fun = "col",
+  filename = paste0(tmpfolder, "col_raw.tif"),
+  names = "col",
+  overwrite = TRUE,
+  datatype = "INT2U",
+  gdal = c("TILED=YES", "BLOCKYSIZE=8000", "BLOCKXSIZE=16")
+)
 
 # Deselect oblique geographic coordinates
 
@@ -61,32 +77,34 @@ cov_selected <- grep(
 cov <- rast(cov_files)
 cov <- subset(cov, cov_selected)
 
-# Sample dem for x and y coordinates
+# Sample dem for row and col
+
+row_col_dem <- c(row, col, dem)
 
 set.seed(1234)
 
-# pts <- spatSample(dem, 10^5, na.rm = TRUE, cells = TRUE, xy = TRUE)
-# 
-# pts <- select(pts, -last_col())
+# pts <- spatSample(row_col_dem, 10^5, na.rm = TRUE, cells = TRUE, xy = TRUE)
 
-# extr <- extract(
-#   cov,
-#   pts$cell
-# )
+pts <- select(pts, !dhm2015_terraen_10m)
+
+extr <- extract(
+  cov,
+  pts$cell
+)
 
 pts_2 <- bind_cols(pts, extr)
 
 dir_extr <- dir_dat %>%
   paste0(., "/extracts/")
 
-write.table(
-  pts_2,
-  file = paste0(dir_extr, "/random_100k.csv"),
-  sep = ";",
-  row.names = FALSE
-)
+# write.table(
+#   pts_2,
+#   file = paste0(dir_extr, "/random_100k.csv"),
+#   sep = ";",
+#   row.names = FALSE
+# )
 
-# Models for predicting x and y
+# Models for predicting row and col
 
 dir_xy_models <- dir_dat %>%
   paste0(., "/models_xy/") %T>%
@@ -124,7 +142,7 @@ extra_tuning_xgb <- TRUE
 
 models <- list()
 
-targets <- c("x", "y")
+targets <- c("row", "col")
 
 for (i in 1:length(targets))
 {
@@ -380,6 +398,8 @@ getpred <- function(x2, i2) {
   return(df)
 }
 
+library(foreach)
+
 allpred <- foreach(i = 1:2, .combine = rbind) %do%
   getpred(models[[i]], i)
 
@@ -538,7 +558,8 @@ for(i in 1:length(targets))
     fun = predict_passna,
     na.rm = FALSE,
     filename = paste0(predfolder, targ,  "_10km.tif"),
-    overwrite = TRUE
+    overwrite = TRUE,
+    n_digits = 0
   )
 }
 
@@ -657,7 +678,10 @@ for (i in 1:length(targets)) {
         cov_x2,
         model_i,
         fun = predict_passna,
-        na.rm = FALSE
+        na.rm = FALSE,
+        filename = outname_x,
+        overwrite = TRUE,
+        n_digits = 0
       )
       
       # if (i > 4) {
@@ -665,13 +689,13 @@ for (i in 1:length(targets)) {
       #   outmap <- outmap2
       # }
       
-      terra::math(
-        outmap,
-        "round",
-        digits = n_digits,
-        filename = outname_x,
-        overwrite = TRUE
-      )
+      # terra::math(
+      #   outmap,
+      #   "round",
+      #   digits = n_digits,
+      #   filename = outname_x,
+      #   overwrite = TRUE
+      # )
     }
   )
   
@@ -683,29 +707,133 @@ for (i in 1:length(targets)) {
     list.files(full.names = TRUE) %>%
     sprc()
   
-  merge(
-    outtiles_targ,
-    filename = paste0(dir_pred_all, targ, "_merged.tif"),
-    overwrite = TRUE
-  )
+  if(i == 2) {
+    merge(
+      outtiles_targ,
+      filename = paste0(dir_pred_all, targ, "_merged.tif"),
+      overwrite = TRUE,
+      datatype = "INT2U",
+      gdal = c("TILED=YES", "BLOCKYSIZE=8000", "BLOCKXSIZE=16")
+    )
+  } else {
+    merge(
+      outtiles_targ,
+      filename = paste0(dir_pred_all, targ, "_merged.tif"),
+      overwrite = TRUE,
+      datatype = "INT2U"
+    )
+  }
 }
 
-# Subtract predicted x and y from real coordinates for residuals
+# Subtract predicted row and col from real coordinates for residuals
 
-x_predicted <- rast(paste0(dir_pred_all, "/x_merged.tif"))
-y_predicted <- rast(paste0(dir_pred_all, "/y_merged.tif"))
+row_predicted <- rast(paste0(dir_pred_all, "/row_merged.tif"))
+col_predicted <- rast(paste0(dir_pred_all, "/col_merged.tif"))
 
-s_x <- c(x, x_predicted)
-s_y <- c(y, y_predicted)
+s_row <- c(row, row_predicted)
+s_col <- c(col, col_predicted)
 
 f <- function(i) {
   out <- i[1] - i[2]
   return(out)
 }
 
-app(s_x, f,  filename = paste0(dir_pred_all, "/x_residual.tif"),
-    overwrite = TRUE)
-app(s_y, f,  filename = paste0(dir_pred_all, "/y_residual.tif"),
-    overwrite = TRUE)
+# terraOptions(memfrac = 0.4, tempdir = tmpfolder)
+# 
+# app(s_row, f,  filename = paste0(dir_pred_all, "/row_residual.tif"),
+#     overwrite = TRUE)
+# app(s_col, f,  filename = paste0(dir_pred_all, "/col_residual.tif"),
+#     overwrite = TRUE)
+
+tile_shapes <- dir_tiles %>%
+  paste0(., "/tiles.shp") %>%
+  vect()
+
+
+max_char <- length(tile_shapes) %>%
+  1:. %>%
+  as.character() %>%
+  nchar() %>%
+  max()
+
+tile_numbers <- length(tile_shapes) %>%
+  1:. %>%
+  str_pad(
+    .,
+    max_char,
+    pad = "0"
+  )
+
+dir_row_tiles <- dir_pred_tiles %>% paste0(., "/row_raw/") %T>% dir.create()
+dir_col_tiles <- dir_pred_tiles %>% paste0(., "/col_raw/") %T>% dir.create()
+
+# Before: Pass file names for raw and predicted row and col to clusters.
+
+# In parallel:
+# 1: crop raw col and row rasters
+# 2: Calculate residuals of predictions, based on same tile
+
+# After: Merge residual rasters
+
+library(parallel)
+
+numCores <- detectCores()
+numCores
+
+showConnections()
+
+cl <- makeCluster(numCores)
+
+clusterEvalQ(
+  cl,
+  {
+    library(raster)
+    library(terra)
+    library(magrittr)
+    library(dplyr)
+    library(tools)
+  }
+)
+
+clusterExport(
+  cl,
+  c("dir_dat",
+    "dir_tiles",
+    "dir_code",
+    "tile_numbers",
+    "row",
+    "col"
+  )
+)
+
+parSapplyLB(
+  cl,
+  1:length(tile_shapes),
+  function(j) {
+    tmpfolder <- paste0(dir_dat, "/Temp/")
+    
+    terraOptions(memfrac = 0.02, tempdir = tmpfolder)
+    
+    dir_tile_j <- dir_tiles %>%
+      paste0(., "/tile_", tile_numbers[j], "/") %T>%
+      dir.create()
+    
+    tile_shapes <- dir_tiles %>%
+      base::paste0(., "/tiles.shp") %>%
+      terra::vect()
+    
+    source(paste0(dir_code, "/f_cropstack.R"))
+    
+    cropstack(
+      x = cov_files,
+      y = tile_shapes[j],
+      folder = dir_tile_j
+    )
+  }
+)
+
+stopCluster(cl)
+foreach::registerDoSEQ()
+rm(cl)
 
 # End

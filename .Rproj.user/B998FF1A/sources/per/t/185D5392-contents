@@ -154,7 +154,10 @@ for (i in 1:length(fractions)) {
           SOM_removed = 1,
           year = 2010
         ),
-        n_const = 2
+        n_const = 2,
+        n_digits = 1,
+        filename = outname_x,
+        overwrite = TRUE
       )
       
       # if (i > 4) {
@@ -162,13 +165,13 @@ for (i in 1:length(fractions)) {
       #   outmap <- outmap2
       # }
       
-      terra::math(
-        outmap,
-        "round",
-        digits = n_digits,
-        filename = outname_x,
-        overwrite = TRUE
-        )
+      # terra::math(
+      #   outmap,
+      #   "round",
+      #   digits = n_digits,
+      #   filename = outname_x,
+      #   overwrite = TRUE
+      #   )
     }
   )
   
