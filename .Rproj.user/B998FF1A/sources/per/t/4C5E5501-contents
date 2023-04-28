@@ -47,23 +47,26 @@ dem_ind <- grepl(
 
 dem <- rast(cov_files[dem_ind])
 
-row <- init(
-  dem,
-  fun = "row",
-  filename = paste0(tmpfolder, "row_raw.tif"),
-  names = "row",
-  overwrite = TRUE,
-  datatype = "INT2U"
-)
-col <- init(
-  dem,
-  fun = "col",
-  filename = paste0(tmpfolder, "col_raw.tif"),
-  names = "col",
-  overwrite = TRUE,
-  datatype = "INT2U",
-  gdal = c("TILED=YES", "BLOCKYSIZE=8000", "BLOCKXSIZE=16")
-)
+# row <- init(
+#   dem,
+#   fun = "row",
+#   filename = paste0(tmpfolder, "row_raw.tif"),
+#   names = "row",
+#   overwrite = TRUE,
+#   datatype = "INT2U"
+# )
+# col <- init(
+#   dem,
+#   fun = "col",
+#   filename = paste0(tmpfolder, "col_raw.tif"),
+#   names = "col",
+#   overwrite = TRUE,
+#   datatype = "INT2U",
+#   gdal = c("TILED=YES", "BLOCKYSIZE=8000", "BLOCKXSIZE=16")
+# )
+
+row_raw <- rast(paste0(tmpfolder, "row_raw.tif"))
+col_raw <- rast(paste0(tmpfolder, "col_raw.tif"))
 
 # Deselect oblique geographic coordinates
 
@@ -85,14 +88,14 @@ set.seed(1234)
 
 # pts <- spatSample(row_col_dem, 10^5, na.rm = TRUE, cells = TRUE, xy = TRUE)
 
-pts <- select(pts, !dhm2015_terraen_10m)
-
-extr <- extract(
-  cov,
-  pts$cell
-)
-
-pts_2 <- bind_cols(pts, extr)
+# pts <- select(pts, !dhm2015_terraen_10m)
+# 
+# extr <- extract(
+#   cov,
+#   pts$cell
+# )
+# 
+# pts_2 <- bind_cols(pts, extr)
 
 dir_extr <- dir_dat %>%
   paste0(., "/extracts/")
@@ -103,6 +106,12 @@ dir_extr <- dir_dat %>%
 #   sep = ";",
 #   row.names = FALSE
 # )
+
+pts_2 <- read.table(
+  paste0(dir_extr, "/random_100k.csv"),
+  header = TRUE,
+  sep = ";"
+  )
 
 # Models for predicting row and col
 
@@ -136,9 +145,11 @@ min_child_weight_test <- c(1, 2, 4, 8, 16, 32)
 
 trees_per_round <- 10
 
+# For xgblinear
+
 # 9: Train models
 
-extra_tuning_xgb <- TRUE
+extra_tuning_xgb <- FALSE
 
 models <- list()
 
@@ -147,53 +158,55 @@ targets <- c("row", "col")
 for (i in 1:length(targets))
 {
   targ <- targets[i]
-  
+
   print(targ)
-  
+
   cov_c_i <- cov_selected %>% paste0(collapse = " + ")
-  
+
   formula_i <- paste0(targ, " ~ ", cov_c_i) %>%
     as.formula()
-  
+
   trdat <- pts_2
-  
+
   if (!use_all_points) {
     set.seed(11111)
     trdat %<>% sample_n(n)
   }
-  
+
   set.seed(789)
-  
-  folds <- select(trdat, .data[[targ]]) %>%
+
+  folds <- select(trdat, any_of(targ)) %>%
     unlist() %>%
     createFolds(., 3)
-  
+
   showConnections()
-  
+
   # xgboost optimization
   # 1: Fit learning rate (eta) and nrounds
-  
+
   print("Step 1")
   set.seed(123)
-  
+
   models[[i]] <- caret::train(
     form = formula_i,
     data = trdat,
-    method = "xgbTree",
+    method = "xgbLinear",
     na.action = na.pass,
-    tuneGrid = tgrid,
+    # tuneGrid = tgrid,
     trControl = trainControl(
       index = folds,
-      savePredictions = "final"
-    ),
-    num_parallel_tree = trees_per_round
+      savePredictions = "final",
+      allowParallel = FALSE
+    )
+    # ,
+    # num_parallel_tree = trees_per_round
   )
-  
+
   if (extra_tuning_xgb) {
     # 2: Fit max_depth and min_child_weight
     print("Step 2")
     set.seed(123)
-    
+
     model2 <- caret::train(
       form = formula_i,
       data = trdat,
@@ -204,21 +217,22 @@ for (i in 1:length(targets))
         eta = models[[i]]$bestTune$eta,
         max_depth = max_depth_test,  # NB
         min_child_weight = min_child_weight_test,  # NB
-        gamma = models[[i]]$bestTune$gamma,        
+        gamma = models[[i]]$bestTune$gamma,
         colsample_bytree = models[[i]]$bestTune$colsample_bytree,
         subsample = models[[i]]$bestTune$subsample
       ),
       trControl = trainControl(
         index = folds,
         savePredictions = "final"
-      ),
-      num_parallel_tree = trees_per_round
+      )
+      # ,
+      # num_parallel_tree = trees_per_round
     )
-    
+
     # 3: Tune gamma
     print("Step 3")
     set.seed(123)
-    
+
     model3 <- caret::train(
       form = formula_i,
       data = trdat,
@@ -239,17 +253,16 @@ for (i in 1:length(targets))
       ),
       num_parallel_tree = trees_per_round
     )
-    
+
     models[[i]] <- model3
   }
   print(models[[i]])
-  
+
   saveRDS(
     models[[i]],
     paste0(dir_xy_models, "/model_", targ, ".rds")
   )
 }
-
 
 models_loaded <- lapply(
   1:2,
@@ -551,7 +564,7 @@ showConnections()
 for(i in 1:length(targets))
 {
   targ <- targets[i]
-  
+
   maps_10km[[i]] <- predict(
     cov_10km,
     models[[i]],
@@ -616,17 +629,17 @@ n_digits <- 0
 
 for (i in 1:length(targets)) {
   targ <- targets[i]
-  
+
   dir_pred_tiles_targ <- dir_pred_tiles %>%
     paste0(., "/", targ, "/") %T>%
     dir.create()
-  
+
   model_i <- models[[i]]
-  
+
   showConnections()
-  
+
   cl <- makeCluster(numCores)
-  
+
   clusterEvalQ(
     cl,
     {
@@ -637,7 +650,7 @@ for (i in 1:length(targets)) {
       library(dplyr)
     }
   )
-  
+
   clusterExport(
     cl,
     c("i",
@@ -652,28 +665,28 @@ for (i in 1:length(targets)) {
       "n_digits"
     )
   )
-  
+
   parSapplyLB(
     cl,
     1:length(subdir_tiles),
     function(x) {
       tmpfolder <- paste0(dir_dat, "/Temp/")
-      
+
       terraOptions(memfrac = 0.02, tempdir = tmpfolder)
-      
+
       cov_x <- subdir_tiles[x] %>%
         list.files(full.names = TRUE) %>%
         rast()
-      
+
       names(cov_x) <- cov_names
-      
+
       cov_x2 <- subset(cov_x, cov_selected)
-      
+
       tilename_x <- basename(subdir_tiles[x])
-      
+
       outname_x <- dir_pred_tiles_targ %>%
         paste0(., "/", targ, "_", tilename_x, ".tif")
-      
+
       outmap <- predict(
         cov_x2,
         model_i,
@@ -683,12 +696,12 @@ for (i in 1:length(targets)) {
         overwrite = TRUE,
         n_digits = 0
       )
-      
+
       # if (i > 4) {
       #   outmap2 <- terra::exp(outmap)
       #   outmap <- outmap2
       # }
-      
+
       # terra::math(
       #   outmap,
       #   "round",
@@ -698,15 +711,15 @@ for (i in 1:length(targets)) {
       # )
     }
   )
-  
+
   stopCluster(cl)
   foreach::registerDoSEQ()
   rm(cl)
-  
+
   outtiles_targ <- dir_pred_tiles_targ %>%
     list.files(full.names = TRUE) %>%
     sprc()
-  
+
   if(i == 2) {
     merge(
       outtiles_targ,
@@ -730,8 +743,8 @@ for (i in 1:length(targets)) {
 row_predicted <- rast(paste0(dir_pred_all, "/row_merged.tif"))
 col_predicted <- rast(paste0(dir_pred_all, "/col_merged.tif"))
 
-s_row <- c(row, row_predicted)
-s_col <- c(col, col_predicted)
+s_row <- c(row_raw, row_predicted)
+s_col <- c(col_raw, col_predicted)
 
 f <- function(i) {
   out <- i[1] - i[2]
@@ -749,12 +762,13 @@ tile_shapes <- dir_tiles %>%
   paste0(., "/tiles.shp") %>%
   vect()
 
-
 max_char <- length(tile_shapes) %>%
   1:. %>%
   as.character() %>%
   nchar() %>%
   max()
+
+library(stringr)
 
 tile_numbers <- length(tile_shapes) %>%
   1:. %>%
@@ -764,10 +778,17 @@ tile_numbers <- length(tile_shapes) %>%
     pad = "0"
   )
 
-dir_row_tiles <- dir_pred_tiles %>% paste0(., "/row_raw/") %T>% dir.create()
-dir_col_tiles <- dir_pred_tiles %>% paste0(., "/col_raw/") %T>% dir.create()
+dir_row_tiles <- dir_pred_tiles %>% paste0(., "/row_residual/") %T>% dir.create()
+dir_col_tiles <- dir_pred_tiles %>% paste0(., "/col_residual/") %T>% dir.create()
+
+dir_residual_tiles <- c(dir_row_tiles, dir_col_tiles)
 
 # Before: Pass file names for raw and predicted row and col to clusters.
+
+files_raw <- paste0(tmpfolder, targets, "_raw.tif")
+
+dir_pred_tiles_targets <- dir_pred_tiles %>%
+  paste0(., "/", targets, "/") 
 
 # In parallel:
 # 1: crop raw col and row rasters
@@ -780,60 +801,109 @@ library(parallel)
 numCores <- detectCores()
 numCores
 
-showConnections()
-
-cl <- makeCluster(numCores)
-
-clusterEvalQ(
-  cl,
-  {
-    library(raster)
-    library(terra)
-    library(magrittr)
-    library(dplyr)
-    library(tools)
-  }
-)
-
-clusterExport(
-  cl,
-  c("dir_dat",
-    "dir_tiles",
-    "dir_code",
-    "tile_numbers",
-    "row",
-    "col"
+for (i in 1:length(targets)) {
+  pred_files_i <- dir_pred_tiles_targets[[i]] %>%
+    list.files(full.names = TRUE)
+  
+  showConnections()
+  
+  cl <- makeCluster(numCores)
+  
+  clusterEvalQ(
+    cl,
+    {
+      library(raster)
+      library(terra)
+      library(magrittr)
+      library(dplyr)
+      library(tools)
+    }
   )
-)
-
-parSapplyLB(
-  cl,
-  1:length(tile_shapes),
-  function(j) {
-    tmpfolder <- paste0(dir_dat, "/Temp/")
-    
-    terraOptions(memfrac = 0.02, tempdir = tmpfolder)
-    
-    dir_tile_j <- dir_tiles %>%
-      paste0(., "/tile_", tile_numbers[j], "/") %T>%
-      dir.create()
-    
-    tile_shapes <- dir_tiles %>%
-      base::paste0(., "/tiles.shp") %>%
-      terra::vect()
-    
-    source(paste0(dir_code, "/f_cropstack.R"))
-    
-    cropstack(
-      x = cov_files,
-      y = tile_shapes[j],
-      folder = dir_tile_j
+  
+  clusterExport(
+    cl,
+    c("dir_tiles",
+      "tile_numbers",
+      "files_raw",
+      "pred_files_i",
+      "tmpfolder",
+      "f",
+      "i",
+      "dir_residual_tiles",
+      "targets"
     )
-  }
-)
+  )
+  
+  parSapplyLB(
+    cl,
+    1:length(tile_shapes),
+    function(j) {
+      terraOptions(memfrac = 0.02, tempdir = tmpfolder)
 
-stopCluster(cl)
-foreach::registerDoSEQ()
-rm(cl)
+      pred_tile <- rast(pred_files_i[j])
+
+      tile_shapes <- dir_tiles %>%
+        base::paste0(., "/tiles.shp") %>%
+        terra::vect()
+      
+      r_raw <- rast(files_raw[i])
+      
+      raw_tile <- crop(
+        r_raw,
+        tile_shapes[j]
+      )
+      
+      s <- c(raw_tile, pred_tile)
+      
+      outname <- dir_residual_tiles[i] %>%
+        paste0(., "/", targets[i], "_residual_tile_", tile_numbers[j], ".tif")
+        
+      app(
+        s,
+        f,
+        filename = outname,
+        overwrite = TRUE,
+        wopt = list(datatype = "INT2S")
+        )
+    }
+  )
+  stopCluster(cl)
+  foreach::registerDoSEQ()
+  rm(cl)
+  
+  outtiles_targ_res <- dir_residual_tiles[i] %>%
+    list.files(full.names = TRUE) %>%
+    sprc()
+  
+  merge(
+    outtiles_targ_res,
+    filename = paste0(dir_pred_all, targets[i], "_residual.tif"),
+    overwrite = TRUE,
+    datatype = "INT2S"
+  )
+}
+
+# Write rasters
+
+rs_residuals <- paste0(dir_pred_all, targets, "_residual.tif") %>% rast()
+
+outrasters <- c(row_predicted, col_predicted, rs_residuals)
+
+outnames <- c("row_predicted", "col_predicted", "row_residual", "col_residual")
+
+dtypes <- c("INT2U", "INT2U", "INT2S", "INT2S")
+
+names(outrasters) <- outnames
+
+for (i in 1:length(outnames)) {
+  writeRaster(
+    outrasters[[i]],
+    filename = paste0(dir_cov, "/", outnames[i], ".tif"),
+    datatype = dtypes[i],
+    names = outnames[i],
+    gdal = c("TILED=YES", "BLOCKYSIZE=992", "BLOCKXSIZE=992"),
+    overwrite = TRUE
+  )
+}
 
 # End
