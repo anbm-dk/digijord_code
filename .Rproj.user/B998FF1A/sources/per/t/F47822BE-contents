@@ -119,7 +119,7 @@ SINKS_extr <- terra::extract(
     ID = FALSE,
   )
 
-# 5 Write to file
+# 5 Write to csv
 
 dir_extr <- dir_dat %>%
   paste0(., "/extracts/")
@@ -157,6 +157,23 @@ write.table(
   paste0(dir_extr, "SINKS_extr.csv"),
   row.names = FALSE,
   sep = ";"
+)
+
+# Save as RDS
+
+saveRDS(
+  dsc_extr,
+  paste0(dir_extr, "dsc_extr.rds")
+)
+
+saveRDS(
+  SEGES_extr,
+  paste0(dir_extr, "SEGES_extr.rds")
+)
+
+saveRDS(
+  SINKS_extr,
+  paste0(dir_extr, "SINKS_extr.rds")
 )
 
 # END

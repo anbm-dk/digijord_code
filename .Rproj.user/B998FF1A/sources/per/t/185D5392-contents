@@ -12,7 +12,7 @@ dir_code <- getwd()
 root <- dirname(dir_code)
 dir_dat <- paste0(root, "/digijord_data/")
 
-testn <- 9
+testn <- 11
 mycrs <- "EPSG:25832"
 
 dir_results <- dir_dat %>%
@@ -37,7 +37,7 @@ cov_files <- dir_cov %>% list.files()
 cov_names <- cov_files %>% tools::file_path_sans_ext()
 
 cov_cats <- dir_code %>%
-  paste0(., "/cov_categories_20230323.csv") %>%
+  paste0(., "/cov_categories_20230501.csv") %>%
   read.table(
     sep = ";",
     header = TRUE
@@ -45,7 +45,7 @@ cov_cats <- dir_code %>%
 
 cov_selected <- cov_cats %>%
   filter(anbm_use == 1) %>%
-  select(name) %>%
+  dplyr::select(., name) %>%
   unlist() %>%
   unname()
 
@@ -106,6 +106,7 @@ for (i in 1:length(fractions)) {
       library(xgboost)
       library(magrittr)
       library(dplyr)
+      library(tools)
     }
   )
   
@@ -116,7 +117,6 @@ for (i in 1:length(fractions)) {
       "subdir_tiles",
       "dir_pred_tiles_frac",
       "frac",
-      "cov_names",
       "cov_selected",
       "predict_passna",
       "dir_dat",
@@ -132,11 +132,16 @@ for (i in 1:length(fractions)) {
       
       terraOptions(memfrac = 0.02, tempdir = tmpfolder)
       
-      cov_x <- subdir_tiles[x] %>%
-        list.files(full.names = TRUE) %>%
-        rast()
+      cov_x_files <- subdir_tiles[x] %>%
+        list.files(full.names = TRUE)
       
-      names(cov_x) <- cov_names
+      cov_x_names <- cov_x_files %>%
+        basename() %>%
+        file_path_sans_ext()
+      
+      cov_x <- cov_x_files %>% rast()
+      
+      names(cov_x) <- cov_x_names
       
       cov_x2 <- subset(cov_x, cov_selected)
       
@@ -224,9 +229,8 @@ for (i in 1:length(fractions)) {
 # March 16, 2023: 60 tiles, 121 predictors, clay: 32 hours, cubist
 # March 22, 2023: 591 tiles, 121 predictors, clay: 3 h 48 min, cubist
 
-# Post processing
+# Post processing:
 # Sum texture to 100
-# transform SOC and CaCO3
 # round values
 
 # END

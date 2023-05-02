@@ -33,8 +33,11 @@ root <- dirname(dir_code)
 dir_dat <- paste0(root, "/digijord_data/")
 
 # Test 1 - 8: Cubist
+# Test 8: New covariates (chelsa, river valley bottoms, hillyness)
 # Test 9: xgboost
-testn <- 9
+# Test 10: Predicted row and column (poor accuracy)
+# Test 11: Fever data, more 
+testn <- 11
 mycrs <- "EPSG:25832"
 
 # Results folder
@@ -117,7 +120,7 @@ SINKS_folds <- dir_folds %>%
 dir_cov <- dir_dat %>% paste0(., "/covariates")
 
 cov_cats <- dir_code %>%
-  paste0(., "/cov_categories_20230323.csv") %>%
+  paste0(., "/cov_categories_20230501.csv") %>%
   read.table(
     sep = ";",
     header = TRUE
@@ -158,26 +161,17 @@ if (usebuffer) {
     )
 } else {
   dsc_extr <- dir_extr %>%
-    paste0(., "/dsc_extr.csv") %>%
-    read.table(
-      header = TRUE,
-      sep = ";",
-    )
+    paste0(., "/dsc_extr.rds") %>%
+    readRDS()
   
   SEGES_extr <- dir_extr %>%
-    paste0(., "/SEGES_extr.csv") %>%
-    read.table(
-      header = TRUE,
-      sep = ";",
-    )
+    paste0(., "/SEGES_extr.rds") %>%
+    readRDS()
 }
 
 SINKS_extr <- dir_extr %>%
-  paste0(., "/SINKS_extr.csv") %>%
-  read.table(
-    header = TRUE,
-    sep = ";",
-  )
+  paste0(., "/SINKS_extr.rds") %>%
+  readRDS()
 
 
 # 6: Merge data and transform the target variables
@@ -230,7 +224,7 @@ obs <- cbind(obs, extr, folds)
 
 obs_top <- obs %>%
   filter(
-    upper == 0,
+    upper < 25,
     is.finite(fold)
     )
 
@@ -259,10 +253,9 @@ plot(obs_top_v, "clay", breaks = 5, breakby = "cases", col = cividis(5))
 
 cov_selected <- cov_cats %>%
   filter(anbm_use == 1) %>%
-  select(name) %>%
+  dplyr::select(., name) %>%
   unlist() %>%
   unname()
-
 
 
 # Template for custom eval
@@ -317,12 +310,6 @@ WeightedSummary <- function (
   return(out)
 }
 
-# Small random sample for testing
-# Remember to include full dataset in the final model
-n <- 1000
-
-use_all_points <- TRUE
-# use_all_points <- FALSE
 
 # NB: Weighted cubist
 
@@ -377,22 +364,30 @@ cubist_weighted$tags <- c(l$cubist$tags, "Accepts Case Weights")
 # For xgboost
 
 tgrid <- expand.grid(
-  nrounds = 20,
+  nrounds = 100,
   eta = seq(0.1, 1, 0.1),
   max_depth = 6,
   min_child_weight = 1,
   gamma = 0,
   colsample_bytree = 0.5,
-  subsample = 0.5
+  subsample = 0.3
 )
 
-gamma_test <- seq(0, 0.5, 0.1)
 max_depth_test <- seq(1, 20, 3)
 min_child_weight_test <- c(1, 2, 4, 8, 16, 32)
+gamma_test <- seq(0, 0.5, 0.1)
 
 objectives <- c(rep("reg:squarederror", 4), rep("reg:tweedie", 2))
 
 trees_per_round <- 10
+
+
+# Small random sample for testing
+# Remember to include full dataset in the final model
+n <- 1000
+
+use_all_points <- TRUE
+# use_all_points <- FALSE
 
 # 9: Train models
 
@@ -476,7 +471,7 @@ for (i in 1:length(fractions))
           ind_j = is_j*rnum
         ) %>%
         filter(ind_j != 0) %>%
-        select(ind_j) %>%
+        dplyr::select(., ind_j) %>%
         unlist() %>%
         unname()
     }
@@ -489,6 +484,7 @@ for (i in 1:length(fractions))
   
   # xgboost optimization
   # 1: Fit learning rate (eta) and nrounds
+  print("Step 1")
 
   set.seed(1)
 
@@ -504,12 +500,12 @@ for (i in 1:length(fractions))
       index = folds_i,
       savePredictions = "final",
       predictionBounds = c(bounds_lower[i], bounds_upper[i]),
-      summaryFunction = WeightedSummary
+      summaryFunction = WeightedSummary,
+      allowParallel = FALSE
     ),
     metric = 'RMSEw',
     maximize = FALSE,
     weights = trdat$w,
-    # allowParallel = FALSE,  # for xgboost
     num_parallel_tree = trees_per_round,
     objective = objectives[i]
   )
@@ -518,8 +514,9 @@ for (i in 1:length(fractions))
   # rm(cl)
   
   if (extra_tuning_xgb) {
-    
     # 2: Fit max_depth and min_child_weight
+    print("Step 2")
+    
     set.seed(1)
     
     model2 <- caret::train(
@@ -540,16 +537,18 @@ for (i in 1:length(fractions))
         index = folds_i,
         savePredictions = "final",
         predictionBounds = c(bounds_lower[i], bounds_upper[i]),
-        summaryFunction = WeightedSummary
+        summaryFunction = WeightedSummary,
+        allowParallel = FALSE
       ),
       metric = 'RMSEw',
       maximize = FALSE,
       weights = trdat$w,
-      # allowParallel = FALSE,  # for xgboost
       num_parallel_tree = trees_per_round
     )
     
     # 3: Tune gamma
+    print("Step 3")
+    
     set.seed(1)
     
     model3 <- caret::train(
@@ -570,12 +569,12 @@ for (i in 1:length(fractions))
         index = folds_i,
         savePredictions = "final",
         predictionBounds = c(bounds_lower[i], bounds_upper[i]),
-        summaryFunction = WeightedSummary
+        summaryFunction = WeightedSummary,
+        allowParallel = FALSE
       ),
       metric = 'RMSEw',
       maximize = FALSE,
       weights = trdat$w,
-      # allowParallel = FALSE,  # for xgboost
       num_parallel_tree = trees_per_round
     )
     
@@ -663,7 +662,7 @@ get_acc <- function(x2, i2) {
   df <- x2$pred %>%
     arrange(rowIndex) %>%
     distinct(rowIndex, .keep_all = TRUE) %>%
-    select(c(pred, obs, weights)) %>%
+    dplyr::select(., c(pred, obs, weights)) %>%
     mutate(
       pred = ifelse(pred < 0, 0, pred)
     )
@@ -720,7 +719,7 @@ getpred <- function(x2, i2) {
   df <- x2$pred %>%
     arrange(rowIndex) %>%
     distinct(rowIndex, .keep_all = TRUE) %>%
-    select(c(pred, obs)) %>%
+    dplyr::select(., c(pred, obs)) %>%
     mutate(
       pred = ifelse(pred < 0, 0, pred)
     )
@@ -901,7 +900,9 @@ for(i in 1:length(fractions))
     const = data.frame(
       SOM_removed = 1,
       year = 2010
-    )
+    ),
+    n_const = 2,
+    n_digits = 1
   )
 }
 
@@ -990,7 +991,7 @@ dev.off()
 # To do:
 # Further refine xgboost use
 # Use all observations
-# Implement forward feature selection
+# Implement forward feature selection?
 # Include forest samples
 # Include profile database
 # Include depth
