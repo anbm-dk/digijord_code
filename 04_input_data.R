@@ -32,9 +32,9 @@
 # - Indicate removal of SOM for texture analyses (OK)
 # - BD (later)
 # - pH (later)
-# - Nutrients: Pt, Kt, Mgt, CUT (later)
+# - Nutrients: Pt, Kt, Mgt, CUT, TOTALN TOTALP ORGAP    K   NA   CA   MG (later)
 # - Water retention (later)
-# - Texture sub-fractions: Gsilt, GfinSD (later)
+# - Texture sub-fractions: Gsilt, GfinSD, GRVSILT S63 S125 S200 S500 (later)
 
 mycolnames <- c(
   "ID_new",
@@ -54,7 +54,9 @@ mycolnames <- c(
   "CaCO3_test",
   "SOM_removed",
   "pH",
-  "N"
+  "N",
+  "BD",
+  "CEC"
 )
 
 # Start up
@@ -105,7 +107,18 @@ con2 <- odbcConnectAccess2007(SINKS_db)
 SINKS <- sqlFetch(con2, "bMHG_RODALTDETDUVIL_01JAN2011")
 
 # 1.4: Profiles: Texture (not right now)
+
+profiles_db <- dir_dat %>%
+  paste0(., "/observations/profiles/DDJD2023.accdb")
+
+con3 <- odbcConnectAccess2007(profiles_db)
+
+profiles_texture <- sqlFetch(con3, "ANALYSE")
+
 # 1.5: Profiles: Water retention (later)
+
+profiles_retention <-  sqlFetch(con3, "VANDRETENTION")
+
 # 1.6: Profiles: Drainage (later)
 # 1.7 Lucas database?
 
@@ -308,12 +321,10 @@ plot(maxvalue/minvalue)
 
 sinks3$SOC <- maxvalue
 sinks3$N <- minvalue
-sinks3$date <- as.character(sinks3$SD_Dato) %>%
+sinks3$date <- sinks3$SD_Dato %>%
+  as.character() %>%
   stri_replace_all_fixed("-", "") %>%
-  strsplit(" ") %>%
-  unlist() %>%
-  matrix(nrow = 2) %>%
-  .[1, ]
+  substr(., 1, 8)
 
 uppers <- c(0:3)*34
 lowers <- uppers + 30
@@ -338,6 +349,101 @@ sinks4 <- sinks3 %>%
 allmydata <- bind_rows(dsc2, seges2, sinks4)
 
 plot(allmydata$UTMX, allmydata$UTMY)
+
+# 2.4: Profiles texture
+
+profiles_texture %>% filter(PRFRA > PRTIL)
+profiles_texture %>% filter(TEKTURSUM < 0)
+
+# Replace negative values (ok)
+# Fix PRFRA PRTIL (ok)
+# Get upper and lower from horizons table when they are missing for the sample
+# (Remove samples where upper and lower are still missing)
+# Standardize texture sums
+# Remove false zeroes
+# - texture
+# - BD
+# - pH
+# - SOC
+# - CaCO3
+# - CEC
+
+
+# TEKSTURART Ingen analyse
+
+tex_negs <- profiles_texture %>%
+  select(-c(PRFRA, PRTIL)) %>%
+  select_if(is.numeric) %>%
+  as.matrix() %>%
+  apply(., 1, function(x) {
+    out <- sum(x < 0, na.rm = TRUE)
+    return(out)
+  }
+  )
+
+profiles_texture[tex_negs > 0, ]
+profiles_texture %>% filter((PRTIL- PRFRA) > 100)
+
+check_negs <- profiles_texture %>%
+  select(-c(PRFRA, PRTIL)) %>%
+  select_if(is.numeric) %>%
+  colnames()
+
+profiles_tex2 <- profiles_texture %>%
+  mutate(
+    across(
+      any_of(check_negs),
+      function(x) replace(x, x < 0, NA))  # Remove negative measurements
+  ) %>%
+  mutate(
+    PRFRA = case_when(
+      PRFRA > PRTIL & PROFILNR == 2517 ~ PRFRA*-1,
+      .default = PRFRA
+      ),
+    PRTIL = case_when(
+      PRFRA > PRTIL & PROFILNR == 2531 ~ 170,
+      PRFRA > PRTIL & PROFILNR %in% c(2528, 2529, 2530) ~ PRFRA,
+      .default = PRTIL
+    )
+  ) %>%
+  mutate(
+    PRFRA = case_when(
+      is.na(PRFRA) ~ PRTIL,
+      .default = PRFRA
+    ),
+    PRTIL = case_when(
+      is.na(PRTIL) ~ PRFRA,
+      (PRTIL- PRFRA) > 100 & PROFILNR == 2539 ~ 30,
+      .default = PRTIL
+    )
+  )
+
+profiles_tex2 %>%
+  filter(PROFILNR %in% c(2517, 2528, 2529, 2530, 2531, 2539)) %>%
+  select(c(PROFILNR, HORISONTNR, HORISONTPR, PRFRA, PRTIL))
+
+plot(profiles_tex2$PRFRA, profiles_tex2$PRTIL)
+
+
+
+%>%
+  mutate(
+    db = "Profile database",
+    UTMX = x,
+    UTMY = y,
+    ID_old = provenr,
+    date = paste0("19", Dato),
+    upper = DybFra,
+    lower = DybTil,
+    clay = Ler * 100 / (Ler + Silt + FinSD + GrovSD),
+    silt = Silt * 100 / (Ler + Silt + FinSD + GrovSD),
+    fine_sand = FinSD * 100 / (Ler + Silt + FinSD + GrovSD),
+    coarse_sand = GrovSD * 100 / (Ler + Silt + FinSD + GrovSD),
+    SOC = Humus*0.587,
+    SOM_removed = 0,
+    CaCO3_test = as.numeric(CaCO3 > 0)
+  ) %>%
+  select(any_of(mycolnames))
 
 # Write files
 
