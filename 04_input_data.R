@@ -67,6 +67,7 @@ library(RODBC)
 library(dplyr)
 library(tidyr)
 library(stringi)
+library(readxl)
 
 dir_code <- getwd()
 root <- dirname(dir_code)
@@ -80,7 +81,7 @@ dsc <- dir_dat %>%
     .,
     "/observations/DanishSoilClassification/DLJ/DLJmDecimaler_DKBH.shp"
   ) %>%
-  vect
+  vect()
 
 # 1.2: Load SEGES samples
 
@@ -106,7 +107,18 @@ con2 <- odbcConnectAccess2007(SINKS_db)
 
 SINKS <- sqlFetch(con2, "bMHG_RODALTDETDUVIL_01JAN2011")
 
-# 1.4: Profiles: Texture (not right now)
+# 1.4: Profiles:
+
+# 1.4.1: Profiles coordinates
+
+profiles_shp <- dir_dat %>%
+  paste0(
+    .,
+    "/observations/profiles/Profiles_coordinates_new/Profiles_coordinates_new.shp"
+  ) %>%
+  vect()
+
+# 1.4.2: Profiles: Texture
 
 profiles_db <- dir_dat %>%
   paste0(., "/observations/profiles/DDJD2023.accdb")
@@ -114,6 +126,15 @@ profiles_db <- dir_dat %>%
 con3 <- odbcConnectAccess2007(profiles_db)
 
 profiles_texture <- sqlFetch(con3, "ANALYSE")
+
+# 1.4.3: Profiles: Horizons
+
+profiles_horizons <- dir_dat %>%
+  paste0(
+    .,
+    "/observations/profiles/DDJD_horizons/DDJD_HORISONT_FRA_TIL.xlsx"
+  ) %>%
+  read_excel()
 
 # 1.5: Profiles: Water retention (later)
 
@@ -357,19 +378,32 @@ profiles_texture %>% filter(TEKTURSUM < 0)
 
 # Replace negative values (ok)
 # Fix PRFRA PRTIL (ok)
-# Get upper and lower from horizons table when they are missing for the sample
+# Get upper and lower from horizons table when they are missing for the sample (ok)
 # (Remove samples where upper and lower are still missing)
 # Standardize texture sums
 # Remove false zeroes
 # - texture
-# - BD
-# - pH
+# - BD (OK)
+# - pH (OK)
 # - SOC
 # - CaCO3
-# - CEC
-
+# - CEC (OK)
 
 # TEKSTURART Ingen analyse
+
+# "Humus"
+# "humus"
+# "Tekstur"
+# "tekstur"
+# "Ingen analyse"
+# "ingen analyse"
+# "Kalk"
+# "kalk"
+# "Humus/kalk"
+# "tekstur/kalk"
+# NA
+# " "
+# "0,0"
 
 tex_negs <- profiles_texture %>%
   select(-c(PRFRA, PRTIL)) %>%
@@ -424,7 +458,119 @@ profiles_tex2 %>%
 
 plot(profiles_tex2$PRFRA, profiles_tex2$PRTIL)
 
+# Get boundaries from horizons table
 
+profiles_horizons_small <- profiles_horizons %>%
+  mutate(
+    HOR_ID = paste0(PROFILNR, "_", HORISONTNR)
+  ) %>%
+  select(-c(PROFILNR, HORISONTNR, HORISONT))
+
+profiles_tex2 %<>%
+  mutate(
+    HOR_ID = paste0(PROFILNR, "_", HORISONTNR)
+  ) %>%
+  left_join(
+    profiles_horizons_small,
+    "HOR_ID"
+    ) %>%
+  mutate(
+    PRFRA = case_when(
+      is.na(PRFRA) ~ FRA,
+      .default = PRFRA
+    ),
+    PRTIL = case_when(
+      is.na(PRTIL) ~ TIL,
+      .default = PRTIL
+    )
+  ) %>%
+  select(-c(HOR_ID, FRA, TIL))
+
+# Remove false zeroes
+
+plot(profiles_tex2$LER)
+plot(sqrt(profiles_tex2$HUMUS))
+plot(sqrt(profiles_tex2$CACO3))
+plot(profiles_tex2$PHCACL2) # ok
+plot(profiles_tex2$CEC) # ok
+plot(profiles_tex2$VOLVGT) # ok
+
+profiles_tex2 %<>%
+  mutate(
+    PHCACL2 = case_when(
+      PHCACL2 < 1 ~ NA,
+      .default = PHCACL2
+    ),
+    CEC = case_when(
+      CEC == 0 ~ NA,
+      .default = CEC
+    ),
+    VOLVGT = case_when(
+      VOLVGT == 0 ~ NA,
+      .default = VOLVGT
+    )
+  )
+
+profiles_tex2 %<>%
+  rowwise() %>%
+  mutate(
+    tminsum = sum(LER, SILT, GRVSILT, S63, S125, S200, S500, na.rm = TRUE)
+  ) %>%
+  ungroup()
+
+plot(profiles_tex2$tminsum)
+
+profil
+
+profiles_tex2 %>% filter(tminsum != 0 & LER == 0)
+profiles_tex2 %>% filter(HUMUS == 0 & TEKSTURART != "Ingen analyse")
+
+profiles_tex2 %>% filter(CACO3 == 0 & TEKSTURART == "0,0")
+
+profiles_tex2 %>% filter(TEKSTURART == "0,0")
+
+profiles_tex2 %>% filter(TEKSTURART == "Humus" & CACO3 > 0)
+
+# TEKSTURART analysis:
+# "Humus"         # More than 400 samples, all texture fractions are false zeroes
+# "tekstur"       # 996 samples, false zeroes where all fractions are 0
+# "ingen analyse" # One sample, texture fractions are false zeroes,
+#                 # CaCO3 is a "true" 0 (i.e. not measured)
+# "Ingen analyse" # 198 samples, all zero rows are false zeroes
+# "Kalk"          # 27 samples, texture fractions and humus are false zeroes
+# "Humus/kalk"    # More than 100 samples, all texture fractions are false zeroes
+# NA              # More than 1000 samples, only false zeroes where all measurements are 0/NA
+# "0,0"           # Only two, no analysis, all zeroes are false
+
+# "humus"         # 11 samples, no false zeroes
+# "Tekstur"       # More than 9000 samples, no false zeroes
+# "kalk"          # 20 samples, no false zeroes, but "TOTAL KULSTOF" is unreliable
+# "tekstur/kalk"  # Three samples, no false zeroes
+# " "             # 11 samples, no false zeroes
+
+profiles_zerosom <- profiles_tex2 %>%
+  group_by(PROFILNR) %>%
+  summarise(humsum = sum(HUMUS, na.rm = TRUE)) %>%
+  filter(humsum == 0)
+
+profiles_tex2 %>%
+  filter(
+  PROFILNR %in% profiles_zerosom$PROFILNR & TEKSTURART != "Ingen analyse")
+
+
+profiles_tex3 <- profiles_tex2 %>%
+  mutate(claysilt = LER/(LER + SILT))
+
+
+
+plot(
+  profiles_tex3$HUMUS,
+  profiles_tex3$claysilt,
+  xlim = c(0, 10),
+  abline(v = 5, col = "blue")
+  )
+
+# SOM only removed for soils with more than 5% SOM
 
 %>%
   mutate(
