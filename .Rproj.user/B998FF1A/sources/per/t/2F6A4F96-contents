@@ -371,6 +371,7 @@ allmydata <- bind_rows(dsc2, seges2, sinks4)
 
 plot(allmydata$UTMX, allmydata$UTMY)
 
+
 # 2.4: Profiles texture
 
 profiles_texture %>% filter(PRFRA > PRTIL)
@@ -380,7 +381,7 @@ profiles_texture %>% filter(TEKTURSUM < 0)
 # Fix PRFRA PRTIL (ok)
 # Get upper and lower from horizons table when they are missing for the sample (ok)
 # (Remove samples where upper and lower are still missing)
-# Standardize texture sums
+
 # Remove false zeroes
 # - texture
 # - BD (OK)
@@ -388,22 +389,7 @@ profiles_texture %>% filter(TEKTURSUM < 0)
 # - SOC
 # - CaCO3
 # - CEC (OK)
-
-# TEKSTURART Ingen analyse
-
-# "Humus"
-# "humus"
-# "Tekstur"
-# "tekstur"
-# "Ingen analyse"
-# "ingen analyse"
-# "Kalk"
-# "kalk"
-# "Humus/kalk"
-# "tekstur/kalk"
-# NA
-# " "
-# "0,0"
+# Standardize texture sums
 
 tex_negs <- profiles_texture %>%
   select(-c(PRFRA, PRTIL)) %>%
@@ -520,20 +506,11 @@ profiles_tex2 %<>%
 
 plot(profiles_tex2$tminsum)
 
-profil
-
-profiles_tex2 %>% filter(tminsum != 0 & LER == 0)
-profiles_tex2 %>% filter(HUMUS == 0 & TEKSTURART != "Ingen analyse")
-
-profiles_tex2 %>% filter(CACO3 == 0 & TEKSTURART == "0,0")
-
-profiles_tex2 %>% filter(TEKSTURART == "0,0")
-
-profiles_tex2 %>% filter(TEKSTURART == "Humus" & CACO3 > 0)
+profiles_tex2 %>% as.data.frame() %>% filter(TEKSTURART == "Kalk")
 
 # TEKSTURART analysis:
 # "Humus"         # More than 400 samples, all texture fractions are false zeroes
-# "tekstur"       # 996 samples, false zeroes where all fractions are 0
+# "tekstur"       # 996 samples, false zeroes where all texture fractions are 0
 # "ingen analyse" # One sample, texture fractions are false zeroes,
 #                 # CaCO3 is a "true" 0 (i.e. not measured)
 # "Ingen analyse" # 198 samples, all zero rows are false zeroes
@@ -548,29 +525,143 @@ profiles_tex2 %>% filter(TEKSTURART == "Humus" & CACO3 > 0)
 # "tekstur/kalk"  # Three samples, no false zeroes
 # " "             # 11 samples, no false zeroes
 
-profiles_zerosom <- profiles_tex2 %>%
-  group_by(PROFILNR) %>%
-  summarise(humsum = sum(HUMUS, na.rm = TRUE)) %>%
-  filter(humsum == 0)
+# Summary:
+# If texture, humus and CaCO3 are all zero, they are false zeroes
+# If texture fractions are all zero, they are false zeroes
+# If CaCO3 is >0, and texture fractions + humus are zero, humus is a false zero
+# If one texture fraction is >0, humus and CaCO3 may be true zeroes
+# If one texture fraction is >0, the other fractions may be true zeroes
+# If humus or texture fractions are >0, CaCO3 may be true zeroes
 
-profiles_tex2 %>%
-  filter(
-  PROFILNR %in% profiles_zerosom$PROFILNR & TEKSTURART != "Ingen analyse")
+profiles_tex2 %<>%
+  rowwise() %>%
+  mutate(
+    TEKTURSUM_NY = sum(LER, SILT, GRVSILT, S63, S125, S200, S500, HUMUS, CACO3,
+                       na.rm = TRUE)
+  ) %>%
+  ungroup()
 
-
-profiles_tex3 <- profiles_tex2 %>%
-  mutate(claysilt = LER/(LER + SILT))
-
-
-
-plot(
-  profiles_tex3$HUMUS,
-  profiles_tex3$claysilt,
-  xlim = c(0, 10),
-  abline(v = 5, col = "blue")
+profiles_tex2 %<>%
+  rowwise() %>%
+  mutate(
+    TEKSTUR_NZERO = sum(c(LER, SILT, GRVSILT, S63, S125, S200, S500) == 0,
+                     na.rm = TRUE)
   )
 
-# SOM only removed for soils with more than 5% SOM
+profiles_tex2 %>% as.data.frame() %>% filter(tminsum > 101) %>% arrange(-tminsum)
+profiles_tex2 %>% as.data.frame() %>% filter(TEKTURSUM > 101) %>% arrange(-TEKTURSUM)
+profiles_tex2 %>%
+  as.data.frame() %>%
+  filter(TEKTURSUM_NY < 99 & tminsum > 0) %>%
+  arrange(-TEKTURSUM_NY)
+
+profiles_tex2 %>% filter(TEKSTUR_NZERO == 2) %>% as.data.frame()
+profiles_tex2 %>% filter(TEKSTUR_NZERO == 1 & TEKTURSUM_NY < 50)
+  
+# Mineral texture sums above 101 are generally due to repeated values for one
+# of the sand fractions.
+# For one sample (profile 975, horizon 4), S500 seems to be the sum of the other
+# texture fractions.
+# If two or more texture fractions are zero, they are false zeroes
+
+# Check if any profiles consistently lack SOM measurements (inconclusive)
+
+# profiles_zerosom <- profiles_tex2 %>%
+#   group_by(PROFILNR) %>%
+#   summarise(humsum = sum(HUMUS, na.rm = TRUE)) %>%
+#   filter(humsum == 0)
+# 
+# profiles_tex2 %>%
+#   filter(
+#   PROFILNR %in% profiles_zerosom$PROFILNR & TEKSTURART != "Ingen analyse")
+
+# Decisions:
+# 1: Remove repeated texture values where the sum is higher than 101% (remove
+# last).
+# 2: If two or more texture fractions are zero, set them to NA. (OK)
+# 3: For profile 975, horizon 4, recalculate S500. (OK)
+# 4: If all fractions, including humus and CaCO3 are zero/NA, set them all to
+# NA. (OK)
+# 5: Set humus zeroes to NA if CaCO3 > 0 and texture is zero/NA. (OK)
+
+profiles_tex2 %<>% ungroup()
+
+t_colnames <- c("LER", "SILT", "GRVSILT", "S63", "S125", "S200", "S500")
+
+profiles_tex4 <- profiles_tex2 %>%
+  rowwise() %>%
+  mutate(
+    across(
+      c(SILT, GRVSILT, S63, S125, S200, S500),
+      ~ case_when(
+        TEKTURSUM_NY > 101 & c_across(LER:S500)[match(cur_column(), t_colnames) - 1] == . ~ NA,
+        .default = .
+      ) 
+    ) 
+  ) %>%
+  rowwise() %>%
+  mutate(
+    across(
+      c(LER, SILT, GRVSILT, S63, S125, S200, S500),
+      ~ case_when(
+        TEKSTUR_NZERO > 1 & . == 0 ~ NA, 
+        .default = .)
+    )
+  ) %>% 
+  rowwise() %>%
+  mutate(
+    S500 = case_when(
+      PROFILNR == 975 & HORISONTNR == 4 ~ 100 - sum(
+        LER, SILT, GRVSILT, S63, S125, S200, HUMUS, CACO3, na.rm = TRUE
+      ),
+      .default = S500
+    )
+  ) %>%
+  ungroup() %>%
+  mutate(
+    across(
+      c(LER, SILT, GRVSILT, S63, S125, S200, S500, HUMUS, CACO3),
+      ~ case_when(
+        TEKTURSUM_NY == 0 ~ NA, 
+        .default = .
+        )
+    )
+  ) %>%
+  mutate(
+    HUMUS = case_when(
+      HUMUS == 0 & CACO3 > 0 & tminsum == 0 ~ NA,
+      HUMUS == 0 & CACO3 > 0 & is.na(tminsum) ~ NA,
+      .default = HUMUS
+    )
+  )
+
+profiles_tex4 %<>%
+  rowwise() %>%
+  mutate(
+    TEKTURSUM_NY = sum(LER, SILT, GRVSILT, S63, S125, S200, S500, HUMUS, CACO3,
+                       na.rm = TRUE)
+  ) %>%
+  ungroup()
+
+plot(profiles_tex4$TEKTURSUM_NY)
+
+profiles_tex4 %>% filter(TEKTURSUM_NY > 101) %>% as.data.frame()
+
+# profile 3280 is ok (sum only 102%)
+# profile 3180 horizon 6 sample 2 seems to be a duplicate of the topsoil sample
+# with S500 as the only exception. The column "TOTAL KULSTOF" seems to contain 
+# the only valid measurement from this sample. The texture fractions for this
+# sample should therefore be set to NA.
+
+plot(profiles_tex4$HUMUS, profiles_tex4$`TOTAL KULSTOF`)
+cor(profiles_tex4$HUMUS, profiles_tex4$`TOTAL KULSTOF`, use = "pairwise.complete.obs")
+plot(log(profiles_tex4$HUMUS), log(profiles_tex4$`TOTAL KULSTOF`))
+cor(log(profiles_tex4$HUMUS), log(profiles_tex4$`TOTAL KULSTOF`), use = "pairwise.complete.obs", method = "spearman")
+
+# Standardization
+# Only standardize texture fractions if the combined sum, including humus and
+# CaCO3 are more than 90%.
+
 
 %>%
   mutate(
@@ -590,6 +681,19 @@ plot(
     CaCO3_test = as.numeric(CaCO3 > 0)
   ) %>%
   select(any_of(mycolnames))
+
+# Analyse SOM removal
+# SOM only removed for soils with more than 5% SOM
+
+# profiles_tex3 <- profiles_tex2 %>%
+#   mutate(claysilt = LER/(LER + SILT))
+# 
+# plot(
+#   profiles_tex3$HUMUS,
+#   profiles_tex3$claysilt,
+#   xlim = c(0, 10),
+#   abline(v = 5, col = "blue")
+#   )
 
 # Write files
 
