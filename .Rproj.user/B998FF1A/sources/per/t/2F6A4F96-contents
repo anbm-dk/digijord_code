@@ -379,7 +379,6 @@ profiles_texture %>% filter(TEKTURSUM < 0)
 
 # Replace negative values (ok)
 # Fix PRFRA PRTIL (ok)
-# Get upper and lower from horizons table when they are missing for the sample (ok)
 # (Remove samples where upper and lower are still missing)
 
 # Remove false zeroes
@@ -422,18 +421,8 @@ profiles_tex2 <- profiles_texture %>%
       ),
     PRTIL = case_when(
       PRFRA > PRTIL & PROFILNR == 2531 ~ 170,
+      (PRTIL - PRFRA) > 100 & PROFILNR == 2539 ~ 30,
       PRFRA > PRTIL & PROFILNR %in% c(2528, 2529, 2530) ~ PRFRA,
-      .default = PRTIL
-    )
-  ) %>%
-  mutate(
-    PRFRA = case_when(
-      is.na(PRFRA) ~ PRTIL,
-      .default = PRFRA
-    ),
-    PRTIL = case_when(
-      is.na(PRTIL) ~ PRFRA,
-      (PRTIL- PRFRA) > 100 & PROFILNR == 2539 ~ 30,
       .default = PRTIL
     )
   )
@@ -444,39 +433,12 @@ profiles_tex2 %>%
 
 plot(profiles_tex2$PRFRA, profiles_tex2$PRTIL)
 
-# Get boundaries from horizons table
-
-profiles_horizons_small <- profiles_horizons %>%
-  mutate(
-    HOR_ID = paste0(PROFILNR, "_", HORISONTNR)
-  ) %>%
-  select(-c(PROFILNR, HORISONTNR, HORISONT))
-
-profiles_tex2 %<>%
-  mutate(
-    HOR_ID = paste0(PROFILNR, "_", HORISONTNR)
-  ) %>%
-  left_join(
-    profiles_horizons_small,
-    "HOR_ID"
-    ) %>%
-  mutate(
-    PRFRA = case_when(
-      is.na(PRFRA) ~ FRA,
-      .default = PRFRA
-    ),
-    PRTIL = case_when(
-      is.na(PRTIL) ~ TIL,
-      .default = PRTIL
-    )
-  ) %>%
-  select(-c(HOR_ID, FRA, TIL))
 
 # Remove false zeroes
 
-plot(profiles_tex2$LER)
-plot(sqrt(profiles_tex2$HUMUS))
-plot(sqrt(profiles_tex2$CACO3))
+plot(profiles_tex2$LER) # ok
+plot(sqrt(profiles_tex2$HUMUS)) # ok
+plot(sqrt(profiles_tex2$CACO3)) # ok
 plot(profiles_tex2$PHCACL2) # ok
 plot(profiles_tex2$CEC) # ok
 plot(profiles_tex2$VOLVGT) # ok
@@ -537,19 +499,16 @@ profiles_tex2 %<>%
   rowwise() %>%
   mutate(
     TEKTURSUM_NY = sum(LER, SILT, GRVSILT, S63, S125, S200, S500, HUMUS, CACO3,
-                       na.rm = TRUE)
+                       na.rm = TRUE),
+    TEKSTUR_NZERO = sum(c(LER, SILT, GRVSILT, S63, S125, S200, S500) == 0,
+                        na.rm = TRUE)
   ) %>%
   ungroup()
 
-profiles_tex2 %<>%
-  rowwise() %>%
-  mutate(
-    TEKSTUR_NZERO = sum(c(LER, SILT, GRVSILT, S63, S125, S200, S500) == 0,
-                     na.rm = TRUE)
-  )
-
-profiles_tex2 %>% as.data.frame() %>% filter(tminsum > 101) %>% arrange(-tminsum)
-profiles_tex2 %>% as.data.frame() %>% filter(TEKTURSUM > 101) %>% arrange(-TEKTURSUM)
+profiles_tex2 %>% as.data.frame() %>% filter(tminsum > 101) %>%
+  arrange(-tminsum)
+profiles_tex2 %>% as.data.frame() %>% filter(TEKTURSUM > 101) %>%
+  arrange(-TEKTURSUM)
 profiles_tex2 %>%
   as.data.frame() %>%
   filter(TEKTURSUM_NY < 99 & tminsum > 0) %>%
@@ -584,8 +543,6 @@ profiles_tex2 %>% filter(TEKSTUR_NZERO == 1 & TEKTURSUM_NY < 50)
 # NA. (OK)
 # 5: Set humus zeroes to NA if CaCO3 > 0 and texture is zero/NA. (OK)
 
-profiles_tex2 %<>% ungroup()
-
 t_colnames <- c("LER", "SILT", "GRVSILT", "S63", "S125", "S200", "S500")
 
 profiles_tex4 <- profiles_tex2 %>%
@@ -599,7 +556,6 @@ profiles_tex4 <- profiles_tex2 %>%
       ) 
     ) 
   ) %>%
-  rowwise() %>%
   mutate(
     across(
       c(LER, SILT, GRVSILT, S63, S125, S200, S500),
@@ -607,8 +563,7 @@ profiles_tex4 <- profiles_tex2 %>%
         TEKSTUR_NZERO > 1 & . == 0 ~ NA, 
         .default = .)
     )
-  ) %>% 
-  rowwise() %>%
+  ) %>%
   mutate(
     S500 = case_when(
       PROFILNR == 975 & HORISONTNR == 4 ~ 100 - sum(
@@ -658,10 +613,200 @@ cor(profiles_tex4$HUMUS, profiles_tex4$`TOTAL KULSTOF`, use = "pairwise.complete
 plot(log(profiles_tex4$HUMUS), log(profiles_tex4$`TOTAL KULSTOF`))
 cor(log(profiles_tex4$HUMUS), log(profiles_tex4$`TOTAL KULSTOF`), use = "pairwise.complete.obs", method = "spearman")
 
+is_naturalnumber <- function(x, tol = .Machine$double.eps^0.5) {
+  out <- x > tol & abs(x - round(x)) < tol
+  return(out)
+} 
+
+profiles_tex4 %>%
+  filter(!(JBNR %in% 1:12)) %>%
+  filter(!is.na(JBNR)) %>%
+  filter(is_naturalnumber(`TOTAL KULSTOF`)) %>%
+  as.data.frame()
+
+plot(profiles_tex4$PHH2O)  # simply remove zeroes.
+plot(profiles_tex4$PHKCL)  # simply remove zeroes.
+plot(profiles_tex4$POROES)  # simply remove zeroes.
+plot(profiles_tex4$TOTALP)  # simply remove zeroes.
+plot(profiles_tex4$TOTALN)  # simply remove zeroes.
+plot(profiles_tex4$ORGAP)  # simply remove zeroes.
+plot(profiles_tex4$`UORGANISK P`) # simply remove zeroes.
+plot(profiles_tex4$`CITRATOPL P`)  # simply remove zeroes.
+plot(profiles_tex4$`TOTAL KULSTOF`)  # simply remove zeroes.
+
+library(ggplot2)
+
+profiles_tex4 %>%
+  filter(JBNR %in% 1:12) %>%
+  filter(HUMUS != 0) %>%
+  filter(`TOTAL KULSTOF` != 0) %>%
+  ggplot(aes(x = HUMUS, y = `TOTAL KULSTOF`)) + geom_point()
+
+profiles_tex4 %>%
+  filter(JBNR %in% 1:12) %>%
+  filter(HUMUS != 0) %>%
+  filter(`TOTAL KULSTOF` != 0) %>%
+  filter(`TOTAL KULSTOF` > HUMUS) %>%
+  as.data.frame()
+
+# The columns "UORGANISK P", "CITRATOPL P", "TOTAL KULSTOF", "JBNR" seem to
+# share many false zeroes. These should be set to NA.
+# The columns "TOTALN", "TOTALP", "ORGAP", "UORGANISK P" share many false
+# zeroes. These should be set to NA.
+# In the columns K, NA, CA, MG, BASER, SURION, CEC, BASEMAETN the zeroes are 
+# false if CEC is either NA or zero.
+# If SURION and BASEMAETN are both zero, they are false zeroes, irrespective of
+# CEC.
+# JBNR should only ever be an integer between 1 and 12.
+# `TOTAL KULSTOF` values that are integers seem to contain the JBNR in cases
+# Where the latter is missing.
+
+# Decisions:
+# 6: Remove all invalid JB numbers (not in 1:12). (ok)
+# 7: Where JBNR is missing and total C is an integer, use total C for JBNR and
+# delete the value from the total C column. Remove any invalid JBNR values
+# again. (ok)
+# 8: For profile 3180 horizon 6 sample 2 set all texture fractions to NA. (ok)
+# 9: Set all zeroes to NA for PHH2O, PHKCL, POROES, TOTALP, TOTALN, ORGAP,
+# UORGANISK P, CITRATOPL P, TOTAL KULSTOF. (ok)
+# 10: If CEC is NA or zero, set 0 to NA for the columns K, NA, CA, MG, BASER,
+# SURION, CEC, BASEMAETN. (ok)
+# 11: If SURION and BASEMAETN are both zero, set them to NA. (ok)
+# 12: For profile 2532 horizon 3, HUMUS is 100 due to an error caused by 
+# missing texture fractions (not measured). According to the field report (MH 
+# Greve & P Sørensen, 1990: Lokalitetskortlægning på marginaljord - et pilot-
+# projekt, 2. revideret udgave, bilag), the HUMUS content for this horizon is
+# 2.66%. Correct this manually. (ok)
+
+profiles_tex4 %<>%
+  mutate(
+    JBNR = case_when(
+      !(JBNR %in% 1:12) ~ NA, 
+      .default = JBNR
+    ),
+    JBNR = case_when(
+      is.na(JBNR) & is_naturalnumber(`TOTAL KULSTOF`) ~ `TOTAL KULSTOF`,
+      .default = JBNR
+    ),
+    `TOTAL KULSTOF` = case_when(
+      is_naturalnumber(`TOTAL KULSTOF`) & `TOTAL KULSTOF` == JBNR ~ NA,
+      .default = `TOTAL KULSTOF`
+    ),
+    JBNR = case_when(
+      !(JBNR %in% 1:12) ~ NA, 
+      .default = JBNR
+    )
+  ) %>%
+  mutate(
+    across(
+      c(LER, SILT, GRVSILT, S63, S125, S200, S500, HUMUS, CACO3),
+      ~ case_when(
+        PROFILNR == 3180 & HORISONTNR == 6 & HORISONTPR == 2 ~ NA, 
+        .default = .
+      )
+    ),
+    across(
+      c(PHH2O, PHKCL, POROES, TOTALP, TOTALN, ORGAP, `UORGANISK P`,
+        `CITRATOPL P`, `TOTAL KULSTOF`),
+      ~ case_when(
+        . == 0 ~ NA, 
+        .default = .
+      )
+    ),
+    across(
+      c(K, `NA`, CA, MG, BASER, SURION, BASEMAETN),
+      ~ case_when(
+        is.na(CEC) & . == 0 ~ NA, 
+        .default = .
+      )
+    )
+  ) %>%
+  mutate(
+    SURION = case_when(
+      PROFILNR == 3181 & SURION == 0 ~ NA,
+      .default = SURION
+    ),
+    BASEMAETN = case_when(
+      PROFILNR == 3181 & BASEMAETN == 0 ~ NA,
+      .default = BASEMAETN
+    ),
+    HUMUS = case_when(
+      PROFILNR == 2532 & HORISONTNR == 3 ~ 2.66,
+      .default = HUMUS
+    )
+  )
+
+profiles_tex4 %<>%
+  rowwise() %>%
+  mutate(
+    TEKTURSUM = sum(LER, SILT, GRVSILT, S63, S125, S200, S500, HUMUS, CACO3,
+                    na.rm = TRUE)
+  ) %>%
+  ungroup() %>%
+  mutate(
+    TEKTURSUM = case_when(
+      TEKTURSUM == 0 ~ NA,
+      .default = TEKTURSUM
+    )
+  )
+
+# Export corrected table
+
+profiles_analyse_corrected <- profiles_tex4 %>%
+  select(colnames(profiles_texture))
+  
+write.table(
+  profiles_analyse_corrected,
+  paste0(dir_dat, "/observations/profiles/ANALYSE_corrected_20230606.csv"),
+  sep = ";",
+  na = "",
+  row.names = FALSE
+)
+
+# Impute missing horizon boundaries
+# Get boundaries from horizons table
+# Get upper and lower from horizons table when they are missing for the sample
+# (ok)
+
+profiles_horizons_small <- profiles_horizons %>%
+  mutate(
+    HOR_ID = paste0(PROFILNR, "_", HORISONTNR)
+  ) %>%
+  select(-c(PROFILNR, HORISONTNR, HORISONT))
+
+profiles_tex5 <- profiles_tex4 %>%
+  mutate(
+    PRFRA = case_when(
+      is.na(PRFRA) ~ PRTIL,
+      .default = PRFRA
+    ),
+    PRTIL = case_when(
+      is.na(PRTIL) ~ PRFRA,
+      .default = PRTIL
+    )
+  ) %>%
+  mutate(
+    HOR_ID = paste0(PROFILNR, "_", HORISONTNR)
+  ) %>%
+  left_join(
+    profiles_horizons_small,
+    "HOR_ID"
+  ) %>%
+  mutate(
+    PRFRA = case_when(
+      is.na(PRFRA) ~ FRA,
+      .default = PRFRA
+    ),
+    PRTIL = case_when(
+      is.na(PRTIL) ~ TIL,
+      .default = PRTIL
+    )
+  ) %>%
+  select(-c(HOR_ID, FRA, TIL))
+
 # Standardization
 # Only standardize texture fractions if the combined sum, including humus and
 # CaCO3 are more than 90%.
-
 
 %>%
   mutate(
