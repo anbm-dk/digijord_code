@@ -774,7 +774,7 @@ profiles_horizons_small <- profiles_horizons %>%
   ) %>%
   select(-c(PROFILNR, HORISONTNR, HORISONT))
 
-profiles_tex5 <- profiles_tex4 %>%
+profiles_tex5 <- profiles_analyse_corrected %>%
   mutate(
     PRFRA = case_when(
       is.na(PRFRA) ~ PRTIL,
@@ -808,24 +808,91 @@ profiles_tex5 <- profiles_tex4 %>%
 # Only standardize texture fractions if the combined sum, including humus and
 # CaCO3 are more than 90%.
 
-%>%
+
+
+"date",
+"UTMX",
+"UTMY",
+
+
+
+
+profiles_tex5 %>% filter(is.na(HUMUS) & !is.na(LER)) %>% as.data.frame()
+
+profiles_tex5 %>%
+  filter(!is.na(LER)) %>%
+  filter(TEKTURSUM < 99) %>%
+  filter(is.na(HUMUS)) %>%
+  filter(is.na(CACO3)) %>%
+  slice_sample(n = 20) %>%
+  as.data.frame()
+
+# If TEKTURSUM is more than 90, use sum of mineral fractions
+# If not, and if HUMUS or CaCO3 are available, use 100 - (HUMUS + CaCO3)
+# Otherwise, do not standardize
+
+profiles_tex5 %>%
   mutate(
     db = "Profile database",
-    UTMX = x,
-    UTMY = y,
-    ID_old = provenr,
-    date = paste0("19", Dato),
-    upper = DybFra,
-    lower = DybTil,
-    clay = Ler * 100 / (Ler + Silt + FinSD + GrovSD),
-    silt = Silt * 100 / (Ler + Silt + FinSD + GrovSD),
-    fine_sand = FinSD * 100 / (Ler + Silt + FinSD + GrovSD),
-    coarse_sand = GrovSD * 100 / (Ler + Silt + FinSD + GrovSD),
-    SOC = Humus*0.587,
-    SOM_removed = 0,
-    CaCO3_test = as.numeric(CaCO3 > 0)
+    ID_old = paste0(PROFILNR, "_", HORISONTNR, "_", HORISONTPR),
+    upper = PRFRA,
+    lower = PRTIL,
+    SOC = case_when(
+      !is.na(HUMUS) ~ HUMUS*0.587,
+      is.na(HUMUS) & is.na(CACO3) ~ `TOTAL KULSTOF`,
+      is.na(HUMUS) & CACO3 == 0 ~ `TOTAL KULSTOF`,
+      .default = NA
+    ),
+    SOM_removed = case_when(
+      HUMUS >= 5 ~ 1,
+      HUMUS < 5 ~ 0,
+      .default = NA
+    ),
+    CaCO3 = CACO3,
+    BD = VOLVGT,
+    pH = PHCACL2,
+    N = TOTALN
   ) %>%
-  select(any_of(mycolnames))
+  rowwise() %>%
+  mutate(
+    tminsum = sum(LER, SILT, GRVSILT, S63, S125, S200, S500, na.rm = TRUE),
+    not_SOM_CaCO3 = case_when(
+      !is.na(sum(HUMUS, CACO3)) ~ 100 - (HUMUS + CACO3),
+      !is.na(HUMUS) & is.na(CACO3) ~ 100 - HUMUS,
+      is.na(HUMUS) & !is.na(CACO3) ~ 100 - CACO3,
+      .default = NA
+    ),
+    clay = case_when(
+      TEKTURSUM >= 90 ~ LER * 100 / (tminsum),
+      TEKTURSUM < 90 & !is.na(not_SOM_CaCO3) ~ LER * 100 / (not_SOM_CaCO3),
+      .default = LER
+    ),
+    silt = case_when(
+      TEKTURSUM >= 90 ~ SILT * 100 / (tminsum),
+      TEKTURSUM < 90 & !is.na(not_SOM_CaCO3) ~ SILT * 100 / (not_SOM_CaCO3),
+      .default = SILT
+    ),
+    fsand_raw = case_when(
+      sum(!is.na(c_across(GRVSILT:S125))) > 0 ~ sum(GRVSILT, S63, S125, na.rm = TRUE),
+      .default = NA
+    ),
+    fine_sand = case_when(
+      TEKTURSUM >= 90 ~ fsand_raw * 100 / (tminsum),
+      TEKTURSUM < 90 & !is.na(not_SOM_CaCO3) ~ fsand_raw * 100 / (not_SOM_CaCO3),
+      .default = fsand_raw
+    ),
+    csand_raw = case_when(
+      sum(!is.na(c_across(S200:S500))) > 0 ~ sum(S200, S500, na.rm = TRUE),
+      .default = NA
+    ),
+    coarse_sand = case_when(
+      TEKTURSUM >= 90 ~ csand_raw * 100 / (tminsum),
+      TEKTURSUM < 90 & !is.na(not_SOM_CaCO3) ~ csand_raw * 100 / (not_SOM_CaCO3),
+      .default = csand_raw
+    )
+  )%>%
+  ungroup() %>%
+  select(any_of(mycolnames)) %>% slice_sample(n = 20) %>% as.data.frame()
 
 # Analyse SOM removal
 # SOM only removed for soils with more than 5% SOM
