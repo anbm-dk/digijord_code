@@ -52,6 +52,14 @@ SINKS <- dir_obs_proc %>%
     keepgeom = TRUE
   )
 
+profiles_shp <- dir_dat %>%
+  paste0(
+    .,
+    "/observations/profiles/Profiles_coordinates_new/Profiles_coordinates_new.shp"
+  ) %>%
+  vect()
+
+
 # 2 Load covariates
 
 cov_dir <- dir_dat %>% paste0(., "/covariates")
@@ -119,6 +127,14 @@ SINKS_extr <- terra::extract(
     ID = FALSE,
   )
 
+profiles_extr <- terra::extract(
+  x = cov,
+  y = profiles_shp,
+  ID = FALSE,
+)
+
+profiles_extr$PROFILNR <- profiles_shp$PROFILNR
+
 # 5 Write to csv
 
 dir_extr <- dir_dat %>%
@@ -159,6 +175,13 @@ write.table(
   sep = ";"
 )
 
+write.table(
+  profiles_extr,
+  paste0(dir_extr, "profiles_extr.csv"),
+  row.names = FALSE,
+  sep = ";"
+)
+
 # Save as RDS
 
 saveRDS(
@@ -175,5 +198,11 @@ saveRDS(
   SINKS_extr,
   paste0(dir_extr, "SINKS_extr.rds")
 )
+
+saveRDS(
+  profiles_extr,
+  paste0(dir_extr, "profiles_extr.rds")
+)
+
 
 # END

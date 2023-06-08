@@ -3,7 +3,7 @@
     "path": "C:/Users/au542768/digijord/digijord_code/06_folds.R",
     "project_path": "06_folds.R",
     "type": "r_source",
-    "hash": "1564218560",
+    "hash": "2989992575",
     "contents": "",
     "dirty": false,
     "created": 1675240750672.0,
@@ -13,15 +13,15 @@
         "tempName": "Untitled1",
         "source_window_id": "",
         "Source": "Source",
-        "cursorPosition": "149,0",
+        "cursorPosition": "53,9",
         "scrollLine": "0"
     },
     "folds": "",
-    "lastKnownWriteTime": 1675246188,
+    "lastKnownWriteTime": 1686229346,
     "encoding": "UTF-8",
     "collab_server": "",
     "source_window": "",
-    "last_content_update": 1675246188,
+    "last_content_update": 1686229346676,
     "read_only": false,
     "read_only_alternatives": []
 }

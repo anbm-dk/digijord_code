@@ -50,6 +50,13 @@ SINKS <- dir_obs_proc %>%
     keepgeom = TRUE
   )
 
+profiles_shp <- dir_dat %>%
+  paste0(
+    .,
+    "/observations/profiles/Profiles_coordinates_new/Profiles_coordinates_new.shp"
+  ) %>%
+  vect()
+
 # 2 Load and aggregate DEM
 
 cov_dir <- dir_dat %>% paste0(., "/covariates/")
@@ -138,6 +145,14 @@ SINKS_folds <- terra::extract(
   ID = FALSE,
 )
 
+profiles_folds <- terra::extract(
+  x = folds_10_100m,
+  y = profiles_shp,
+  ID = FALSE,
+)
+
+profiles_folds$PROFILNR <- profiles_shp$PROFILNR
+
 # 5 Write to file
 
 write.table(
@@ -157,6 +172,13 @@ write.table(
 write.table(
   SINKS_folds,
   paste0(dir_folds, "/SINKS_folds.csv"),
+  row.names = FALSE,
+  sep = ";"
+)
+
+write.table(
+  profiles_folds,
+  paste0(dir_folds, "/profiles_folds.csv"),
   row.names = FALSE,
   sep = ";"
 )

@@ -15,7 +15,7 @@
 
 # 1: Start up
 
-library(Cubist)
+# library(Cubist)
 library(terra)
 library(magrittr)
 library(tools)
@@ -37,7 +37,7 @@ dir_dat <- paste0(root, "/digijord_data/")
 # Test 9: xgboost
 # Test 10: Predicted row and column (poor accuracy)
 # Test 11: Fever data, more 
-testn <- 11
+testn <- 12
 mycrs <- "EPSG:25832"
 
 # Results folder
@@ -87,6 +87,17 @@ SINKS <- dir_obs_proc %>%
     keepgeom = TRUE
   )
 
+profiles_texture <- dir_obs_proc %>%
+  paste0(., "profiles_texture.csv") %>%
+  read.table(
+    header = TRUE,
+    sep = ";",
+  ) %>%
+  vect(
+    geom = c("UTMX", "UTMY"),
+    crs = mycrs,
+    keepgeom = TRUE
+  )
 
 # 3: Load folds
 
@@ -114,6 +125,14 @@ SINKS_folds <- dir_folds %>%
     sep = ";",
   )
 
+profiles_folds <- dir_folds %>%
+  paste0(., "profiles_folds.csv") %>%
+  read.table(
+    header = TRUE,
+    sep = ";",
+  ) %>%
+  right_join(values(profiles_texture)) %>%
+  select(lyr.1)
 
 # 4: Load covariate data
 
@@ -173,10 +192,15 @@ SINKS_extr <- dir_extr %>%
   paste0(., "/SINKS_extr.rds") %>%
   readRDS()
 
+profiles_extr <- dir_extr %>%
+  paste0(., "profiles_extr.rds") %>%
+  readRDS() %>%
+  right_join(values(profiles_texture)) %>%
+  select(any_of(cov_names))
 
 # 6: Merge data and transform the target variables
 
-obs <- list(dsc, SEGES, SINKS) %>%
+obs <- list(dsc, SEGES, SINKS, profiles_texture) %>%
   vect() %>%
   values() %>%
   mutate(
@@ -209,7 +233,8 @@ bounds_upper <- rep(100, 6)
 folds <- bind_rows(
   dsc_folds,
   SEGES_folds,
-  SINKS_folds
+  SINKS_folds,
+  profiles_folds
 )
 
 names(folds) <- "fold"
@@ -217,16 +242,24 @@ names(folds) <- "fold"
 extr <- bind_rows(
   dsc_extr,
   SEGES_extr,
-  SINKS_extr
+  SINKS_extr,
+  profiles_extr
 )
 
-obs <- cbind(obs, extr, folds)
+obs <- cbind(obs, extr, folds) %>%
+  filter(!is.na(UTMX) & !is.na(UTMY))
 
 obs_top <- obs %>%
   filter(
     upper < 25,
     is.finite(fold)
     )
+
+obs_prf <- obs %>%
+  filter(
+    db == "Profile database",
+    is.finite(fold)
+  )
 
 # Make new ID
 # Use all observations?
@@ -310,58 +343,7 @@ WeightedSummary <- function (
   return(out)
 }
 
-
-# NB: Weighted cubist
-
-l <- getModelInfo("cubist")
-
-cubist_weighted <- l$cubist
-
-cubist_weighted$label <- "cubist_weighted"
-
-cubist_weighted$fit <- function(x, y, wts, param, lev, last, classProbs, ...) {
-  if(!is.null(wts)) {
-    out <- Cubist::cubist(x,
-                          y,
-                          committees = param$committees,
-                          weights = wts,
-                          ...)
-  } else {
-    out <- Cubist::cubist(x, y, committees =  param$committees,  ...)
-  }
-  if(last) out$tuneValue$neighbors <- param$neighbors
-  out
-}
-
-cubist_weighted$predict <- function(modelFit, newdata, submodels = NULL) {
-  out <- predict(modelFit,
-                 as.data.frame(newdata),
-                 neighbors = modelFit$tuneValue$neighbors)
-  if(!is.null(submodels)) {
-    tmp <- vector(mode = "list", length = nrow(submodels) + 1)
-    tmp[[1]] <- out
-    
-    for(j in seq(along = submodels$neighbors))
-      tmp[[j+1]] <- predict(modelFit,
-                            as.data.frame(newdata),
-                            neighbors = submodels$neighbors[j])
-    
-    out <- tmp
-  }
-  out
-}
-
-cubist_weighted$tags <- c(l$cubist$tags, "Accepts Case Weights")
-
 # Tuning grid
-
-# For cubist:
-# tgrid <- data.frame(
-#   committees = 20,
-#   neighbors = 0
-# )
-
-# For xgboost
 
 tgrid <- expand.grid(
   nrounds = 100,
@@ -386,12 +368,12 @@ trees_per_round <- 10
 # Remember to include full dataset in the final model
 n <- 1000
 
-use_all_points <- TRUE
-# use_all_points <- FALSE
+# use_all_points <- TRUE
+use_all_points <- FALSE
 
 # 9: Train models
 
-extra_tuning_xgb <- TRUE
+extra_tuning_xgb <- FALSE
 
 models <- list()
 
@@ -401,7 +383,9 @@ for (i in 1:length(fractions))
 
   print(frac)
 
-  cov_c_i <- cov_selected %>% paste0(collapse = " + ")
+  cov_c_i <- cov_selected %>%
+    c("upper", "lower") %>%
+    paste0(collapse = " + ")
   if (i %in% 1:4) {
     cov_c_i <- cov_selected %>%
       c(., "SOM_removed") %>%
@@ -417,7 +401,9 @@ for (i in 1:length(fractions))
   formula_i <- paste0(frac, " ~ ", cov_c_i) %>%
     as.formula()
 
-  trdat <- obs_top %>%
+  # trdat <- obs_top %>%
+  #   filter(is.finite(.data[[frac]]))
+  trdat <- obs_prf %>%
     filter(is.finite(.data[[frac]]))
 
   # Three folds (placeholder)
@@ -434,30 +420,83 @@ for (i in 1:length(fractions))
 
   # Calculate weights
   # Calculate densities for depth intervals
-  dens <- ppp(
-    trdat$UTMX,
-    trdat$UTMY,
-    c(441000, 894000),
-    c(6049000, 6403000)
-  ) %>%
-    density(
-      sigma = 250,
-      at = 'points',
-      leaveoneout = FALSE
-    )
+  # dens <- ppp(
+  #   trdat$UTMX,
+  #   trdat$UTMY,
+  #   c(441000, 894000),
+  #   c(6049000, 6403000)
+  # ) %>%
+  #   density(
+  #     sigma = 250,
+  #     at = 'points',
+  #     leaveoneout = FALSE
+  #   )
+  # 
+  # attributes(dens) <- NULL
+  # 
+  # min(dens)
+  # max(dens)
+  # 
+  # trdat %<>%
+  #   mutate(
+  #     density = dens,
+  #     w = min(dens) / dens
+  #   )
   
-  attributes(dens) <- NULL
+  # Weighting by depth intervals
   
-  min(dens)
-  max(dens)
-
-  trdat %<>%
-    mutate(
-      density = dens,
-      w = min(dens) / dens
-    )
+  w_interval <- 10
+  w_increment <- 1
+  w_startdepth <- 0
+  w_maxdepth <- 200
+  w_iterations <- round(w_maxdepth / w_increment, digits = 0)
   
-
+  wdat <- trdat %>%
+    filter(!is.na(UTMX) & !is.na(UTMX))
+  
+  dens_mat <- matrix(numeric(), nrow = nrow(wdat), ncol = w_iterations)
+  
+  for(j in 1:w_iterations)
+  {
+    upper_i <- w_startdepth + w_increment*(i - 1)
+    lower_i <- upper_i + w_interval
+    
+    wdat_ind <- wdat$lower > upper_i & wdat$upper < lower_i
+    wdat_ind[is.na(wdat_ind)] <- FALSE
+    
+    wdat_i <- wdat[wdat_ind, ]
+    
+    dens_i <- ppp(
+      wdat_i$UTMX,
+      wdat_i$UTMY,
+      c(441000, 894000),
+      c(6049000, 6403000)
+    ) %>%
+      density(
+        sigma = 500,
+        at = 'points',
+        leaveoneout = FALSE
+      )
+    
+    attributes(dens_i) <- NULL
+    
+    dens_mat[wdat_ind, i] <- dens_i
+  }
+  
+  dens_depth <- apply(
+    dens_mat,
+    1,
+    function(x) {
+      out <- mean(x, na.rm = TRUE)
+      return(out)
+    }
+  )
+  
+  w_depth <- min(dens_depth, na.rm = TRUE) / dens_depth
+  
+  w_depth[!is.finite(w_depth)] <- 1
+  
+  trdat$w <- w_depth
   
   # List of folds
   

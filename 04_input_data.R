@@ -28,10 +28,9 @@
 # - Coarse sand (OK)
 # - SOC (OK)
 # - CaCO3 (OK)
-# - CaCO3_test (to do)
 # - Indicate removal of SOM for texture analyses (OK)
 # - BD (later)
-# - pH (later)
+# - pH (OK)
 # - Nutrients: Pt, Kt, Mgt, CUT, TOTALN TOTALP ORGAP    K   NA   CA   MG (later)
 # - Water retention (later)
 # - Texture sub-fractions: Gsilt, GfinSD, GRVSILT S63 S125 S200 S500 (later)
@@ -51,7 +50,6 @@ mycolnames <- c(
   "coarse_sand",
   "SOC",
   "CaCO3",
-  "CaCO3_test",
   "SOM_removed",
   "pH",
   "N",
@@ -176,8 +174,7 @@ dsc2 <- dsc %>%
     fine_sand = FinSD * 100 / (Ler + Silt + FinSD + GrovSD),
     coarse_sand = GrovSD * 100 / (Ler + Silt + FinSD + GrovSD),
     SOC = Humus*0.587,
-    SOM_removed = 0,
-    CaCO3_test = as.numeric(CaCO3 > 0)
+    SOM_removed = 0
   ) %>%
   select(any_of(mycolnames))
 
@@ -210,7 +207,7 @@ seges2 <- SEGES %>%
       !is.na(tsum) ~ GrovsandPct*100 / tsum
     ),
     SOM_removed = 1,
-    pH = Rt,
+    pH = Rt - 0.5,
     N = TotalNPct
   ) %>%
   select(any_of(mycolnames))
@@ -433,6 +430,18 @@ profiles_tex2 %>%
 
 plot(profiles_tex2$PRFRA, profiles_tex2$PRTIL)
 
+# Analyse SOM removal
+# SOM only removed for soils with more than 5% SOM
+
+# profiles_tex3 <- profiles_tex2 %>%
+#   mutate(claysilt = LER/(LER + SILT))
+# 
+# plot(
+#   profiles_tex3$HUMUS,
+#   profiles_tex3$claysilt,
+#   xlim = c(0, 10),
+#   abline(v = 5, col = "blue")
+#   )
 
 # Remove false zeroes
 
@@ -808,15 +817,6 @@ profiles_tex5 <- profiles_analyse_corrected %>%
 # Only standardize texture fractions if the combined sum, including humus and
 # CaCO3 are more than 90%.
 
-
-
-"date",
-"UTMX",
-"UTMY",
-
-
-
-
 profiles_tex5 %>% filter(is.na(HUMUS) & !is.na(LER)) %>% as.data.frame()
 
 profiles_tex5 %>%
@@ -831,7 +831,7 @@ profiles_tex5 %>%
 # If not, and if HUMUS or CaCO3 are available, use 100 - (HUMUS + CaCO3)
 # Otherwise, do not standardize
 
-profiles_tex5 %>%
+profiles_tex5 %<>%
   mutate(
     db = "Profile database",
     ID_old = paste0(PROFILNR, "_", HORISONTNR, "_", HORISONTPR),
@@ -892,20 +892,29 @@ profiles_tex5 %>%
     )
   )%>%
   ungroup() %>%
-  select(any_of(mycolnames)) %>% slice_sample(n = 20) %>% as.data.frame()
+  select(any_of(c(mycolnames, "PROFILNR")))
 
-# Analyse SOM removal
-# SOM only removed for soils with more than 5% SOM
 
-# profiles_tex3 <- profiles_tex2 %>%
-#   mutate(claysilt = LER/(LER + SILT))
-# 
-# plot(
-#   profiles_tex3$HUMUS,
-#   profiles_tex3$claysilt,
-#   xlim = c(0, 10),
-#   abline(v = 5, col = "blue")
-#   )
+# Get coordinates and date
+
+profiles_xy_date <- profiles_shp %>%
+  values() %>%
+  mutate(
+    date = paste0(
+      AARSTAL,
+      formatC(MND, 2, 2, flag = "0"),
+      formatC(DAG, 2, 2, flag = "0")
+      ),
+    UTMX = x,
+    UTMY = y
+  ) %>%
+  select(-c(AARSTAL, MND, DAG, x, y)) %>%
+  arrange(PROFILNR)
+
+profiles_tex5 %<>%
+  left_join(profiles_xy_date) %>%
+  as.data.frame()
+
 
 # Write files
 
@@ -930,6 +939,13 @@ write.table(
 write.table(
   sinks4,
   paste0(dir_obs_proc, "SINKS.csv"),
+  row.names = FALSE,
+  sep = ";"
+)
+
+write.table(
+  profiles_tex5,
+  paste0(dir_obs_proc, "profiles_texture.csv"),
   row.names = FALSE,
   sep = ";"
 )
