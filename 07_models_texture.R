@@ -368,12 +368,12 @@ trees_per_round <- 10
 # Remember to include full dataset in the final model
 n <- 1000
 
-# use_all_points <- TRUE
-use_all_points <- FALSE
+use_all_points <- TRUE
+# use_all_points <- FALSE
 
 # 9: Train models
 
-extra_tuning_xgb <- FALSE
+extra_tuning_xgb <- TRUE
 
 models <- list()
 
@@ -388,11 +388,13 @@ for (i in 1:length(fractions))
     paste0(collapse = " + ")
   if (i %in% 1:4) {
     cov_c_i <- cov_selected %>%
+      c("upper", "lower") %>%
       c(., "SOM_removed") %>%
       paste0(collapse = " + ")
   } else {
     if (i == 5) {
       cov_c_i <- cov_selected %>%
+        c("upper", "lower") %>%
         c(., "year") %>%
         paste0(collapse = " + ")
     }
@@ -403,7 +405,7 @@ for (i in 1:length(fractions))
 
   # trdat <- obs_top %>%
   #   filter(is.finite(.data[[frac]]))
-  trdat <- obs_prf %>%
+  trdat <- obs %>%
     filter(is.finite(.data[[frac]]))
 
   # Three folds (placeholder)
@@ -458,29 +460,29 @@ for (i in 1:length(fractions))
   
   for(j in 1:w_iterations)
   {
-    upper_i <- w_startdepth + w_increment*(i - 1)
-    lower_i <- upper_i + w_interval
+    upper_j <- w_startdepth + w_increment*(j - 1)
+    lower_j <- upper_j + w_interval
     
-    wdat_ind <- wdat$lower > upper_i & wdat$upper < lower_i
+    wdat_ind <- wdat$lower > upper_j & wdat$upper < lower_j
     wdat_ind[is.na(wdat_ind)] <- FALSE
     
-    wdat_i <- wdat[wdat_ind, ]
+    wdat_j <- wdat[wdat_ind, ]
     
-    dens_i <- ppp(
-      wdat_i$UTMX,
-      wdat_i$UTMY,
+    dens_j <- ppp(
+      wdat_j$UTMX,
+      wdat_j$UTMY,
       c(441000, 894000),
       c(6049000, 6403000)
     ) %>%
       density(
-        sigma = 500,
+        sigma = 1000,
         at = 'points',
         leaveoneout = FALSE
       )
     
-    attributes(dens_i) <- NULL
+    attributes(dens_j) <- NULL
     
-    dens_mat[wdat_ind, i] <- dens_i
+    dens_mat[wdat_ind, j] <- dens_j
   }
   
   dens_depth <- apply(
@@ -531,8 +533,6 @@ for (i in 1:length(fractions))
     form = formula_i,
     data = trdat,
     method = "xgbTree",
-    # method = cubist_weighted,
-    # method = "cubist",
     na.action = na.pass,
     tuneGrid = tgrid,
     trControl = trainControl(
@@ -906,78 +906,154 @@ dev.off()
 
 # 10: Make maps for the test area
 
-outfolder <- dir_dat %>%
+dir_cov_10km <- dir_dat %>%
   paste0(., "/testarea_10km/covariates/")
 
-cov_10km <- outfolder %>%
-  list.files(full.names = TRUE) %>%
-  rast()
-
-predfolder <- dir_dat %>%
-  paste0(., "/testarea_10km/predictions_", testn, "/") %T>%
+predfolder <- dir_results %>%
+  paste0(., "/predictions_testarea/") %T>%
   dir.create()
 
 source("f_predict_passna.R")
 
 # Make the maps
 
-maps_10km <- list()
+uppers <- c(0, 25, 50, 100)
+lowers <- c(25, 50, 100, 200)
+
+map_spec <- expand_grid(
+  fraction_i = 1:6,
+  interval = 1:4
+  )
 
 showConnections()
 
-for(i in 1:length(fractions))
-{
-  frac <- fractions[i]
-  
-  maps_10km[[i]] <- predict(
-    cov_10km,
-    models[[i]],
-    fun = predict_passna,
-    na.rm = FALSE,
-    filename = paste0(predfolder, frac,  "_10km.tif"),
-    overwrite = TRUE,
-    const = data.frame(
-      SOM_removed = 1,
-      year = 2010
-    ),
-    n_const = 2,
-    n_digits = 1
+numCores <- 20
+
+cl <- makeCluster(numCores)
+
+clusterEvalQ(
+  cl,
+  {
+    library(terra)
+    library(caret)
+    library(xgboost)
+    library(magrittr)
+    library(dplyr)
+    library(tools)
+  }
+)
+
+clusterExport(
+  cl,
+  c("uppers",
+    "lowers",
+    "map_spec",
+    "predfolder",
+    "dir_cov_10km",
+    "models",
+    "cov_selected",
+    "predict_passna",
+    "dir_dat",
+    "fractions"
   )
+)
+
+parSapplyLB(
+  cl,
+  1:nrow(map_spec),
+  function(x) {
+    tmpfolder <- paste0(dir_dat, "/Temp/")
+    
+    terraOptions(memfrac = 0.02, tempdir = tmpfolder)
+    
+    cov_10km <- dir_cov_10km %>%
+      list.files(full.names = TRUE) %>%
+      rast() %>%
+      subset(cov_selected)
+    
+    outname <- predfolder %>%
+      paste0(
+        ., "/", fractions[map_spec$fraction_i[x]],
+        "_depth", map_spec$interval[x],
+        ".tif"
+        )
+    
+    predict(
+      cov_10km,
+      models[[map_spec$fraction_i[x]]],
+      fun = predict_passna,
+      na.rm = FALSE,
+      const = data.frame(
+        SOM_removed = 1,
+        year = 2010,
+        upper = uppers[map_spec$interval[x]],
+        lower = lowers[map_spec$interval[x]]
+      ),
+      n_const = 4,
+      n_digits = 1,
+      filename = outname,
+      overwrite = TRUE
+    )
+  }
+)
+
+stopCluster(cl)
+foreach::registerDoSEQ()
+rm(cl)
+
+maps_10_km <- list()
+
+for(i in 1:length(fractions)) {
+  maps_10_km[[i]] <- c(1:4) %>%
+    paste0(
+      predfolder, "/", fractions[i],
+      "_depth", .,
+      ".tif"
+    ) %>% rast()
+  names(maps_10_km[[i]]) <- paste0(
+    fraction_names[i], " ", uppers, " - ", lowers, " cm"
+    )
 }
 
-maps_10km <- predfolder %>%
-  paste0(., fractions,  "_10km.tif") %>%
-  rast()
-
-names(maps_10km) <- fractions
+# SOC depth distribution is very obviously wrong. I will need to fix it.
+# I should probably apply a wider spatial filter to reduce the influence of
+# the sinks data points.
+# Maybe I should use a model to estimate density using covariates, as there is
+# a higher concentration in some areas.
 
 # Looking at 10 km maps
 
 library(viridisLite)
-
-plot(maps_10km, col = cividis(100), box = FALSE)
-
-# maps_10km_stack2 <- c(
-#   maps_10km[[1:4]],
-#   exp(maps_10km[[5]]),
-#   exp(maps_10km[[6]])
-# )
-
-maps_10km_stack2 <- round(maps_10km, 4)
-
-names(maps_10km_stack2) <- fraction_names
-
-tiff(
-  paste0(dir_results, "/maps_test", testn, ".tiff"),
-  width = 24,
-  height = 16,
-  units = "cm",
-  res = 300
-)
-
-plot(maps_10km_stack2, col = cividis(100))
+library(tidyterra)
 
 dev.off()
+
+autoplot(maps_10_km[[1]]) +
+  scale_fill_gradientn(colours = viridis(100), na.value = NA)
+
+try(dev.off())
+lapply(1:6, function(x) {
+  fname <- paste0(dir_results, "/", fractions[x], "_10km_test", testn, ".tiff")
+  
+  myplot <- autoplot(maps_10_km[[x]]) +
+    scale_fill_gradientn(colours = viridis(100), na.value = NA)
+  
+  tiff(
+    fname,
+    width = 16,
+    height = 14,
+    units = "cm",
+    res = 300
+  )
+  
+  print(myplot)
+  
+  try(dev.off())
+  try(dev.off())
+}
+)
+dev.off()
+
 
 JB <- function(clay, silt, sand_f, SOM, CaCO3)
 {
