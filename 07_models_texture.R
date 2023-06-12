@@ -32,6 +32,17 @@ dir_code <- getwd()
 root <- dirname(dir_code)
 dir_dat <- paste0(root, "/digijord_data/")
 
+
+# To do:
+# Accuracy by depth
+# Maps for depths (ok)
+# Effects of som removal
+# Pdp with depth
+# Profile examples
+# Forest samples
+# Adaptive kernel for point densities
+
+
 # Test 1 - 8: Cubist
 # Test 8: New covariates (chelsa, river valley bottoms, hillyness)
 # Test 9: xgboost

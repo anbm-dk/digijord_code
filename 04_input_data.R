@@ -5,10 +5,11 @@
 # - Danish Soil Classification [DSC] (OK)
 # - SEGES (OK)
 # - SINKS (OK)
-# - Profiles: Texture (not right now)
+# - Profiles: Texture (OK)
 # - Profiles: Water retention (later)
 # - Profiles: Drainage (later)
 # - Lucas database?
+# - Forest samples
 # 2: Standardize
 # - Uniform column names (OK)
 # - Scale texture fractions to a sum of 100 (OK)
@@ -139,7 +140,23 @@ profiles_horizons <- dir_dat %>%
 profiles_retention <-  sqlFetch(con3, "VANDRETENTION")
 
 # 1.6: Profiles: Drainage (later)
-# 1.7 Lucas database?
+# 1.7: Lucas database?
+
+# 1.8: Forest samples
+
+forests_tax <- dir_dat %>%
+  paste0(
+    .,
+    "/observations/forest_samples/Taksation_ETRS89.xlsx"
+  ) %>%
+  read_excel(.name_repair = "universal")
+
+forests_dsc <- dir_dat %>%
+  paste0(
+    .,
+    "/observations/forest_samples/Skovjord_ETRS89.xlsx"
+  ) %>%
+  read_excel(.name_repair = "universal")
 
 # 2: Data standardization
 # 2.1: DSC
@@ -915,6 +932,71 @@ profiles_tex5 %<>%
   left_join(profiles_xy_date) %>%
   as.data.frame()
 
+# 2.8: Forest samples
+
+
+
+forests_tax2 <- forests_tax %>%
+  mutate(
+    db = "Forest evaluation",
+    ID_old = as.character(key),
+    date = "1980",
+    upper = 0,
+    lower = 20,
+  ) %>%
+  filter(
+    !is.na(Humus) & !is.na(UTMN) & !is.na(UTMØ)
+    )
+
+forests_dsc2 <- forests_dsc %>%
+  mutate(
+    across(
+      where(is.numeric),
+      function(x) replace(x, x == -1, NA)) # Remove negative values
+  ) %>%
+  arrange(Lokalitet) %>%
+  group_by(Lokalitet) %>%
+  arrange(Dybde.fra) %>%
+  mutate(
+    db = "Forests DSC",
+    ID_old = paste0(Lokalitet, "_", row_number()),
+    date = "1991",
+    upper = Dybde.fra,
+    lower = Dybde.til,
+    CaCO3 = case_when(
+      is.na(CaCO3) ~ 0,
+      .default = CaCO3
+    ),
+    Finsand = Grovsilt + ..63.mym + ..125.mym,
+    Grovsand = ..200.mym + ..500.mym
+  ) %>%
+  ungroup() %>%
+  arrange(Lokalitet)
+
+forests_all <- bind_rows(forests_tax2, forests_dsc2) %>%
+  mutate(
+    UTMX = UTMØ,
+    UTMY = UTMN,
+    SOM_removed = 0,
+    SOC = Humus*0.586
+  ) %>%
+  rowwise() %>%
+  mutate(
+    tsum = sum(Ler, Silt, Finsand, Grovsand, na.rm = TRUE),
+    tsum_all = sum(Ler, Silt, Finsand, Grovsand, Humus, CaCO3, na.rm = TRUE)
+  ) %>%
+  ungroup() %>%
+  mutate(
+    tsum = case_when(
+      tsum == 0 ~ NA,
+      .default = tsum
+    ),
+    clay = Ler * 100 / tsum,
+    silt = Silt * 100 / tsum,
+    fine_sand = Finsand * 100 / tsum,
+    coarse_sand = Grovsand * 100 / tsum
+  ) %>%
+  select(any_of(mycolnames))
 
 # Write files
 
@@ -946,6 +1028,13 @@ write.table(
 write.table(
   profiles_tex5,
   paste0(dir_obs_proc, "profiles_texture.csv"),
+  row.names = FALSE,
+  sep = ";"
+)
+
+write.table(
+  forests_all,
+  paste0(dir_obs_proc, "forest_samples.csv"),
   row.names = FALSE,
   sep = ";"
 )
