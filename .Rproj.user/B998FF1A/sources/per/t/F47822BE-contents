@@ -59,12 +59,23 @@ profiles_shp <- dir_dat %>%
   ) %>%
   vect()
 
+forest_samples <- dir_obs_proc %>%
+  paste0(., "forest_samples.csv") %>%
+  read.table(
+    header = TRUE,
+    sep = ";",
+  ) %>%
+  vect(
+    geom = c("UTMX", "UTMY"),
+    crs = mycrs,
+    keepgeom = TRUE
+  )
 
 # 2 Load covariates
 
 cov_dir <- dir_dat %>% paste0(., "/covariates")
 
-cov_files <- cov_dir %>% list.files
+cov_files <- cov_dir %>% list.files()
 
 cov_names <- cov_files %>% tools::file_path_sans_ext()
 
@@ -135,6 +146,12 @@ profiles_extr <- terra::extract(
 
 profiles_extr$PROFILNR <- profiles_shp$PROFILNR
 
+forests_extr <- terra::extract(
+  x = cov,
+  y = forest_samples,
+  ID = FALSE,
+)
+
 # 5 Write to csv
 
 dir_extr <- dir_dat %>%
@@ -182,6 +199,13 @@ write.table(
   sep = ";"
 )
 
+write.table(
+  forests_extr,
+  paste0(dir_extr, "forests_extr.csv"),
+  row.names = FALSE,
+  sep = ";"
+)
+
 # Save as RDS
 
 saveRDS(
@@ -204,5 +228,9 @@ saveRDS(
   paste0(dir_extr, "profiles_extr.rds")
 )
 
+saveRDS(
+  forests_extr,
+  paste0(dir_extr, "forests_extr.rds")
+)
 
 # END

@@ -57,6 +57,18 @@ profiles_shp <- dir_dat %>%
   ) %>%
   vect()
 
+forest_samples <- dir_obs_proc %>%
+  paste0(., "forest_samples.csv") %>%
+  read.table(
+    header = TRUE,
+    sep = ";",
+  ) %>%
+  vect(
+    geom = c("UTMX", "UTMY"),
+    crs = mycrs,
+    keepgeom = TRUE
+  )
+
 # 2 Load and aggregate DEM
 
 cov_dir <- dir_dat %>% paste0(., "/covariates/")
@@ -153,6 +165,12 @@ profiles_folds <- terra::extract(
 
 profiles_folds$PROFILNR <- profiles_shp$PROFILNR
 
+forests_folds <- terra::extract(
+  x = folds_10_100m,
+  y = forest_samples,
+  ID = FALSE,
+)
+
 # 5 Write to file
 
 write.table(
@@ -179,6 +197,13 @@ write.table(
 write.table(
   profiles_folds,
   paste0(dir_folds, "/profiles_folds.csv"),
+  row.names = FALSE,
+  sep = ";"
+)
+
+write.table(
+  forests_folds,
+  paste0(dir_folds, "/forest_folds.csv"),
   row.names = FALSE,
   sep = ";"
 )
