@@ -447,7 +447,7 @@ for (i in 1:length(fractions))
   #   filter(is.finite(.data[[frac]]))
   trdat <- obs %>%
     filter(is.finite(.data[[frac]])) %>%
-    filter(!is.na(UTMX) & !is.na(UTMX)) %>%
+    filter(!is.na(UTMX) & !is.na(UTMY)) %>%
     filter(lower > 0, upper < 200)
 
   # Three folds (placeholder)
