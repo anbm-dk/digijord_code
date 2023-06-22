@@ -1,17 +1,7 @@
 # 07: Train texture models
 
-# Cubist
+# xgboost
 # Use all observations, including NA (OK)
-# Fractions:
-# - Clay
-# - Silt
-# - Fine sand
-# - Coarse sand
-# - SOC (log)
-# - CaCO3 (log)
-# Topsoil
-# Start with a small map for the test area
-# Expand from there
 
 # 1: Start up
 
@@ -32,14 +22,12 @@ dir_code <- getwd()
 root <- dirname(dir_code)
 dir_dat <- paste0(root, "/digijord_data/")
 
-
 # To do:
 # Accuracy by depth
 # Maps for depths (ok)
 # Effects of som removal
 # Pdp with depth
 # Profile examples
-# Forest samples
 # Adaptive kernel for point densities
 
 
@@ -110,6 +98,18 @@ profiles_texture <- dir_obs_proc %>%
     keepgeom = TRUE
   )
 
+forest_samples <- dir_obs_proc %>%
+  paste0(., "forest_samples.csv") %>%
+  read.table(
+    header = TRUE,
+    sep = ";",
+  ) %>%
+  vect(
+    geom = c("UTMX", "UTMY"),
+    crs = mycrs,
+    keepgeom = TRUE
+  ) 
+
 # 3: Load folds
 
 dir_folds <- dir_dat %>%
@@ -144,6 +144,13 @@ profiles_folds <- dir_folds %>%
   ) %>%
   right_join(values(profiles_texture)) %>%
   select(lyr.1)
+
+forest_folds <- dir_folds %>%
+  paste0(., "forest_folds.csv") %>%
+  read.table(
+    header = TRUE,
+    sep = ";",
+  )
 
 # 4: Load covariate data
 
@@ -209,9 +216,17 @@ profiles_extr <- dir_extr %>%
   right_join(values(profiles_texture)) %>%
   select(any_of(cov_names))
 
+SINKS_extr <- dir_extr %>%
+  paste0(., "/SINKS_extr.rds") %>%
+  readRDS()
+
+forests_extr <- dir_extr %>%
+  paste0(., "/forests_extr.rds") %>%
+  readRDS()
+
 # 6: Merge data and transform the target variables
 
-obs <- list(dsc, SEGES, SINKS, profiles_texture) %>%
+obs_data <- list(dsc, SEGES, SINKS, profiles_texture, forest_samples) %>%
   vect() %>%
   values() %>%
   mutate(
@@ -245,7 +260,8 @@ folds <- bind_rows(
   dsc_folds,
   SEGES_folds,
   SINKS_folds,
-  profiles_folds
+  profiles_folds,
+  forest_folds
 )
 
 names(folds) <- "fold"
@@ -254,12 +270,18 @@ extr <- bind_rows(
   dsc_extr,
   SEGES_extr,
   SINKS_extr,
-  profiles_extr
+  profiles_extr,
+  forests_extr
 )
 
-obs <- cbind(obs, extr, folds) %>%
+obs <- cbind(obs_data, extr, folds) %>%
   filter(!is.na(UTMX) & !is.na(UTMY))
 
+obs %<>%
+  rownames_to_column() %>%
+  mutate(ID_new = rowname, .before = everything()) %>%
+  select(-rowname)
+  
 obs_top <- obs %>%
   filter(
     upper < 25,
@@ -287,11 +309,18 @@ tiff(
   res = 300
 )
 
-plot(obs_top_v, "clay", breaks = 5, breakby = "cases", col = cividis(5))
+plot(
+  obs_top_v, "clay", breaks = 5, breakby = "cases", col = cividis(5),
+  cex = 0.2
+)
 
-dev.off()
+try(dev.off())
+try(dev.off())
 
-plot(obs_top_v, "clay", breaks = 5, breakby = "cases", col = cividis(5))
+plot(
+  obs_top_v, "clay", breaks = 5, breakby = "cases", col = cividis(5),
+  cex = 0.4
+)
 
 # 8: Set up models
 
@@ -417,7 +446,9 @@ for (i in 1:length(fractions))
   # trdat <- obs_top %>%
   #   filter(is.finite(.data[[frac]]))
   trdat <- obs %>%
-    filter(is.finite(.data[[frac]]))
+    filter(is.finite(.data[[frac]])) %>%
+    filter(!is.na(UTMX) & !is.na(UTMX)) %>%
+    filter(lower > 0, upper < 200)
 
   # Three folds (placeholder)
   trdat %<>% mutate(
@@ -464,36 +495,61 @@ for (i in 1:length(fractions))
   w_maxdepth <- 200
   w_iterations <- round(w_maxdepth / w_increment, digits = 0)
   
-  wdat <- trdat %>%
-    filter(!is.na(UTMX) & !is.na(UTMX))
-  
-  dens_mat <- matrix(numeric(), nrow = nrow(wdat), ncol = w_iterations)
+  dens_mat <- matrix(numeric(), nrow = nrow(trdat), ncol = w_iterations)
   
   for(j in 1:w_iterations)
   {
     upper_j <- w_startdepth + w_increment*(j - 1)
     lower_j <- upper_j + w_interval
     
-    wdat_ind <- wdat$lower > upper_j & wdat$upper < lower_j
-    wdat_ind[is.na(wdat_ind)] <- FALSE
+    trdat_ind <- trdat$lower > upper_j & trdat$upper < lower_j
+    trdat_ind[is.na(trdat_ind)] <- FALSE
     
-    wdat_j <- wdat[wdat_ind, ]
+    trdat_j <- trdat[trdat_ind, ]
     
-    dens_j <- ppp(
-      wdat_j$UTMX,
-      wdat_j$UTMY,
-      c(441000, 894000),
-      c(6049000, 6403000)
-    ) %>%
-      density(
-        sigma = 1000,
-        at = 'points',
-        leaveoneout = FALSE
-      )
+    #sigma equal to the radius of a cirkle with an equal area per sample
+    sigma_j <- sqrt(42951/(nrow(trdat_j)*pi))*1000
     
-    attributes(dens_j) <- NULL
+    # separate densities for wetlands and uplands
     
-    dens_mat[wdat_ind, j] <- dens_j
+    dens_j <- numeric(nrow(trdat_j))
+    
+    for(k in 0:1) {
+      trdat_j_wl_ind <- trdat_j$wetlands_10m == k
+      
+      trdat_jk <- trdat_j[trdat_j_wl_ind, ]
+      
+      dens_jk <- ppp(
+        trdat_jk$UTMX,
+        trdat_jk$UTMY,
+        c(441000, 894000),
+        c(6049000, 6403000)
+      ) %>%
+        density(
+          sigma = sigma_j,
+          at = 'points',
+          leaveoneout = FALSE
+        )
+      
+      attributes(dens_jk) <- NULL
+      
+      dens_j[trdat_j_wl_ind] <- dens_jk
+    }
+    # dens_j <- ppp(
+    #   trdat_j$UTMX,
+    #   trdat_j$UTMY,
+    #   c(441000, 894000),
+    #   c(6049000, 6403000)
+    # ) %>%
+    #   density(
+    #     sigma = sigma_j,
+    #     at = 'points',
+    #     leaveoneout = FALSE
+    #   )
+    # 
+    # attributes(dens_j) <- NULL
+    
+    dens_mat[trdat_ind, j] <- dens_j
   }
   
   dens_depth <- apply(
@@ -593,7 +649,8 @@ for (i in 1:length(fractions))
       metric = 'RMSEw',
       maximize = FALSE,
       weights = trdat$w,
-      num_parallel_tree = trees_per_round
+      num_parallel_tree = trees_per_round,
+      objective = objectives[i]
     )
     
     # 3: Tune gamma
@@ -625,7 +682,8 @@ for (i in 1:length(fractions))
       metric = 'RMSEw',
       maximize = FALSE,
       weights = trdat$w,
-      num_parallel_tree = trees_per_round
+      num_parallel_tree = trees_per_round,
+      objective = objectives[i]
     )
     
     models[[i]] <- model3
@@ -640,7 +698,6 @@ for (i in 1:length(fractions))
 
 # 4: Reduce learning rate, use cv to optimize nrounds, early stopping
 
-
 models_loaded <- lapply(
   1:6,
   function(x) {
@@ -651,7 +708,7 @@ models_loaded <- lapply(
   }
 )
 
-# models <- models_loaded
+models <- models_loaded
 
 names(models) <- fractions
 
@@ -817,6 +874,51 @@ allpred %>%
   ylab("Prediction (%)")
 
 dev.off()
+
+# Accuracy vs depth
+
+models[[5]]$trainingData
+m5_w <- models[[5]]$pred %>% arrange(rowIndex) %>% select(weights)
+
+plot(m5_w$weights, -models[[5]]$trainingData$upper)
+
+i <- 5
+
+
+d_acc <- sapply(
+  0:199,
+  function(x) {
+    mdata <- models[[i]]$pred %>%
+      bind_cols(models[[i]]$trainingData)
+    
+    ddat <- mdata %>% filter(
+      upper < x + 1 & lower > x
+    )
+    
+    out <- get_R2w(
+      select(ddat, pred, obs),
+      ddat$weights
+    )
+    
+    return(out)
+  }
+)
+
+d_wsum <- sapply(
+  0:199,
+  function(x) {
+    mdata <- models[[i]]$pred %>%
+      bind_cols(models[[i]]$trainingData)
+    
+    ddat <- mdata %>% filter(
+      upper < x + 1 & lower > x
+    )
+    
+    out <- sum(ddat$weights)
+    
+    return(out)
+  }
+)
 
 # Covariate importance
 
@@ -1005,6 +1107,8 @@ parSapplyLB(
       filename = outname,
       overwrite = TRUE
     )
+    
+    return(NA)
   }
 )
 
@@ -1032,12 +1136,13 @@ for(i in 1:length(fractions)) {
 # Maybe I should use a model to estimate density using covariates, as there is
 # a higher concentration in some areas.
 
+
 # Looking at 10 km maps
 
 library(viridisLite)
 library(tidyterra)
 
-dev.off()
+try(dev.off())
 
 autoplot(maps_10_km[[1]]) +
   scale_fill_gradientn(colours = viridis(100), na.value = NA)
@@ -1064,25 +1169,6 @@ lapply(1:6, function(x) {
 }
 )
 dev.off()
-
-
-JB <- function(clay, silt, sand_f, SOM, CaCO3)
-{
-  out <- rep(0, length(clay))
-  out[CaCO3 > 10] <- 12
-  out[out == 0 & SOM > 10] <- 11
-  out[out == 0 & clay < 5 & silt < 20 & sand_f < 50] <- 1
-  out[out == 0 & clay < 5 & silt < 20] <- 2
-  out[out == 0 & clay < 10 & silt < 25 & sand_f < 40] <- 3
-  out[out == 0 & clay < 10 & silt < 25]<-4
-  out[out == 0 & clay < 15 & silt < 30 & sand_f < 40] <- 5
-  out[out == 0 & clay < 15 & silt < 30] <- 6
-  out[out == 0 & clay < 25 & silt < 35] <- 7
-  out[out == 0 & clay < 45 & silt < 45] <- 8
-  out[out == 0 & silt < 50] <- 9
-  out[out == 0] <- 10
-  return(out)
-}
 
 # maps_10km_s2 <- c(maps_10km[[1]], maps_10km[[2]], maps_10km[[3]], exp(maps_10km[[5]])/0.568, exp(maps_10km[[6]]))
 
