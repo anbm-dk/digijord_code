@@ -363,24 +363,49 @@ WeightedSummary <- function (
     ...
 ) {
   out <- numeric()
-  # Weighted RMSE
-  get_RMSEw <- function(d, w) {
-    sqe <- w*(d[, 1] - d[, 2])^2
-    msqe <- sum(sqe)/sum(w)
-    out <- sqrt(msqe)
-    return(out)
-  }
-  # Weighted R^2
-  get_R2w <- function(d, w)
-  {
-    require(boot)
-    out <- boot::corr(d[, 1:2], w)^2
-    return(out)
-  }
   out[1] <- get_RMSEw(data[, 1:2], data$weights)
   out[2] <- get_R2w(data[, 1:2], data$weights)
   names(out) <- c('RMSEw', 'R2w')
   return(out)
+}
+
+# Weighted summary function with log transformation
+WeightedSummary_log <- function (
+    data,
+    lev = NULL,
+    model = NULL,
+    ...
+) {
+  out <- numeric()
+  data[, 1:2] <- log(data[, 1:2])
+  data <- data[is.finite(rowSums(data)), ]
+  out[1] <- get_RMSEw(data[, 1:2], data$weights)
+  out[2] <- get_R2w(data[, 1:2], data$weights)
+  names(out) <- c('RMSEw_log', 'R2w_log')
+  return(out)
+}
+
+metrics <- rep('RMSEw', length(fractions))
+metrics[fractions == "SOC"] <- 'RMSEw_log'
+
+# Function to calculate point densities
+
+get_dens <- function(datxy, sig) {
+  dens_out <- ppp(
+    datxy$UTMX,
+    datxy$UTMY,
+    c(441000, 894000),
+    c(6049000, 6403000)
+  ) %>%
+    density(
+      sigma = sig,
+      at = 'points',
+      leaveoneout = FALSE
+    )
+  
+  attributes(dens_out) <- NULL
+  
+  return(dens_out)
 }
 
 # Tuning grid
@@ -422,6 +447,12 @@ for (i in 1:length(fractions))
   frac <- fractions[i]
 
   print(frac)
+  
+  if (metrics[i] == "RMSEw_log") {
+    sumfun <- WeightedSummary_log
+  } else {
+    sumfun <- WeightedSummary
+  }
 
   cov_c_i <- cov_selected %>%
     c("upper", "lower") %>%
@@ -461,34 +492,8 @@ for (i in 1:length(fractions))
   if (!use_all_points) {
     trdat %<>% sample_n(n)
   }
-
-  # Calculate weights
-  # Calculate densities for depth intervals
-  # dens <- ppp(
-  #   trdat$UTMX,
-  #   trdat$UTMY,
-  #   c(441000, 894000),
-  #   c(6049000, 6403000)
-  # ) %>%
-  #   density(
-  #     sigma = 250,
-  #     at = 'points',
-  #     leaveoneout = FALSE
-  #   )
-  # 
-  # attributes(dens) <- NULL
-  # 
-  # min(dens)
-  # max(dens)
-  # 
-  # trdat %<>%
-  #   mutate(
-  #     density = dens,
-  #     w = min(dens) / dens
-  #   )
   
   # Weighting by depth intervals
-  
   w_interval <- 10
   w_increment <- 1
   w_startdepth <- 0
@@ -507,47 +512,24 @@ for (i in 1:length(fractions))
     
     trdat_j <- trdat[trdat_ind, ]
     
-    #sigma equal to the radius of a cirkle with an equal area per sample
+    # Sigma equal to the radius of a circle with an equal area per sample
     sigma_j <- sqrt(42951/(nrow(trdat_j)*pi))*1000
     
-    # separate densities for wetlands and uplands
-    
-    dens_j <- numeric(nrow(trdat_j))
-    
-    for(k in 0:1) {
-      trdat_j_wl_ind <- trdat_j$wetlands_10m == k
+    # For SOC:
+    # Separate densities for wetlands and uplands
+    if (frac == "SOC") {
+      dens_j <- numeric(nrow(trdat_j))
       
-      trdat_jk <- trdat_j[trdat_j_wl_ind, ]
-      
-      dens_jk <- ppp(
-        trdat_jk$UTMX,
-        trdat_jk$UTMY,
-        c(441000, 894000),
-        c(6049000, 6403000)
-      ) %>%
-        density(
-          sigma = sigma_j,
-          at = 'points',
-          leaveoneout = FALSE
-        )
-      
-      attributes(dens_jk) <- NULL
-      
-      dens_j[trdat_j_wl_ind] <- dens_jk
+      for(k in 0:1) {
+        trdat_j_wl_ind <- trdat_j$wetlands_10m == k
+        
+        trdat_jk <- trdat_j[trdat_j_wl_ind, ]
+        
+        dens_j[trdat_j_wl_ind] <- get_dens(trdat_jk, sigma_j)
+      }
+    } else {
+      dens_j <- get_dens(trdat_j, sigma_j)
     }
-    # dens_j <- ppp(
-    #   trdat_j$UTMX,
-    #   trdat_j$UTMY,
-    #   c(441000, 894000),
-    #   c(6049000, 6403000)
-    # ) %>%
-    #   density(
-    #     sigma = sigma_j,
-    #     at = 'points',
-    #     leaveoneout = FALSE
-    #   )
-    # 
-    # attributes(dens_j) <- NULL
     
     dens_mat[trdat_ind, j] <- dens_j
   }
@@ -606,10 +588,10 @@ for (i in 1:length(fractions))
       index = folds_i,
       savePredictions = "final",
       predictionBounds = c(bounds_lower[i], bounds_upper[i]),
-      summaryFunction = WeightedSummary,
+      summaryFunction = sumfun,
       allowParallel = FALSE
     ),
-    metric = 'RMSEw',
+    metric = metrics[i],
     maximize = FALSE,
     weights = trdat$w,
     num_parallel_tree = trees_per_round,
@@ -643,10 +625,10 @@ for (i in 1:length(fractions))
         index = folds_i,
         savePredictions = "final",
         predictionBounds = c(bounds_lower[i], bounds_upper[i]),
-        summaryFunction = WeightedSummary,
+        summaryFunction = sumfun,
         allowParallel = FALSE
       ),
-      metric = 'RMSEw',
+      metric = metrics[i],
       maximize = FALSE,
       weights = trdat$w,
       num_parallel_tree = trees_per_round,
@@ -676,10 +658,10 @@ for (i in 1:length(fractions))
         index = folds_i,
         savePredictions = "final",
         predictionBounds = c(bounds_lower[i], bounds_upper[i]),
-        summaryFunction = WeightedSummary,
+        summaryFunction = sumfun,
         allowParallel = FALSE
       ),
-      metric = 'RMSEw',
+      metric = metrics[i],
       maximize = FALSE,
       weights = trdat$w,
       num_parallel_tree = trees_per_round,
@@ -877,13 +859,7 @@ dev.off()
 
 # Accuracy vs depth
 
-models[[5]]$trainingData
-m5_w <- models[[5]]$pred %>% arrange(rowIndex) %>% select(weights)
-
-plot(m5_w$weights, -models[[5]]$trainingData$upper)
-
-i <- 5
-
+i <- 6
 
 d_acc <- sapply(
   0:199,
@@ -895,7 +871,7 @@ d_acc <- sapply(
       upper < x + 1 & lower > x
     )
     
-    out <- get_R2w(
+    out <- get_RMSEw(
       select(ddat, pred, obs),
       ddat$weights
     )
@@ -919,6 +895,9 @@ d_wsum <- sapply(
     return(out)
   }
 )
+
+plot(d_acc)
+plot(d_wsum)
 
 # Covariate importance
 
@@ -1168,7 +1147,6 @@ lapply(1:6, function(x) {
   try(dev.off())
 }
 )
-dev.off()
 
 # maps_10km_s2 <- c(maps_10km[[1]], maps_10km[[2]], maps_10km[[3]], exp(maps_10km[[5]])/0.568, exp(maps_10km[[6]]))
 
