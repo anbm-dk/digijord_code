@@ -500,7 +500,7 @@ for (i in 1:length(fractions))
   w_maxdepth <- 200
   w_iterations <- round(w_maxdepth / w_increment, digits = 0)
   
-  dens_mat <- matrix(numeric(), nrow = nrow(trdat), ncol = w_iterations)
+  w_mat <- matrix(numeric(), nrow = nrow(trdat), ncol = w_iterations)
   
   for(j in 1:w_iterations)
   {
@@ -531,20 +531,30 @@ for (i in 1:length(fractions))
       dens_j <- get_dens(trdat_j, sigma_j)
     }
     
-    dens_mat[trdat_ind, j] <- dens_j
+    w_j <- min(dens_j, na.rm = TRUE) / dens_j
+    w_mat[trdat_ind, j] <- w_j
   }
   
-  dens_depth <- apply(
-    dens_mat,
+  # dens_depth <- apply(
+  #   dens_mat,
+  #   1,
+  #   function(x) {
+  #     out <- mean(x, na.rm = TRUE)
+  #     return(out)
+  #   }
+  # )
+  
+  # w_depth <- min(dens_depth, na.rm = TRUE) / dens_depth
+  
+  w_depth <- apply(
+    w_mat,
     1,
     function(x) {
       out <- mean(x, na.rm = TRUE)
       return(out)
     }
   )
-  
-  w_depth <- min(dens_depth, na.rm = TRUE) / dens_depth
-  
+
   w_depth[!is.finite(w_depth)] <- 1
   
   trdat$w <- w_depth
@@ -697,8 +707,13 @@ names(models) <- fractions
 # Model summary
 
 models_sum <- lapply(models, function(x) {
-  out <- x$results %>%
-    filter(RMSEw == min(RMSEw))
+  results <- x$results
+  if ("RMSEw" %in% names(results)) {
+    out <- results %>% filter(RMSEw == min(RMSEw))
+  } else {
+    out <- results %>%
+      filter(RMSEw_log == min(RMSEw_log))
+  }
   return(out)
 }
 ) %>%
@@ -859,45 +874,108 @@ dev.off()
 
 # Accuracy vs depth
 
-i <- 6
+depths_acc <- c(0:199) + 0.5
 
-d_acc <- sapply(
-  0:199,
-  function(x) {
-    mdata <- models[[i]]$pred %>%
-      bind_cols(models[[i]]$trainingData)
-    
-    ddat <- mdata %>% filter(
-      upper < x + 1 & lower > x
-    )
-    
-    out <- get_RMSEw(
-      select(ddat, pred, obs),
-      ddat$weights
-    )
-    
-    return(out)
-  }
+d_acc <- matrix(numeric(), nrow = length(depths_acc), ncol = length(fractions))
+d_wsum <- matrix(numeric(), nrow = length(depths_acc), ncol = length(fractions))
+
+colnames(d_acc) <- fractions
+colnames(d_wsum) <- fractions
+
+for (i in 1:length(fractions)) {
+  d_acc[, i] <- sapply(
+    depths_acc,
+    function(x) {
+      mdata <- models[[i]]$pred %>%
+        bind_cols(models[[i]]$trainingData)
+      
+      ddat <- mdata %>% filter(
+        upper < x + 0.5 & lower > x - 0.5
+      )
+      
+      out <- get_RMSEw(
+        select(ddat, pred, obs),
+        ddat$weights
+      )
+      
+      return(out)
+    }
+  )
+  
+  d_wsum[, i] <- sapply(
+    depths_acc,
+    function(x) {
+      mdata <- models[[i]]$pred %>%
+        bind_cols(models[[i]]$trainingData)
+      
+      ddat <- mdata %>% filter(
+        upper < x + 0.5 & lower > x - 0.5
+      )
+      
+      out <- sum(ddat$weights)
+      
+      return(out)
+    }
+  )
+}
+
+d_acc %<>%
+  as.data.frame() %>%
+  bind_cols(data.frame(Depth = depths_acc), .) %>%
+  pivot_longer(
+    cols = any_of(fractions),
+    names_to = "Fraction",
+    values_to = "RMSEw"
+    ) %>%
+  mutate(
+    Fraction = factor(Fraction, levels = fractions, labels = fraction_names)
+  )
+
+d_wsum %<>%
+  as.data.frame() %>%
+  bind_cols(data.frame(Depth = depths_acc), .) %>%
+  pivot_longer(
+    cols = any_of(fractions),
+    names_to = "Fraction",
+    values_to = "Total weight"
+    ) %>%
+  mutate(
+    Fraction = factor(Fraction, levels = fractions, labels = fraction_names)
+  )
+
+tiff(
+  paste0(dir_results, "/depth_accuracy_test_", testn, ".tiff"),
+  width = 16,
+  height = 10,
+  units = "cm",
+  res = 300
 )
 
-d_wsum <- sapply(
-  0:199,
-  function(x) {
-    mdata <- models[[i]]$pred %>%
-      bind_cols(models[[i]]$trainingData)
-    
-    ddat <- mdata %>% filter(
-      upper < x + 1 & lower > x
-    )
-    
-    out <- sum(ddat$weights)
-    
-    return(out)
-  }
+d_acc %>%
+  ggplot(aes(x = RMSEw, y = Depth)) +
+  facet_wrap(~ Fraction, nrow = 1, scales = "free_x") +
+  geom_path() +
+  scale_y_reverse(expand = c(0, 0))
+try(dev.off())
+try(dev.off())
+
+tiff(
+  paste0(dir_results, "/depth_weights_test_", testn, ".tiff"),
+  width = 16,
+  height = 10,
+  units = "cm",
+  res = 300
 )
 
-plot(d_acc)
-plot(d_wsum)
+d_wsum %>%
+  ggplot(aes(x = `Total weight`, y = Depth)) +
+  facet_wrap(~ Fraction, nrow = 1, scales = "free_x") +
+  geom_path() +
+  scale_y_reverse(expand = c(0, 0))
+
+try(dev.off())
+try(dev.off())
+
 
 # Covariate importance
 
@@ -934,10 +1012,12 @@ l %<>% bind_rows() %>%
 l_cat <- cov_cats %>%
   mutate(
     covariate = name,
-    category = ifelse(
-      category == "basic",
-      scorpan,
-      category
+    category = case_when(
+      category == "basic" ~ scorpan,
+      category == "WATEM" ~ "OR",
+      category == "sentinel_composite" ~ "S2 time series",
+      category == "bare_soil" ~ "Bare soil",
+      .default = "Other"
     )
   )
 
@@ -949,16 +1029,25 @@ l %<>%
   arrange(target, Overall) %>%
   mutate(order = row_number())
 
-l$category %<>% as.factor()
+l %<>% mutate(
+  category = case_when(
+    covariate == "upper" ~ "Depth",
+    covariate == "lower" ~ "Depth",
+    covariate == "year" ~ "Time",
+    category == "N" ~ "Spatial position",
+    category == "R" ~ "Topography",
+    category == "C" ~ "Climate",
+    category == "C " ~ "Climate",
+    category == "P" ~ "Parent materials",
+    category == "S" ~ "Soil",
+    category == "SO" ~ "Soil and organisms",
+    category == "CR" ~ "Climate and topography",
+    category == "OR" ~ "Organisms and topography",
+    .default = category
+  )
+)
 
-# levels(l$category) <- c(
-#   "Bare soil",
-#   "Spatial position",
-#   "Parent materials",
-#   "Topography",
-#   "S2 time series",
-#   "Soil"
-# )
+l$category %<>% as.factor()
 
 catcolors <- l$category %>%
   levels() %>%
@@ -994,7 +1083,7 @@ l %>%
   ) +
   colScale
 
-dev.off()
+try(dev.off())
 
 # 10: Make maps for the test area
 
