@@ -23,13 +23,12 @@ root <- dirname(dir_code)
 dir_dat <- paste0(root, "/digijord_data/")
 
 # To do:
-# Accuracy by depth
+# Accuracy by depth (OK)
 # Maps for depths (ok)
+# Adaptive kernel for point densities (OK)
 # Effects of som removal
 # Pdp with depth
 # Profile examples
-# Adaptive kernel for point densities
-
 
 # Test 1 - 8: Cubist
 # Test 8: New covariates (chelsa, river valley bottoms, hillyness)
@@ -390,6 +389,8 @@ metrics[fractions == "SOC"] <- 'RMSEw_log'
 
 # Function to calculate point densities
 
+qnorm(seq(0.55, 0.95, 0.1), 0, 1)
+
 get_dens <- function(datxy, sig) {
   dens_out <- ppp(
     datxy$UTMX,
@@ -494,18 +495,18 @@ for (i in 1:length(fractions))
   }
   
   # Weighting by depth intervals
-  w_interval <- 10
-  w_increment <- 1
+  w_interval   <- 10
+  w_increment  <- 1
   w_startdepth <- 0
-  w_maxdepth <- 200
-  w_iterations <- round(w_maxdepth / w_increment, digits = 0)
+  w_maxdepth   <- 200
+  w_iterations <- round((w_maxdepth - w_startdepth) / w_increment, digits = 0)
   
   w_mat <- matrix(numeric(), nrow = nrow(trdat), ncol = w_iterations)
   
   for(j in 1:w_iterations)
   {
-    upper_j <- w_startdepth + w_increment*(j - 1)
-    lower_j <- upper_j + w_interval
+    upper_j <- w_startdepth + w_increment*(j - 1) - w_interval
+    lower_j <- upper_j + w_interval*2
     
     trdat_ind <- trdat$lower > upper_j & trdat$upper < lower_j
     trdat_ind[is.na(trdat_ind)] <- FALSE
@@ -514,6 +515,9 @@ for (i in 1:length(fractions))
     
     # Sigma equal to the radius of a circle with an equal area per sample
     sigma_j <- sqrt(42951/(nrow(trdat_j)*pi))*1000
+    
+    # Use the expected mean density as a baseline
+    mean_dens_j <- nrow(trdat_j)/(42951*10^6)
     
     # For SOC:
     # Separate densities for wetlands and uplands
@@ -531,7 +535,8 @@ for (i in 1:length(fractions))
       dens_j <- get_dens(trdat_j, sigma_j)
     }
     
-    w_j <- min(dens_j, na.rm = TRUE) / dens_j
+    w_j <- mean_dens_j / dens_j
+    w_j[w_j > 1] <- 1
     w_mat[trdat_ind, j] <- w_j
   }
   
@@ -874,88 +879,80 @@ dev.off()
 
 # Accuracy vs depth
 
-depths_acc <- c(0:199) + 0.5
+depths_acc <- c(0:200)
 
-d_acc <- matrix(numeric(), nrow = length(depths_acc), ncol = length(fractions))
-d_wsum <- matrix(numeric(), nrow = length(depths_acc), ncol = length(fractions))
+d_out <- list()
 
-colnames(d_acc) <- fractions
-colnames(d_wsum) <- fractions
+# This operation is somewhat slow
+# Also calculate statistics by depth for the observations
 
 for (i in 1:length(fractions)) {
-  d_acc[, i] <- sapply(
-    depths_acc,
-    function(x) {
-      mdata <- models[[i]]$pred %>%
-        bind_cols(models[[i]]$trainingData)
-      
-      ddat <- mdata %>% filter(
-        upper < x + 0.5 & lower > x - 0.5
-      )
-      
-      out <- get_RMSEw(
-        select(ddat, pred, obs),
-        ddat$weights
-      )
-      
-      return(out)
-    }
-  )
+  mdata <- models[[i]]$pred %>%
+    bind_cols(models[[i]]$trainingData)
   
-  d_wsum[, i] <- sapply(
+  d_out[[i]] <- lapply(
     depths_acc,
     function(x) {
-      mdata <- models[[i]]$pred %>%
-        bind_cols(models[[i]]$trainingData)
-      
       ddat <- mdata %>% filter(
-        upper < x + 0.5 & lower > x - 0.5
+        upper < x + 10 & lower > x - 10
       )
       
-      out <- sum(ddat$weights)
+      out <- data.frame(
+        Fraction = fractions[i],
+        Depth = x,
+        RMSEw = get_RMSEw(
+          select(ddat, pred, obs),
+          ddat$weights
+          ),
+        R2w = get_R2w(
+          select(ddat, pred, obs),
+          ddat$weights
+        ),
+        Weights = sum(ddat$weights)
+      )
       
       return(out)
     }
-  )
+  ) %>% bind_rows()
 }
 
-d_acc %<>%
-  as.data.frame() %>%
-  bind_cols(data.frame(Depth = depths_acc), .) %>%
-  pivot_longer(
-    cols = any_of(fractions),
-    names_to = "Fraction",
-    values_to = "RMSEw"
-    ) %>%
-  mutate(
-    Fraction = factor(Fraction, levels = fractions, labels = fraction_names)
-  )
-
-d_wsum %<>%
-  as.data.frame() %>%
-  bind_cols(data.frame(Depth = depths_acc), .) %>%
-  pivot_longer(
-    cols = any_of(fractions),
-    names_to = "Fraction",
-    values_to = "Total weight"
-    ) %>%
+d_out %<>%
+  bind_rows() %>%
   mutate(
     Fraction = factor(Fraction, levels = fractions, labels = fraction_names)
   )
 
 tiff(
-  paste0(dir_results, "/depth_accuracy_test_", testn, ".tiff"),
+  paste0(dir_results, "/depth_RMSEw_test_", testn, ".tiff"),
   width = 16,
   height = 10,
   units = "cm",
   res = 300
 )
 
-d_acc %>%
+d_out %>%
   ggplot(aes(x = RMSEw, y = Depth)) +
   facet_wrap(~ Fraction, nrow = 1, scales = "free_x") +
   geom_path() +
   scale_y_reverse(expand = c(0, 0))
+
+try(dev.off())
+try(dev.off())
+
+tiff(
+  paste0(dir_results, "/depth_R2w_test_", testn, ".tiff"),
+  width = 16,
+  height = 10,
+  units = "cm",
+  res = 300
+)
+
+d_out %>%
+  ggplot(aes(x = R2w, y = Depth)) +
+  facet_wrap(~ Fraction, nrow = 1, scales = "free_x") +
+  geom_path() +
+  scale_y_reverse(expand = c(0, 0))
+
 try(dev.off())
 try(dev.off())
 
@@ -967,8 +964,8 @@ tiff(
   res = 300
 )
 
-d_wsum %>%
-  ggplot(aes(x = `Total weight`, y = Depth)) +
+d_out %>%
+  ggplot(aes(x = Weights, y = Depth)) +
   facet_wrap(~ Fraction, nrow = 1, scales = "free_x") +
   geom_path() +
   scale_y_reverse(expand = c(0, 0))
@@ -1194,26 +1191,20 @@ for(i in 1:length(fractions)) {
       ".tif"
     ) %>% rast()
   names(maps_10_km[[i]]) <- paste0(
-    fraction_names[i], " ", uppers, " - ", lowers, " cm"
+    fraction_names[i], ", ", uppers, " - ", lowers, " cm"
     )
 }
 
-# SOC depth distribution is very obviously wrong. I will need to fix it.
-# I should probably apply a wider spatial filter to reduce the influence of
-# the sinks data points.
-# Maybe I should use a model to estimate density using covariates, as there is
-# a higher concentration in some areas.
+# SOC depth distribution is very obviously wrong. I will need to fix it. (ok)
+# Using a separate density for wetlands fixes this issue.
+# Ideally, I should use the extent of the central wetlands, which is the survey
+# area for the SINKS dataset-
 
 
-# Looking at 10 km maps
+# Figures for 10 km maps
 
 library(viridisLite)
 library(tidyterra)
-
-try(dev.off())
-
-autoplot(maps_10_km[[1]]) +
-  scale_fill_gradientn(colours = viridis(100), na.value = NA)
 
 try(dev.off())
 lapply(1:6, function(x) {
@@ -1239,9 +1230,38 @@ lapply(1:6, function(x) {
 
 # maps_10km_s2 <- c(maps_10km[[1]], maps_10km[[2]], maps_10km[[3]], exp(maps_10km[[5]])/0.568, exp(maps_10km[[6]]))
 
-maps_10km_s2 <- c(maps_10km[[1]], maps_10km[[2]], maps_10km[[3]], maps_10km[[5]]/0.568, maps_10km[[6]])
+source("f_classify_soil_JB.R")
 
-maps_10km_jb <- lapp(maps_10km_s2, JB) %>% as.factor()
+maps_10km_jb <- lapply(
+  1:length(uppers),
+  function(x) {
+    maps_10_km_s2 <- c(
+      maps_10_km[[1]][[x]],
+      maps_10_km[[2]][[x]],
+      maps_10_km[[3]][[x]],
+      maps_10_km[[5]][[x]]/0.568,
+      maps_10_km[[6]][[x]]
+    )
+    
+    names(maps_10_km_s2) <- c("clay", "silt", "sand_f", "SOM", "CaCO3")
+    
+    out <- lapp(maps_10_km_s2, classify_soil_JB)
+    return(out)
+  }
+) %>%
+  rast()
+
+levels(maps_10km_jb) <- rep(
+  list(
+    data.frame(
+      id = 1:12,
+      Class = paste0("JB", 1:12)
+    )
+  ),
+  nlyr(maps_10km_jb)
+)
+
+names(maps_10km_jb) <- paste0("JB class, ", uppers, " - ", lowers, " cm")
 
 myrgb <- col2rgb(mycolors)
 tsp <- as.TSP(dist(t(myrgb)))
@@ -1249,30 +1269,27 @@ set.seed(1)
 sol <- solve_TSP(tsp, control = list(repetitions = 1e3))
 ordered_cols <- mycolors[sol]
 
-# ggplot2::qplot(x = 1:12, y = 1, fill = I(ordered_cols), geom = "col", width = 1) + ggplot2::theme_void()
+classes_in_maps <- values(maps_10km_jb) %>%
+  unlist() %>%
+  matrix(ncol = 1) %>%
+  unique() %>%
+  sort()
+
+cols_in_maps <- ordered_cols[classes_in_maps]
+
+plot_jb <- autoplot(maps_10km_jb) +
+  scale_fill_discrete(type = cols_in_maps)
 
 tiff(
-  paste0(dir_results, "/JB_test", testn, ".tiff"),
+  paste0(dir_results, "/JB_test_", testn, ".tiff"),
   width = 15,
   height = 10,
   units = "cm",
   res = 300
 )
 
-plot(
-  maps_10km_jb,
-  col = ordered_cols[levels(maps_10km_jb)[[1]]$ID],
-  main = "JB-nummer"
-)
+print(plot_jb)
 
 dev.off()
-
-# To do:
-# Further refine xgboost use
-# Use all observations
-# Implement forward feature selection?
-# Include forest samples
-# Include profile database
-# Include depth
 
 # END
