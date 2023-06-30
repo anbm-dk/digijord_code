@@ -893,22 +893,40 @@ for (i in 1:length(fractions)) {
   d_out[[i]] <- lapply(
     depths_acc,
     function(x) {
-      ddat <- mdata %>% filter(
+      ddat <- mdata %>%
+        filter(
         upper < x + 10 & lower > x - 10
-      )
+      ) %>%
+        mutate(
+          thickness = lower - upper,
+          upper_int = case_when(
+            upper > x - 10 ~ upper,
+            .default = x - 10
+          ),
+          lower_int = case_when(
+            lower < x + 10 ~ lower,
+            .default = x + 10
+          ),
+          cm_int = lower_int - upper_int,
+          cm_w_int = case_when(
+            thickness == 0 ~ 1,
+            .default = cm_int / thickness
+          ),
+          combined_weights = cm_w_int*weights
+        )
       
       out <- data.frame(
         Fraction = fractions[i],
         Depth = x,
         RMSEw = get_RMSEw(
           select(ddat, pred, obs),
-          ddat$weights
+          ddat$combined_weights
           ),
         R2w = get_R2w(
           select(ddat, pred, obs),
-          ddat$weights
+          ddat$combined_weights
         ),
-        Weights = sum(ddat$weights)
+        Weights = sum(ddat$combined_weights) / mean(ddat$cm_w_int)
       )
       
       return(out)
@@ -1291,5 +1309,28 @@ tiff(
 print(plot_jb)
 
 dev.off()
+
+
+int_i <- c(10, 40)
+
+trdat2 <- trdat %>% filter(
+  upper < int_i[2] & lower > int_i[1]
+)
+
+trdat2 %<>%
+  mutate(
+    thickness = lower - upper,
+    upper_int = case_when(
+      upper > int_i[1] ~ upper,
+      .default = int_i[1]
+    ),
+    lower_int = case_when(
+      lower < int_i[2] ~ lower,
+      .default = int_i[2]
+    ),
+    cm_int = lower_int - upper_int
+  )
+
+
 
 # END
