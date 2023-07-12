@@ -414,7 +414,113 @@ crs(dem) <- mycrs
 #   fileEncoding = "latin1"
 # )
 
-# 6: Identify covariates missing in the overview table
+# 6: Make new sets of oblique geographic coordinates
+
+# install.packages('devtools')
+
+# library(devtools)
+
+# install_github("anbm-dk/obliquer")
+
+# library(obliquer)
+# 
+# dir_tiles <- dir_dat %>%
+#   paste0(., "/tiles_591/")
+# 
+# tile_shapes <- dir_tiles %>%
+#   paste0(., "/tiles.shp") %>%
+#   vect()
+# 
+# # split dem into tiles
+# 
+# tmp_dem_tiles <- paste0(tmpfolder, "/dem/") %T>% dir.create()
+# tmp_ogc_tiles <- paste0(tmpfolder, "/ogc/") %T>% dir.create()
+# 
+# for (i in 1:length(tile_shapes)) {
+#   terra::crop(
+#     dem,
+#     tile_shapes[i],
+#     filename = paste0(tmp_dem_tiles, "/dem_tile_", i, ".tif")
+#   )
+# }
+# 
+# dem_files <- tmp_dem_tiles %>% list.files(full.names = TRUE)
+# 
+# library(parallel)
+# 
+# numCores <- detectCores()
+# numCores
+# 
+# showConnections()
+# 
+# cl <- makeCluster(numCores)
+# 
+# clusterEvalQ(
+#   cl,
+#   {
+#     library(terra)
+#     library(magrittr)
+#     library(obliquer)
+#   }
+# )
+# 
+# clusterExport(
+#   cl,
+#   c(
+#     "dem_files",
+#     "tmp_ogc_tiles",
+#     "tmpfolder"
+#   )
+# )
+# 
+# parSapplyLB(
+#   cl,
+#   1:length(dem_files),
+#   function(j) {
+#     terraOptions(memfrac = 0.02, tempdir = tmpfolder)
+#     
+#     dem_j <- dem_files[j] %>% rast()
+#     
+#     obliquify(
+#       dem_j,
+#       n_angles = 64,
+#       n_digits = 0,
+#       digits_names = 3,
+#       filename = paste0(tmp_ogc_tiles, "/ogcs_tile_", j, ".tif"),
+#       datatype = "INT4S"
+#       )
+#     
+#     return(NULL)
+#   }
+# )
+# 
+# stopCluster(cl)
+# foreach::registerDoSEQ()
+# rm(cl)
+# 
+# ogc_files <- tmp_ogc_tiles %>% list.files(full.names = TRUE)
+# 
+# ogc_names <- ogc_files[1] %>% rast() %>% names()
+# 
+# for (i in 1:length(ogc_names)) {
+#   ogcs_i <- ogc_files %>% lapply(
+#     function(x) {
+#       out <- x %>% rast() %>% subset(i)
+#       return(out)
+#     }
+#   )
+#   
+#   ogcs <- sprc(ogcs_i)
+#   
+#   ogcs_merged <- merge(
+#     ogcs,
+#     filename = paste0(dir_cov, "/ogc_", ogc_names[i], ".tif"),
+#     datatype = "INT4S",
+#     gdal = "TILED=YES"
+#   )
+# }
+
+# 7: Identify covariates missing in the overview table
 
 cov_cats <- dir_code %>%
   paste0(., "/cov_categories_20230323.csv") %>%
@@ -436,7 +542,7 @@ cov_names <- cov_files %>%
 
 setdiff(cov_names, cov_cats$name)
 
-# 7: Crop all covariates for the test area
+# 8: Crop all covariates for the test area
 
 cov_files <- dir_cov %>%
   list.files(

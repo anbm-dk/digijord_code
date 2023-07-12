@@ -15,7 +15,6 @@ root <- dirname(dir_code)
 dir_dat <- paste0(root, "/digijord_data/")
 dir_cov <- dir_dat %>% paste0(., "/covariates")
 
-testn <- 6
 mycrs <- "EPSG:25832"
 
 dem <- dir_cov %>%

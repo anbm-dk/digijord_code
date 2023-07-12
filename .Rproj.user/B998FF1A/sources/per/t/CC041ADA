@@ -1,26 +1,26 @@
 {
     "id": "CC041ADA",
-    "path": "C:/Users/au542768/digijord/digijord_code/01_covariate_processing.R",
-    "project_path": "01_covariate_processing.R",
+    "path": "C:/Users/au542768/digijord/digijord_code/02_covariate_processing.R",
+    "project_path": "02_covariate_processing.R",
     "type": "r_source",
-    "hash": "3667886641",
+    "hash": "908855730",
     "contents": "",
     "dirty": false,
     "created": 1673338388415.0,
     "source_on_save": false,
-    "relative_order": 1,
+    "relative_order": 2,
     "properties": {
         "source_window_id": "",
         "Source": "Source",
-        "cursorPosition": "466,0",
+        "cursorPosition": "3,0",
         "scrollLine": "0"
     },
     "folds": "",
-    "lastKnownWriteTime": 1681740051,
+    "lastKnownWriteTime": 1689148234,
     "encoding": "UTF-8",
     "collab_server": "",
     "source_window": "",
-    "last_content_update": 1681740051664,
+    "last_content_update": 1689148234783,
     "read_only": false,
     "read_only_alternatives": []
 }

@@ -156,7 +156,7 @@ forest_folds <- dir_folds %>%
 dir_cov <- dir_dat %>% paste0(., "/covariates")
 
 cov_cats <- dir_code %>%
-  paste0(., "/cov_categories_20230501.csv") %>%
+  paste0(., "/cov_categories_20230712.csv") %>%
   read.table(
     sep = ";",
     header = TRUE
@@ -294,7 +294,6 @@ obs_prf <- obs %>%
   )
 
 # Make new ID
-# Use all observations?
 
 obs_top_v <- obs_top %>% vect(geom = c("UTMX", "UTMY"))
 
@@ -384,8 +383,25 @@ WeightedSummary_log <- function (
   return(out)
 }
 
+# Weighted summary function with square root transformation
+WeightedSummary_sqrt <- function (
+    data,
+    lev = NULL,
+    model = NULL,
+    ...
+) {
+  out <- numeric()
+  data[, 1:2] <- sqrt(data[, 1:2])
+  data <- data[is.finite(rowSums(data)), ]
+  out[1] <- get_RMSEw(data[, 1:2], data$weights)
+  out[2] <- get_R2w(data[, 1:2], data$weights)
+  names(out) <- c('RMSEw_sqrt', 'R2w_sqrt')
+  return(out)
+}
+
 metrics <- rep('RMSEw', length(fractions))
 metrics[fractions == "SOC"] <- 'RMSEw_log'
+metrics[fractions == "CaCO3"] <- 'RMSEw_sqrt'
 
 # Function to calculate point densities
 
