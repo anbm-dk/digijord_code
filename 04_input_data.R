@@ -88,7 +88,7 @@ SEGES <- dir_dat %>%
   paste0(
     .,
     "/observations/SEGES_samples/SEGES_samples_cleaned.csv"
-  ) %>% 
+  ) %>%
   read.table(
     sep = ";",
     header = TRUE
@@ -137,7 +137,7 @@ profiles_horizons <- dir_dat %>%
 
 # 1.5: Profiles: Water retention (later)
 
-profiles_retention <-  sqlFetch(con3, "VANDRETENTION")
+profiles_retention <- sqlFetch(con3, "VANDRETENTION")
 
 # 1.6: Profiles: Drainage (later)
 # 1.7: Lucas database?
@@ -174,8 +174,9 @@ dsc2 <- dsc %>%
   mutate(
     across(
       where(is.numeric),
-      function(x) replace(x, x == -1, NA))  # Remove negative texture fraction measurements
-    ) %>%
+      function(x) replace(x, x == -1, NA)
+    ) # Remove negative texture fraction measurements
+  ) %>%
   bind_cols(dsc_coords) %>%
   select(-c(UTMX, UTMY)) %>%
   mutate(
@@ -190,7 +191,7 @@ dsc2 <- dsc %>%
     silt = Silt * 100 / (Ler + Silt + FinSD + GrovSD),
     fine_sand = FinSD * 100 / (Ler + Silt + FinSD + GrovSD),
     coarse_sand = GrovSD * 100 / (Ler + Silt + FinSD + GrovSD),
-    SOC = Humus*0.587,
+    SOC = Humus * 0.587,
     SOM_removed = 0
   ) %>%
   select(any_of(mycolnames))
@@ -209,19 +210,19 @@ seges2 <- SEGES %>%
     tsum = LerPct + SiltPct + FinsandPct + GrovsandPct,
     clay = case_when(
       is.na(tsum) ~ LerPct,
-      !is.na(tsum) ~ LerPct*100 / tsum
+      !is.na(tsum) ~ LerPct * 100 / tsum
     ),
     silt = case_when(
       is.na(tsum) ~ SiltPct,
-      !is.na(tsum) ~ SiltPct*100 / tsum
+      !is.na(tsum) ~ SiltPct * 100 / tsum
     ),
     fine_sand = case_when(
       is.na(tsum) ~ FinsandPct,
-      !is.na(tsum) ~ FinsandPct*100 / tsum
+      !is.na(tsum) ~ FinsandPct * 100 / tsum
     ),
     coarse_sand = case_when(
       is.na(tsum) ~ GrovsandPct,
-      !is.na(tsum) ~ GrovsandPct*100 / tsum
+      !is.na(tsum) ~ GrovsandPct * 100 / tsum
     ),
     SOM_removed = 1,
     pH = Rt - 0.5,
@@ -238,14 +239,14 @@ depths_D <- c("D1", "D2", "D3", "D4")
 new_names <- stri_replace_all_fixed(
   names(SINKS),
   c(depths_A, depths_S),
-  c(depths_D, depths_D), 
+  c(depths_D, depths_D),
   vectorize_all = FALSE
-  )
+)
 
 new_names <- stri_replace_all_fixed(
   new_names,
   "ID_DJF",
-  "IDDJF", 
+  "IDDJF",
   vectorize_all = FALSE
 )
 
@@ -270,7 +271,7 @@ newcols <- D_cols %>%
   unlist() %>%
   unique() %>%
   setdiff(depths_D)
-  
+
 sinks2 <- SINKS_newnames %>%
   select(-any_of(DX)) %>%
   pivot_longer(
@@ -278,7 +279,7 @@ sinks2 <- SINKS_newnames %>%
     names_to = c("depth", ".value"),
     names_sep = "_"
   )
-  
+
 rownas <- apply(sinks2, 1, function(x) sum(is.na(x)))
 
 lapply(sinks2, function(x) sum(!is.na(x))) %>% unlist()
@@ -329,28 +330,29 @@ sinks3 %>%
   print(n = 100)
 # Only one value, TOC2 is N
 
-sinks3 %>% filter(
-  TOC1 < NTotal | TOC2 < NTotal | TOC3 < NTotal
-) %>%
+sinks3 %>%
+  filter(
+    TOC1 < NTotal | TOC2 < NTotal | TOC3 < NTotal
+  ) %>%
   select(depth, TOC1, TOC2, TOC3, NTotal) %>%
   print(n = 100)
 
-n_unique <- sinks3 %>% 
+n_unique <- sinks3 %>%
   select(TOC1, TOC2, TOC3, NTotal) %>%
   apply(1, function(x) length(unique(x)))
 # All points have three unique values
 
-maxvalue <- sinks3 %>% 
+maxvalue <- sinks3 %>%
   select(TOC1, TOC2, TOC3, NTotal) %>%
   apply(1, function(x) max(x, na.rm = TRUE))
 
-minvalue <- sinks3 %>% 
+minvalue <- sinks3 %>%
   select(TOC1, TOC2, TOC3, NTotal) %>%
   apply(1, function(x) min(x, na.rm = TRUE))
 
 plot(log(minvalue), log(maxvalue))
 
-plot(maxvalue/minvalue)
+plot(maxvalue / minvalue)
 
 # I assume that maxvalue is always SOC, and minvalue is always N
 
@@ -361,7 +363,7 @@ sinks3$date <- sinks3$SD_Dato %>%
   stri_replace_all_fixed("-", "") %>%
   substr(., 1, 8)
 
-uppers <- c(0:3)*34
+uppers <- c(0:3) * 34
 lowers <- uppers + 30
 
 sinks_upperlower <- data.frame(
@@ -377,7 +379,7 @@ sinks4 <- sinks3 %>%
     UTMX = SD_X,
     UTMY = SD_Y,
     pH = PH
-  ) %>% 
+  ) %>%
   right_join(sinks_upperlower) %>%
   select(any_of(mycolnames))
 
@@ -411,11 +413,10 @@ tex_negs <- profiles_texture %>%
   apply(., 1, function(x) {
     out <- sum(x < 0, na.rm = TRUE)
     return(out)
-  }
-  )
+  })
 
 profiles_texture[tex_negs > 0, ]
-profiles_texture %>% filter((PRTIL- PRFRA) > 100)
+profiles_texture %>% filter((PRTIL - PRFRA) > 100)
 
 check_negs <- profiles_texture %>%
   select(-c(PRFRA, PRTIL)) %>%
@@ -426,13 +427,14 @@ profiles_tex2 <- profiles_texture %>%
   mutate(
     across(
       any_of(check_negs),
-      function(x) replace(x, x < 0, NA))  # Remove negative measurements
+      function(x) replace(x, x < 0, NA)
+    ) # Remove negative measurements
   ) %>%
   mutate(
     PRFRA = case_when(
-      PRFRA > PRTIL & PROFILNR == 2517 ~ PRFRA*-1,
+      PRFRA > PRTIL & PROFILNR == 2517 ~ PRFRA * -1,
       .default = PRFRA
-      ),
+    ),
     PRTIL = case_when(
       PRFRA > PRTIL & PROFILNR == 2531 ~ 170,
       (PRTIL - PRFRA) > 100 & PROFILNR == 2539 ~ 30,
@@ -452,7 +454,7 @@ plot(profiles_tex2$PRFRA, profiles_tex2$PRTIL)
 
 # profiles_tex3 <- profiles_tex2 %>%
 #   mutate(claysilt = LER/(LER + SILT))
-# 
+#
 # plot(
 #   profiles_tex3$HUMUS,
 #   profiles_tex3$claysilt,
@@ -494,7 +496,9 @@ profiles_tex2 %<>%
 
 plot(profiles_tex2$tminsum)
 
-profiles_tex2 %>% as.data.frame() %>% filter(TEKSTURART == "Kalk")
+profiles_tex2 %>%
+  as.data.frame() %>%
+  filter(TEKSTURART == "Kalk")
 
 # TEKSTURART analysis:
 # "Humus"         # More than 400 samples, all texture fractions are false zeroes
@@ -525,24 +529,32 @@ profiles_tex2 %<>%
   rowwise() %>%
   mutate(
     TEKTURSUM_NY = sum(LER, SILT, GRVSILT, S63, S125, S200, S500, HUMUS, CACO3,
-                       na.rm = TRUE),
+      na.rm = TRUE
+    ),
     TEKSTUR_NZERO = sum(c(LER, SILT, GRVSILT, S63, S125, S200, S500) == 0,
-                        na.rm = TRUE)
+      na.rm = TRUE
+    )
   ) %>%
   ungroup()
 
-profiles_tex2 %>% as.data.frame() %>% filter(tminsum > 101) %>%
+profiles_tex2 %>%
+  as.data.frame() %>%
+  filter(tminsum > 101) %>%
   arrange(-tminsum)
-profiles_tex2 %>% as.data.frame() %>% filter(TEKTURSUM > 101) %>%
+profiles_tex2 %>%
+  as.data.frame() %>%
+  filter(TEKTURSUM > 101) %>%
   arrange(-TEKTURSUM)
 profiles_tex2 %>%
   as.data.frame() %>%
   filter(TEKTURSUM_NY < 99 & tminsum > 0) %>%
   arrange(-TEKTURSUM_NY)
 
-profiles_tex2 %>% filter(TEKSTUR_NZERO == 2) %>% as.data.frame()
+profiles_tex2 %>%
+  filter(TEKSTUR_NZERO == 2) %>%
+  as.data.frame()
 profiles_tex2 %>% filter(TEKSTUR_NZERO == 1 & TEKTURSUM_NY < 50)
-  
+
 # Mineral texture sums above 101 are generally due to repeated values for one
 # of the sand fractions.
 # For one sample (profile 975, horizon 4), S500 seems to be the sum of the other
@@ -555,7 +567,7 @@ profiles_tex2 %>% filter(TEKSTUR_NZERO == 1 & TEKTURSUM_NY < 50)
 #   group_by(PROFILNR) %>%
 #   summarise(humsum = sum(HUMUS, na.rm = TRUE)) %>%
 #   filter(humsum == 0)
-# 
+#
 # profiles_tex2 %>%
 #   filter(
 #   PROFILNR %in% profiles_zerosom$PROFILNR & TEKSTURART != "Ingen analyse")
@@ -579,21 +591,23 @@ profiles_tex4 <- profiles_tex2 %>%
       ~ case_when(
         TEKTURSUM_NY > 101 & c_across(LER:S500)[match(cur_column(), t_colnames) - 1] == . ~ NA,
         .default = .
-      ) 
-    ) 
+      )
+    )
   ) %>%
   mutate(
     across(
       c(LER, SILT, GRVSILT, S63, S125, S200, S500),
       ~ case_when(
-        TEKSTUR_NZERO > 1 & . == 0 ~ NA, 
-        .default = .)
+        TEKSTUR_NZERO > 1 & . == 0 ~ NA,
+        .default = .
+      )
     )
   ) %>%
   mutate(
     S500 = case_when(
       PROFILNR == 975 & HORISONTNR == 4 ~ 100 - sum(
-        LER, SILT, GRVSILT, S63, S125, S200, HUMUS, CACO3, na.rm = TRUE
+        LER, SILT, GRVSILT, S63, S125, S200, HUMUS, CACO3,
+        na.rm = TRUE
       ),
       .default = S500
     )
@@ -603,9 +617,9 @@ profiles_tex4 <- profiles_tex2 %>%
     across(
       c(LER, SILT, GRVSILT, S63, S125, S200, S500, HUMUS, CACO3),
       ~ case_when(
-        TEKTURSUM_NY == 0 ~ NA, 
+        TEKTURSUM_NY == 0 ~ NA,
         .default = .
-        )
+      )
     )
   ) %>%
   mutate(
@@ -620,17 +634,20 @@ profiles_tex4 %<>%
   rowwise() %>%
   mutate(
     TEKTURSUM_NY = sum(LER, SILT, GRVSILT, S63, S125, S200, S500, HUMUS, CACO3,
-                       na.rm = TRUE)
+      na.rm = TRUE
+    )
   ) %>%
   ungroup()
 
 plot(profiles_tex4$TEKTURSUM_NY)
 
-profiles_tex4 %>% filter(TEKTURSUM_NY > 101) %>% as.data.frame()
+profiles_tex4 %>%
+  filter(TEKTURSUM_NY > 101) %>%
+  as.data.frame()
 
 # profile 3280 is ok (sum only 102%)
 # profile 3180 horizon 6 sample 2 seems to be a duplicate of the topsoil sample
-# with S500 as the only exception. The column "TOTAL KULSTOF" seems to contain 
+# with S500 as the only exception. The column "TOTAL KULSTOF" seems to contain
 # the only valid measurement from this sample. The texture fractions for this
 # sample should therefore be set to NA.
 
@@ -642,7 +659,7 @@ cor(log(profiles_tex4$HUMUS), log(profiles_tex4$`TOTAL KULSTOF`), use = "pairwis
 is_naturalnumber <- function(x, tol = .Machine$double.eps^0.5) {
   out <- x > tol & abs(x - round(x)) < tol
   return(out)
-} 
+}
 
 profiles_tex4 %>%
   filter(!(JBNR %in% 1:12)) %>%
@@ -650,15 +667,15 @@ profiles_tex4 %>%
   filter(is_naturalnumber(`TOTAL KULSTOF`)) %>%
   as.data.frame()
 
-plot(profiles_tex4$PHH2O)  # simply remove zeroes.
-plot(profiles_tex4$PHKCL)  # simply remove zeroes.
-plot(profiles_tex4$POROES)  # simply remove zeroes.
-plot(profiles_tex4$TOTALP)  # simply remove zeroes.
-plot(profiles_tex4$TOTALN)  # simply remove zeroes.
-plot(profiles_tex4$ORGAP)  # simply remove zeroes.
+plot(profiles_tex4$PHH2O) # simply remove zeroes.
+plot(profiles_tex4$PHKCL) # simply remove zeroes.
+plot(profiles_tex4$POROES) # simply remove zeroes.
+plot(profiles_tex4$TOTALP) # simply remove zeroes.
+plot(profiles_tex4$TOTALN) # simply remove zeroes.
+plot(profiles_tex4$ORGAP) # simply remove zeroes.
 plot(profiles_tex4$`UORGANISK P`) # simply remove zeroes.
-plot(profiles_tex4$`CITRATOPL P`)  # simply remove zeroes.
-plot(profiles_tex4$`TOTAL KULSTOF`)  # simply remove zeroes.
+plot(profiles_tex4$`CITRATOPL P`) # simply remove zeroes.
+plot(profiles_tex4$`TOTAL KULSTOF`) # simply remove zeroes.
 
 library(ggplot2)
 
@@ -666,7 +683,8 @@ profiles_tex4 %>%
   filter(JBNR %in% 1:12) %>%
   filter(HUMUS != 0) %>%
   filter(`TOTAL KULSTOF` != 0) %>%
-  ggplot(aes(x = HUMUS, y = `TOTAL KULSTOF`)) + geom_point()
+  ggplot(aes(x = HUMUS, y = `TOTAL KULSTOF`)) +
+  geom_point()
 
 profiles_tex4 %>%
   filter(JBNR %in% 1:12) %>%
@@ -679,7 +697,7 @@ profiles_tex4 %>%
 # share many false zeroes. These should be set to NA.
 # The columns "TOTALN", "TOTALP", "ORGAP", "UORGANISK P" share many false
 # zeroes. These should be set to NA.
-# In the columns K, NA, CA, MG, BASER, SURION, CEC, BASEMAETN the zeroes are 
+# In the columns K, NA, CA, MG, BASER, SURION, CEC, BASEMAETN the zeroes are
 # false if CEC is either NA or zero.
 # If SURION and BASEMAETN are both zero, they are false zeroes, irrespective of
 # CEC.
@@ -698,8 +716,8 @@ profiles_tex4 %>%
 # 10: If CEC is NA or zero, set 0 to NA for the columns K, NA, CA, MG, BASER,
 # SURION, CEC, BASEMAETN. (ok)
 # 11: If SURION and BASEMAETN are both zero, set them to NA. (ok)
-# 12: For profile 2532 horizon 3, HUMUS is 100 due to an error caused by 
-# missing texture fractions (not measured). According to the field report (MH 
+# 12: For profile 2532 horizon 3, HUMUS is 100 due to an error caused by
+# missing texture fractions (not measured). According to the field report (MH
 # Greve & P Sørensen, 1990: Lokalitetskortlægning på marginaljord - et pilot-
 # projekt, 2. revideret udgave, bilag), the HUMUS content for this horizon is
 # 2.66%. Correct this manually. (ok)
@@ -707,7 +725,7 @@ profiles_tex4 %>%
 profiles_tex4 %<>%
   mutate(
     JBNR = case_when(
-      !(JBNR %in% 1:12) ~ NA, 
+      !(JBNR %in% 1:12) ~ NA,
       .default = JBNR
     ),
     JBNR = case_when(
@@ -719,7 +737,7 @@ profiles_tex4 %<>%
       .default = `TOTAL KULSTOF`
     ),
     JBNR = case_when(
-      !(JBNR %in% 1:12) ~ NA, 
+      !(JBNR %in% 1:12) ~ NA,
       .default = JBNR
     )
   ) %>%
@@ -727,22 +745,24 @@ profiles_tex4 %<>%
     across(
       c(LER, SILT, GRVSILT, S63, S125, S200, S500, HUMUS, CACO3),
       ~ case_when(
-        PROFILNR == 3180 & HORISONTNR == 6 & HORISONTPR == 2 ~ NA, 
+        PROFILNR == 3180 & HORISONTNR == 6 & HORISONTPR == 2 ~ NA,
         .default = .
       )
     ),
     across(
-      c(PHH2O, PHKCL, POROES, TOTALP, TOTALN, ORGAP, `UORGANISK P`,
-        `CITRATOPL P`, `TOTAL KULSTOF`),
+      c(
+        PHH2O, PHKCL, POROES, TOTALP, TOTALN, ORGAP, `UORGANISK P`,
+        `CITRATOPL P`, `TOTAL KULSTOF`
+      ),
       ~ case_when(
-        . == 0 ~ NA, 
+        . == 0 ~ NA,
         .default = .
       )
     ),
     across(
       c(K, `NA`, CA, MG, BASER, SURION, BASEMAETN),
       ~ case_when(
-        is.na(CEC) & . == 0 ~ NA, 
+        is.na(CEC) & . == 0 ~ NA,
         .default = .
       )
     )
@@ -766,7 +786,8 @@ profiles_tex4 %<>%
   rowwise() %>%
   mutate(
     TEKTURSUM = sum(LER, SILT, GRVSILT, S63, S125, S200, S500, HUMUS, CACO3,
-                    na.rm = TRUE)
+      na.rm = TRUE
+    )
   ) %>%
   ungroup() %>%
   mutate(
@@ -780,7 +801,7 @@ profiles_tex4 %<>%
 
 profiles_analyse_corrected <- profiles_tex4 %>%
   select(colnames(profiles_texture))
-  
+
 write.table(
   profiles_analyse_corrected,
   paste0(dir_dat, "/observations/profiles/ANALYSE_corrected_20230606.csv"),
@@ -834,7 +855,9 @@ profiles_tex5 <- profiles_analyse_corrected %>%
 # Only standardize texture fractions if the combined sum, including humus and
 # CaCO3 are more than 90%.
 
-profiles_tex5 %>% filter(is.na(HUMUS) & !is.na(LER)) %>% as.data.frame()
+profiles_tex5 %>%
+  filter(is.na(HUMUS) & !is.na(LER)) %>%
+  as.data.frame()
 
 profiles_tex5 %>%
   filter(!is.na(LER)) %>%
@@ -855,7 +878,7 @@ profiles_tex5 %<>%
     upper = PRFRA,
     lower = PRTIL,
     SOC = case_when(
-      !is.na(HUMUS) ~ HUMUS*0.587,
+      !is.na(HUMUS) ~ HUMUS * 0.587,
       is.na(HUMUS) & is.na(CACO3) ~ `TOTAL KULSTOF`,
       is.na(HUMUS) & CACO3 == 0 ~ `TOTAL KULSTOF`,
       .default = NA
@@ -907,7 +930,7 @@ profiles_tex5 %<>%
       TEKTURSUM < 90 & !is.na(not_SOM_CaCO3) ~ csand_raw * 100 / (not_SOM_CaCO3),
       .default = csand_raw
     )
-  )%>%
+  ) %>%
   ungroup() %>%
   select(any_of(c(mycolnames, "PROFILNR")))
 
@@ -921,7 +944,7 @@ profiles_xy_date <- profiles_shp %>%
       AARSTAL,
       formatC(MND, 2, 2, flag = "0"),
       formatC(DAG, 2, 2, flag = "0")
-      ),
+    ),
     UTMX = x,
     UTMY = y
   ) %>%
@@ -946,13 +969,14 @@ forests_tax2 <- forests_tax %>%
   ) %>%
   filter(
     !is.na(Humus) & !is.na(UTMN) & !is.na(UTMØ)
-    )
+  )
 
 forests_dsc2 <- forests_dsc %>%
   mutate(
     across(
       where(is.numeric),
-      function(x) replace(x, x == -1, NA)) # Remove negative values
+      function(x) replace(x, x == -1, NA)
+    ) # Remove negative values
   ) %>%
   arrange(Lokalitet) %>%
   group_by(Lokalitet) %>%
@@ -978,7 +1002,7 @@ forests_all <- bind_rows(forests_tax2, forests_dsc2) %>%
     UTMX = UTMØ,
     UTMY = UTMN,
     SOM_removed = 0,
-    SOC = Humus*0.586
+    SOC = Humus * 0.586
   ) %>%
   rowwise() %>%
   mutate(
@@ -1009,7 +1033,7 @@ write.table(
   paste0(dir_obs_proc, "dsc.csv"),
   row.names = FALSE,
   sep = ";"
-  )
+)
 
 write.table(
   seges2,

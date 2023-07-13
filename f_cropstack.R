@@ -1,11 +1,11 @@
 # Function for cropping covariates
 
 cropstack <- function(
-    x,  # list of files
-    y,  # extent
+    x, # list of files
+    y, # extent
     folder # target folder
-) {
-  for(i in 1:length(x)) {
+    ) {
+  for (i in 1:length(x)) {
     require(raster)
     require(terra)
     require(magrittr)

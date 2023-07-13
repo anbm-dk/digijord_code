@@ -16,7 +16,7 @@ library(tidyr)
 library(xgboost)
 
 library(doParallel)
-library(spatstat)  # weights
+library(spatstat) # weights
 
 dir_code <- getwd()
 root <- dirname(dir_code)
@@ -34,7 +34,7 @@ dir_dat <- paste0(root, "/digijord_data/")
 # Test 8: New covariates (chelsa, river valley bottoms, hillyness)
 # Test 9: xgboost
 # Test 10: Predicted row and column (poor accuracy)
-# Test 11: Fever data, more 
+# Test 11: Fever data, more
 testn <- 12
 mycrs <- "EPSG:25832"
 
@@ -107,7 +107,7 @@ forest_samples <- dir_obs_proc %>%
     geom = c("UTMX", "UTMY"),
     crs = mycrs,
     keepgeom = TRUE
-  ) 
+  )
 
 # 3: Load folds
 
@@ -168,7 +168,6 @@ cov_names <- cov_files %>% tools::file_path_sans_ext()
 cov_names %>%
   write.table(
     paste0("cov_names_", Sys.Date(), ".csv")
-
   )
 
 cov_names[!cov_names %in% cov_cats$name]
@@ -188,7 +187,7 @@ if (usebuffer) {
       header = TRUE,
       sep = ";",
     )
-  
+
   SEGES_extr <- dir_extr %>%
     paste0(., "/buffer_SEGES_extr.csv") %>%
     read.table(
@@ -199,7 +198,7 @@ if (usebuffer) {
   dsc_extr <- dir_extr %>%
     paste0(., "/dsc_extr.rds") %>%
     readRDS()
-  
+
   SEGES_extr <- dir_extr %>%
     paste0(., "/SEGES_extr.rds") %>%
     readRDS()
@@ -235,7 +234,7 @@ obs_data <- list(dsc, SEGES, SINKS, profiles_texture, forest_samples) %>%
       as.character() %>%
       substr(start = 1, stop = 4) %>%
       as.numeric()
-    )
+  )
 
 fractions <- c("clay", "silt", "fine_sand", "coarse_sand", "logSOC", "logCaCO3")
 
@@ -280,12 +279,12 @@ obs %<>%
   rownames_to_column() %>%
   mutate(ID_new = rowname, .before = everything()) %>%
   select(-rowname)
-  
+
 obs_top <- obs %>%
   filter(
     upper < 25,
     is.finite(fold)
-    )
+  )
 
 obs_prf <- obs %>%
   filter(
@@ -308,7 +307,8 @@ tiff(
 )
 
 plot(
-  obs_top_v, "clay", breaks = 5, breakby = "cases", col = cividis(5),
+  obs_top_v, "clay",
+  breaks = 5, breakby = "cases", col = cividis(5),
   cex = 0.2
 )
 
@@ -316,7 +316,8 @@ try(dev.off())
 try(dev.off())
 
 plot(
-  obs_top_v, "clay", breaks = 5, breakby = "cases", col = cividis(5),
+  obs_top_v, "clay",
+  breaks = 5, breakby = "cases", col = cividis(5),
   cex = 0.4
 )
 
@@ -337,71 +338,66 @@ cov_selected <- cov_cats %>%
 # }
 
 # Weighted RMSE
-get_RMSEw <- function(d, w)
-{
-  sqe <- w*(d[, 1] - d[, 2])^2
-  msqe <- sum(sqe)/sum(w)
+get_RMSEw <- function(d, w) {
+  sqe <- w * (d[, 1] - d[, 2])^2
+  msqe <- sum(sqe) / sum(w)
   out <- sqrt(msqe)
   return(out)
 }
 
 # Weighted R^2
-get_R2w <- function(d, w)
-{
+get_R2w <- function(d, w) {
   require(boot)
   out <- boot::corr(d[, 1:2], w)^2
   return(out)
 }
 
 # Weighted summary function
-WeightedSummary <- function (
+WeightedSummary <- function(
     data,
     lev = NULL,
     model = NULL,
-    ...
-) {
+    ...) {
   out <- numeric()
   out[1] <- get_RMSEw(data[, 1:2], data$weights)
   out[2] <- get_R2w(data[, 1:2], data$weights)
-  names(out) <- c('RMSEw', 'R2w')
+  names(out) <- c("RMSEw", "R2w")
   return(out)
 }
 
 # Weighted summary function with log transformation
-WeightedSummary_log <- function (
+WeightedSummary_log <- function(
     data,
     lev = NULL,
     model = NULL,
-    ...
-) {
+    ...) {
   out <- numeric()
   data[, 1:2] <- log(data[, 1:2])
   data <- data[is.finite(rowSums(data)), ]
   out[1] <- get_RMSEw(data[, 1:2], data$weights)
   out[2] <- get_R2w(data[, 1:2], data$weights)
-  names(out) <- c('RMSEw_log', 'R2w_log')
+  names(out) <- c("RMSEw_log", "R2w_log")
   return(out)
 }
 
 # Weighted summary function with square root transformation
-WeightedSummary_sqrt <- function (
+WeightedSummary_sqrt <- function(
     data,
     lev = NULL,
     model = NULL,
-    ...
-) {
+    ...) {
   out <- numeric()
   data[, 1:2] <- sqrt(data[, 1:2])
   data <- data[is.finite(rowSums(data)), ]
   out[1] <- get_RMSEw(data[, 1:2], data$weights)
   out[2] <- get_R2w(data[, 1:2], data$weights)
-  names(out) <- c('RMSEw_sqrt', 'R2w_sqrt')
+  names(out) <- c("RMSEw_sqrt", "R2w_sqrt")
   return(out)
 }
 
-metrics <- rep('RMSEw', length(fractions))
-metrics[fractions == "SOC"] <- 'RMSEw_log'
-metrics[fractions == "CaCO3"] <- 'RMSEw_sqrt'
+metrics <- rep("RMSEw", length(fractions))
+metrics[fractions == "SOC"] <- "RMSEw_log"
+metrics[fractions == "CaCO3"] <- "RMSEw_sqrt"
 
 # Function to calculate point densities
 
@@ -416,12 +412,12 @@ get_dens <- function(datxy, sig) {
   ) %>%
     density(
       sigma = sig,
-      at = 'points',
+      at = "points",
       leaveoneout = FALSE
     )
-  
+
   attributes(dens_out) <- NULL
-  
+
   return(dens_out)
 }
 
@@ -464,7 +460,7 @@ for (i in 1:length(fractions))
   frac <- fractions[i]
 
   print(frac)
-  
+
   if (metrics[i] == "RMSEw_log") {
     sumfun <- WeightedSummary_log
   } else {
@@ -500,62 +496,62 @@ for (i in 1:length(fractions))
 
   # Three folds (placeholder)
   trdat %<>% mutate(
-    fold = ceiling(fold/3)
+    fold = ceiling(fold / 3)
   )
   holdout_i <- trdat %>%
     filter(fold == 4)
   trdat %<>% filter(fold < 4)
-  
+
   if (!use_all_points) {
     trdat %<>% sample_n(n)
   }
-  
+
   # Weighting by depth intervals
-  w_interval   <- 10
-  w_increment  <- 1
+  w_interval <- 10
+  w_increment <- 1
   w_startdepth <- 0
-  w_maxdepth   <- 200
+  w_maxdepth <- 200
   w_iterations <- round((w_maxdepth - w_startdepth) / w_increment, digits = 0)
-  
+
   w_mat <- matrix(numeric(), nrow = nrow(trdat), ncol = w_iterations)
-  
-  for(j in 1:w_iterations)
+
+  for (j in 1:w_iterations)
   {
-    upper_j <- w_startdepth + w_increment*(j - 1) - w_interval
-    lower_j <- upper_j + w_interval*2
-    
+    upper_j <- w_startdepth + w_increment * (j - 1) - w_interval
+    lower_j <- upper_j + w_interval * 2
+
     trdat_ind <- trdat$lower > upper_j & trdat$upper < lower_j
     trdat_ind[is.na(trdat_ind)] <- FALSE
-    
+
     trdat_j <- trdat[trdat_ind, ]
-    
+
     # Sigma equal to the radius of a circle with an equal area per sample
-    sigma_j <- sqrt(42951/(nrow(trdat_j)*pi))*1000
-    
+    sigma_j <- sqrt(42951 / (nrow(trdat_j) * pi)) * 1000
+
     # Use the expected mean density as a baseline
-    mean_dens_j <- nrow(trdat_j)/(42951*10^6)
-    
+    mean_dens_j <- nrow(trdat_j) / (42951 * 10^6)
+
     # For SOC:
     # Separate densities for wetlands and uplands
     if (frac == "SOC") {
       dens_j <- numeric(nrow(trdat_j))
-      
-      for(k in 0:1) {
+
+      for (k in 0:1) {
         trdat_j_wl_ind <- trdat_j$wetlands_10m == k
-        
+
         trdat_jk <- trdat_j[trdat_j_wl_ind, ]
-        
+
         dens_j[trdat_j_wl_ind] <- get_dens(trdat_jk, sigma_j)
       }
     } else {
       dens_j <- get_dens(trdat_j, sigma_j)
     }
-    
+
     w_j <- mean_dens_j / dens_j
     w_j[w_j > 1] <- 1
     w_mat[trdat_ind, j] <- w_j
   }
-  
+
   # dens_depth <- apply(
   #   dens_mat,
   #   1,
@@ -564,9 +560,9 @@ for (i in 1:length(fractions))
   #     return(out)
   #   }
   # )
-  
+
   # w_depth <- min(dens_depth, na.rm = TRUE) / dens_depth
-  
+
   w_depth <- apply(
     w_mat,
     1,
@@ -577,11 +573,11 @@ for (i in 1:length(fractions))
   )
 
   w_depth[!is.finite(w_depth)] <- 1
-  
+
   trdat$w <- w_depth
-  
+
   # List of folds
-  
+
   folds_i <- lapply(
     unique(trdat$fold),
     function(x) {
@@ -589,7 +585,7 @@ for (i in 1:length(fractions))
         mutate(
           is_j = fold != x,
           rnum = row_number(),
-          ind_j = is_j*rnum
+          ind_j = is_j * rnum
         ) %>%
         filter(ind_j != 0) %>%
         dplyr::select(., ind_j) %>%
@@ -602,7 +598,7 @@ for (i in 1:length(fractions))
 
   # cl <- makePSOCKcluster(10)
   # registerDoParallel(cl)
-  
+
   # xgboost optimization
   # 1: Fit learning rate (eta) and nrounds
   print("Step 1")
@@ -631,13 +627,13 @@ for (i in 1:length(fractions))
 
   # registerDoSEQ()
   # rm(cl)
-  
+
   if (extra_tuning_xgb) {
     # 2: Fit max_depth and min_child_weight
     print("Step 2")
-    
+
     set.seed(1)
-    
+
     model2 <- caret::train(
       form = formula_i,
       data = trdat,
@@ -646,9 +642,9 @@ for (i in 1:length(fractions))
       tuneGrid = expand.grid(
         nrounds = models[[i]]$bestTune$nrounds,
         eta = models[[i]]$bestTune$eta,
-        max_depth = max_depth_test,  # NB
-        min_child_weight = min_child_weight_test,  # NB
-        gamma = models[[i]]$bestTune$gamma,        
+        max_depth = max_depth_test, # NB
+        min_child_weight = min_child_weight_test, # NB
+        gamma = models[[i]]$bestTune$gamma,
         colsample_bytree = models[[i]]$bestTune$colsample_bytree,
         subsample = models[[i]]$bestTune$subsample
       ),
@@ -665,12 +661,12 @@ for (i in 1:length(fractions))
       num_parallel_tree = trees_per_round,
       objective = objectives[i]
     )
-    
+
     # 3: Tune gamma
     print("Step 3")
-    
+
     set.seed(1)
-    
+
     model3 <- caret::train(
       form = formula_i,
       data = trdat,
@@ -681,7 +677,7 @@ for (i in 1:length(fractions))
         eta = models[[i]]$bestTune$eta,
         max_depth = model2$bestTune$max_depth,
         min_child_weight = model2$bestTune$min_child_weight,
-        gamma = gamma_test,  # NB
+        gamma = gamma_test, # NB
         colsample_bytree = models[[i]]$bestTune$colsample_bytree,
         subsample = models[[i]]$bestTune$subsample
       ),
@@ -698,11 +694,11 @@ for (i in 1:length(fractions))
       num_parallel_tree = trees_per_round,
       objective = objectives[i]
     )
-    
+
     models[[i]] <- model3
   }
   print(models[[i]])
-  
+
   saveRDS(
     models[[i]],
     paste0(dir_results, "/model_", frac, ".rds")
@@ -736,8 +732,7 @@ models_sum <- lapply(models, function(x) {
       filter(RMSEw_log == min(RMSEw_log))
   }
   return(out)
-}
-) %>%
+}) %>%
   bind_rows() %>%
   mutate(
     Fraction = fractions,
@@ -769,7 +764,7 @@ imp_all <- models %>%
     id_cols = covariate,
     names_from = fraction,
     values_from = Overall
-    ) %>%
+  ) %>%
   rowwise() %>%
   mutate(mean_imp = mean(c_across(-covariate))) %>%
   arrange(-mean_imp) %T>%
@@ -791,31 +786,31 @@ get_acc <- function(x2, i2) {
     mutate(
       pred = ifelse(pred < 0, 0, pred)
     )
-  
+
   # if (i2 > 4) df %<>% exp
-  
+
   df %<>% bind_cols(x2$trainingData)
-  
+
   r2_all <- df %$% get_R2w(cbind(pred, obs), weights)
-  
+
   r2_bare <- df %>%
     filter(!is.na(s2_geomedian_b2)) %$%
     get_R2w(cbind(pred, obs), weights)
-  
+
   r2_covered <- df %>%
     filter(is.na(s2_geomedian_b2)) %$%
     get_R2w(cbind(pred, obs), weights)
-  
+
   rmse_all <- df %$% get_RMSEw(cbind(pred, obs), weights)
-  
+
   rmse_bare <- df %>%
     filter(!is.na(s2_geomedian_b2)) %$%
     get_RMSEw(cbind(pred, obs), weights)
-  
+
   rmse_covered <- df %>%
     filter(is.na(s2_geomedian_b2)) %$%
     get_RMSEw(cbind(pred, obs), weights)
-  
+
   out <- data.frame(
     r2_all,
     r2_bare,
@@ -824,7 +819,7 @@ get_acc <- function(x2, i2) {
     rmse_bare,
     rmse_covered
   )
-  
+
   return(out)
 }
 
@@ -838,7 +833,7 @@ write.table(
   paste0(dir_results, "/acc_all_test", testn, ".csv"),
   sep = ";",
   row.names = FALSE
-  )
+)
 
 getpred <- function(x2, i2) {
   df <- x2$pred %>%
@@ -852,21 +847,21 @@ getpred <- function(x2, i2) {
   df %<>% mutate(
     fraction = fractions[i2],
     upper = quantile(obs, 0.99)
-    ) %>%
+  ) %>%
     filter(obs < upper) %>%
     filter(pred < upper) %>%
     filter(obs >= 0)
   return(df)
 }
 
-allpred <- foreach(i = 1:6, .combine=rbind) %do%
+allpred <- foreach(i = 1:6, .combine = rbind) %do%
   getpred(models[[i]], i)
 
 allpred$fraction %<>% factor(levels = fractions)
 
 levels(allpred$fraction) <- c(
   "Clay", "Silt", "Fine sand", "Coarse sand", "SOC", "CaCO3"
-  )
+)
 
 tiff(
   paste0(dir_results, "/accuracy_test", testn, ".tiff"),
@@ -879,7 +874,7 @@ tiff(
 allpred %>%
   ggplot(aes(x = obs, y = pred)) +
   geom_point(alpha = .01, shape = 16) +
-  facet_wrap(~ fraction, nrow = 2, scales = "free") +
+  facet_wrap(~fraction, nrow = 2, scales = "free") +
   theme(aspect.ratio = 1) +
   scale_x_continuous(expand = c(0, 0)) +
   scale_y_continuous(expand = c(0, 0)) +
@@ -905,14 +900,14 @@ d_out <- list()
 for (i in 1:length(fractions)) {
   mdata <- models[[i]]$pred %>%
     bind_cols(models[[i]]$trainingData)
-  
+
   d_out[[i]] <- lapply(
     depths_acc,
     function(x) {
       ddat <- mdata %>%
         filter(
-        upper < x + 10 & lower > x - 10
-      ) %>%
+          upper < x + 10 & lower > x - 10
+        ) %>%
         mutate(
           thickness = lower - upper,
           upper_int = case_when(
@@ -928,23 +923,23 @@ for (i in 1:length(fractions)) {
             thickness == 0 ~ 1,
             .default = cm_int / thickness
           ),
-          combined_weights = cm_w_int*weights
+          combined_weights = cm_w_int * weights
         )
-      
+
       out <- data.frame(
         Fraction = fractions[i],
         Depth = x,
         RMSEw = get_RMSEw(
           select(ddat, pred, obs),
           ddat$combined_weights
-          ),
+        ),
         R2w = get_R2w(
           select(ddat, pred, obs),
           ddat$combined_weights
         ),
         Weights = sum(ddat$combined_weights) / mean(ddat$cm_w_int)
       )
-      
+
       return(out)
     }
   ) %>% bind_rows()
@@ -966,7 +961,7 @@ tiff(
 
 d_out %>%
   ggplot(aes(x = RMSEw, y = Depth)) +
-  facet_wrap(~ Fraction, nrow = 1, scales = "free_x") +
+  facet_wrap(~Fraction, nrow = 1, scales = "free_x") +
   geom_path() +
   scale_y_reverse(expand = c(0, 0))
 
@@ -983,7 +978,7 @@ tiff(
 
 d_out %>%
   ggplot(aes(x = R2w, y = Depth)) +
-  facet_wrap(~ Fraction, nrow = 1, scales = "free_x") +
+  facet_wrap(~Fraction, nrow = 1, scales = "free_x") +
   geom_path() +
   scale_y_reverse(expand = c(0, 0))
 
@@ -1000,7 +995,7 @@ tiff(
 
 d_out %>%
   ggplot(aes(x = Weights, y = Depth)) +
-  facet_wrap(~ Fraction, nrow = 1, scales = "free_x") +
+  facet_wrap(~Fraction, nrow = 1, scales = "free_x") +
   geom_path() +
   scale_y_reverse(expand = c(0, 0))
 
@@ -1021,12 +1016,12 @@ l <- list()
 
 ntop <- 20
 
-for(i in 1:length(models))
+for (i in 1:length(models))
 {
   l[[i]] <- varImp(models[[i]])$importance %>%
     as_tibble(rownames = "covariate") %>%
-    drop_na %>%
-    arrange(- Overall) %>%
+    drop_na() %>%
+    arrange(-Overall) %>%
     slice_head(n = ntop) %>%
     mutate(target = fractions[i]) %>%
     mutate(rank = 1:ntop)
@@ -1100,7 +1095,7 @@ l %>%
   ggplot(aes(x = order, y = Overall, bg = category)) +
   geom_col() +
   facet_wrap(
-    ~ target,
+    ~target,
     ncol = 3,
     scales = "free"
   ) +
@@ -1135,7 +1130,7 @@ lowers <- c(25, 50, 100, 200)
 map_spec <- expand_grid(
   fraction_i = 1:6,
   interval = 1:4
-  )
+)
 
 showConnections()
 
@@ -1157,7 +1152,8 @@ clusterEvalQ(
 
 clusterExport(
   cl,
-  c("uppers",
+  c(
+    "uppers",
     "lowers",
     "map_spec",
     "predfolder",
@@ -1175,21 +1171,21 @@ parSapplyLB(
   1:nrow(map_spec),
   function(x) {
     tmpfolder <- paste0(dir_dat, "/Temp/")
-    
+
     terraOptions(memfrac = 0.02, tempdir = tmpfolder)
-    
+
     cov_10km <- dir_cov_10km %>%
       list.files(full.names = TRUE) %>%
       rast() %>%
       subset(cov_selected)
-    
+
     outname <- predfolder %>%
       paste0(
         ., "/", fractions[map_spec$fraction_i[x]],
         "_depth", map_spec$interval[x],
         ".tif"
-        )
-    
+      )
+
     predict(
       cov_10km,
       models[[map_spec$fraction_i[x]]],
@@ -1206,7 +1202,7 @@ parSapplyLB(
       filename = outname,
       overwrite = TRUE
     )
-    
+
     return(NA)
   }
 )
@@ -1217,16 +1213,17 @@ rm(cl)
 
 maps_10_km <- list()
 
-for(i in 1:length(fractions)) {
+for (i in 1:length(fractions)) {
   maps_10_km[[i]] <- c(1:4) %>%
     paste0(
       predfolder, "/", fractions[i],
       "_depth", .,
       ".tif"
-    ) %>% rast()
+    ) %>%
+    rast()
   names(maps_10_km[[i]]) <- paste0(
     fraction_names[i], ", ", uppers, " - ", lowers, " cm"
-    )
+  )
 }
 
 # SOC depth distribution is very obviously wrong. I will need to fix it. (ok)
@@ -1243,10 +1240,10 @@ library(tidyterra)
 try(dev.off())
 lapply(1:6, function(x) {
   fname <- paste0(dir_results, "/", fractions[x], "_10km_test", testn, ".tiff")
-  
+
   myplot <- autoplot(maps_10_km[[x]]) +
     scale_fill_gradientn(colours = viridis(100), na.value = NA)
-  
+
   tiff(
     fname,
     width = 16,
@@ -1254,13 +1251,12 @@ lapply(1:6, function(x) {
     units = "cm",
     res = 300
   )
-  
+
   print(myplot)
-  
+
   try(dev.off())
   try(dev.off())
-}
-)
+})
 
 # maps_10km_s2 <- c(maps_10km[[1]], maps_10km[[2]], maps_10km[[3]], exp(maps_10km[[5]])/0.568, exp(maps_10km[[6]]))
 
@@ -1273,12 +1269,12 @@ maps_10km_jb <- lapply(
       maps_10_km[[1]][[x]],
       maps_10_km[[2]][[x]],
       maps_10_km[[3]][[x]],
-      maps_10_km[[5]][[x]]/0.568,
+      maps_10_km[[5]][[x]] / 0.568,
       maps_10_km[[6]][[x]]
     )
-    
+
     names(maps_10_km_s2) <- c("clay", "silt", "sand_f", "SOM", "CaCO3")
-    
+
     out <- lapp(maps_10_km_s2, classify_soil_JB)
     return(out)
   }

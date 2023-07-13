@@ -31,30 +31,30 @@ dem_ind <- grepl(
   cov_files
 )
 
-dem <- cov_files[dem_ind] %>% rast
+dem <- cov_files[dem_ind] %>% rast()
 
 crs(dem) <- mycrs
 
 # 1: Mask to coastline (done)
 
 # not_dem <- cov_files[!dem_ind]
-# 
+#
 # dir_masked <- dir_dat %>%
 #   paste0(., "/covariates_masked/") %T>%
 #   dir.create()
-# 
+#
 # not_dem_basenames <- basename(not_dem)
-# 
+#
 # for (i in 1:length(not_dem)) {
 #   dtyp <- not_dem[i] %>%
 #     raster() %>%
 #     dataType()
-#   
+#
 #   cov_i <- not_dem[i] %>%
 #     terra::rast()
-#   
+#
 #   crs(cov_i) <- mycrs
-#   
+#
 #   terra::mask(
 #     cov_i,
 #     mask = dem,
@@ -77,10 +77,10 @@ crs(dem) <- mycrs
 #   gsub("\\.", "_", .) %>%
 #   gsub("-", "_", .) %>%
 #   tolower()
-# 
+#
 # newnames <- basenames %>%
 #   paste0(dir_cov, . , ".tif")
-# 
+#
 # file.rename(
 #   cov_files,
 #   newnames
@@ -95,29 +95,29 @@ crs(dem) <- mycrs
 
 # dir_s1 <- dir_dat %>%
 #   paste0(., "/new_s1/")
-# 
+#
 # files_s1 <- dir_s1 %>%
-#   list.files(full.names = TRUE) 
-# 
+#   list.files(full.names = TRUE)
+#
 # names_s1 <- files_s1 %>%
 #   basename()
-# 
+#
 # for (i in 1:length(files_s1)) {
 #   dtyp <- files_s1[i] %>%
 #     raster() %>%
 #     dataType()
-# 
+#
 #   cov_i <- files_s1[i] %>%
 #     terra::rast()
-# 
+#
 #   crs(cov_i) <- mycrs
-#   
+#
 #   # Crop to coast
 #   r1 <- terra::mask(
 #     cov_i,
 #     mask = dem
 #   )
-#   
+#
 #   # Replace 0 and above
 #   ifel(
 #     r1 < 0,
@@ -138,27 +138,27 @@ crs(dem) <- mycrs
 
 # dir_s2 <- dir_dat %>%
 #   paste0(., "/new_s2/")
-# 
+#
 # files_s2 <- dir_s2 %>%
 #   list.files(full.names = TRUE)
-# 
+#
 # names_s2 <- files_s2 %>%
 #   basename()
-# 
+#
 # tmpfolder <- paste0(dir_dat, "/Temp/")
-# 
+#
 # terraOptions(tempdir = tmpfolder)
-# 
+#
 # for (i in 1:length(files_s2)) {
 #   dtyp <- files_s2[i] %>%
 #     raster() %>%
 #     dataType()
-# 
+#
 #   cov_i <- files_s2[i] %>%
 #     terra::rast()
-# 
+#
 #   crs(cov_i) <- mycrs
-# 
+#
 #   # Crop to coast
 #   r1 <- terra::mask(
 #     cov_i,
@@ -169,7 +169,7 @@ crs(dem) <- mycrs
 #     ),
 #     overwrite = TRUE
 #   )
-# 
+#
 #   # Keep only 0 - 10000
 #   ifel(
 #     r1 > 0 & r1 <= 10000,
@@ -189,14 +189,14 @@ crs(dem) <- mycrs
 # costdist <- dir_dat %>%
 #   paste0(., "/Cost_Distance/Cost_Dist_DHM2015_terraen_10m.tif") %>%
 #   rast()
-# 
+#
 # costdist_newname <- "cost_dist"
-# 
+#
 # names(costdist) <- costdist_newname
-# 
+#
 # outname <- dir_cov %>%
 #   paste0(., "/", costdist_newname, ".tif")
-# 
+#
 # r1 <- terra::math(
 #   costdist,
 #   "round",
@@ -207,7 +207,7 @@ crs(dem) <- mycrs
 #   ),
 #   overwrite = TRUE
 # )
-#   
+#
 # # Crop to extent
 # terra::crop(
 #   r1,
@@ -223,16 +223,16 @@ crs(dem) <- mycrs
 #   paste0(., "/Detrended_DEM/") %>%
 #   list.files(full.names = TRUE) %>%
 #   rast()
-# 
+#
 # detrended_newnames <- sources(detrended) %>%
 #     basename() %>%
 #     file_path_sans_ext() %>%
 #     gsub("\\.", "_", .) %>%
 #     gsub("-", "_", .) %>%
 #     tolower()
-# 
+#
 # names(detrended) <- detrended_newnames
-# 
+#
 # r1 <- terra::math(
 #   detrended,
 #   "round",
@@ -243,7 +243,7 @@ crs(dem) <- mycrs
 #   ),
 #   overwrite = TRUE
 # )
-# 
+#
 # # Crop to extent
 # r2 <- terra::crop(
 #   r1,
@@ -254,11 +254,11 @@ crs(dem) <- mycrs
 #   ),
 #   overwrite = TRUE
 # )
-# 
+#
 # for (i in 1:nlyr(r2)) {
 #   outname <- dir_cov %>%
 #     paste0(., "/", detrended_newnames[i], ".tif")
-#   
+#
 #   writeRaster(
 #     r2[[i]],
 #     datatype = "FLT4S",
@@ -272,13 +272,13 @@ crs(dem) <- mycrs
 # hillyness <- dir_dat %>%
 #   paste0(., "/hillyness/hillyness.tif") %>%
 #   rast()
-# 
+#
 # names(hillyness) <- "hillyness"
 # NAflag(hillyness) <- 128
-# 
+#
 # outname_hillyness <- dir_cov %>%
 #   paste0(., "/hillyness.tif")
-# 
+#
 # terra::crop(
 #   hillyness,
 #   dem,
@@ -292,7 +292,7 @@ crs(dem) <- mycrs
 # r <- dir_dat %>%
 #   paste0(., "/hillyness.tif") %>%
 #   rast()
-# 
+#
 # terra::mask(
 #   r,
 #   mask = dem,
@@ -308,20 +308,20 @@ crs(dem) <- mycrs
 #     pattern = ".tif",
 #     full.names = TRUE
 #   )
-# 
+#
 # dir_cov_renamed <- dir_dat %>%
 #   paste0(., "/covariates_renamed/") %T>%
 #   dir.create()
-# 
+#
 # library(parallel)
-# 
+#
 # numCores <- detectCores()
 # numCores
-# 
+#
 # showConnections()
-# 
+#
 # cl <- makeCluster(numCores)
-# 
+#
 # clusterEvalQ(
 #   cl,
 #   {
@@ -332,7 +332,7 @@ crs(dem) <- mycrs
 #     library(tools)
 #   }
 # )
-# 
+#
 # clusterExport(
 #   cl,
 #   c("mycrs",
@@ -341,49 +341,49 @@ crs(dem) <- mycrs
 #     "tmpfolder"
 #   )
 # )
-# 
+#
 # parSapplyLB(
 #   cl,
 #   cov_files,
 #   function(x) {
 #     terraOptions(memfrac = 0.02, tempdir = tmpfolder)
-#     
+#
 #     r <- x %>% rast()
-#     
+#
 #     dtyp <- x %>%
 #       raster() %>%
 #       dataType()
-#     
+#
 #     newname_x <- sources(r) %>%
 #       basename() %>%
 #       file_path_sans_ext() %>%
 #       gsub("\\.", "_", .) %>%
 #       gsub("-", "_", .) %>%
 #       tolower()
-#     
+#
 #     crs(r) <- mycrs
 #     names(r) <- newname_x
-#     
+#
 #     outname_x <- dir_cov_renamed %>%
 #       paste0(., "/", newname_x, ".tif")
-#     
+#
 #     writeRaster(
 #       r,
 #       datatype = dtyp,
 #       filename = outname_x,
 #       overwrite = TRUE
 #     )
-#     
+#
 #     out <- rast(outname_x)
-#     
+#
 #     return(out)
 #   }
 # )
-# 
+#
 # stopCluster(cl)
 # foreach::registerDoSEQ()
 # rm(cl)
-# 
+#
 # dir_cov_renamed %>%
 #   list.files(full.names = TRUE) %>%
 #   rast() %>% names()
@@ -398,14 +398,14 @@ crs(dem) <- mycrs
 #     header = TRUE,
 #     encoding = "latin1"
 #   )
-# 
+#
 # newnames <- cov_cats$name %>%
 #   gsub("\\.", "_", .) %>%
 #   gsub("-", "_", .) %>%
 #   tolower()
-# 
+#
 # cov_cats$name <- newnames
-# 
+#
 # write.table(
 #   cov_cats,
 #   file = paste0(dir_code, "/cov_categories_20230227.csv"),
@@ -423,19 +423,19 @@ crs(dem) <- mycrs
 # install_github("anbm-dk/obliquer")
 
 # library(obliquer)
-# 
+#
 # dir_tiles <- dir_dat %>%
 #   paste0(., "/tiles_591/")
-# 
+#
 # tile_shapes <- dir_tiles %>%
 #   paste0(., "/tiles.shp") %>%
 #   vect()
-# 
+#
 # # split dem into tiles
-# 
+#
 # tmp_dem_tiles <- paste0(tmpfolder, "/dem/") %T>% dir.create()
 # tmp_ogc_tiles <- paste0(tmpfolder, "/ogc/") %T>% dir.create()
-# 
+#
 # for (i in 1:length(tile_shapes)) {
 #   terra::crop(
 #     dem,
@@ -443,18 +443,18 @@ crs(dem) <- mycrs
 #     filename = paste0(tmp_dem_tiles, "/dem_tile_", i, ".tif")
 #   )
 # }
-# 
+#
 # dem_files <- tmp_dem_tiles %>% list.files(full.names = TRUE)
-# 
+#
 # library(parallel)
-# 
+#
 # numCores <- detectCores()
 # numCores
-# 
+#
 # showConnections()
-# 
+#
 # cl <- makeCluster(numCores)
-# 
+#
 # clusterEvalQ(
 #   cl,
 #   {
@@ -463,7 +463,7 @@ crs(dem) <- mycrs
 #     library(obliquer)
 #   }
 # )
-# 
+#
 # clusterExport(
 #   cl,
 #   c(
@@ -472,15 +472,15 @@ crs(dem) <- mycrs
 #     "tmpfolder"
 #   )
 # )
-# 
+#
 # parSapplyLB(
 #   cl,
 #   1:length(dem_files),
 #   function(j) {
 #     terraOptions(memfrac = 0.02, tempdir = tmpfolder)
-#     
+#
 #     dem_j <- dem_files[j] %>% rast()
-#     
+#
 #     obliquify(
 #       dem_j,
 #       n_angles = 64,
@@ -489,19 +489,19 @@ crs(dem) <- mycrs
 #       filename = paste0(tmp_ogc_tiles, "/ogcs_tile_", j, ".tif"),
 #       datatype = "INT4S"
 #       )
-#     
+#
 #     return(NULL)
 #   }
 # )
-# 
+#
 # stopCluster(cl)
 # foreach::registerDoSEQ()
 # rm(cl)
-# 
+#
 # ogc_files <- tmp_ogc_tiles %>% list.files(full.names = TRUE)
-# 
+#
 # ogc_names <- ogc_files[1] %>% rast() %>% names()
-# 
+#
 # for (i in 1:length(ogc_names)) {
 #   ogcs_i <- ogc_files %>% lapply(
 #     function(x) {
@@ -509,9 +509,9 @@ crs(dem) <- mycrs
 #       return(out)
 #     }
 #   )
-#   
+#
 #   ogcs <- sprc(ogcs_i)
-#   
+#
 #   ogcs_merged <- merge(
 #     ogcs,
 #     filename = paste0(dir_cov, "/ogc_", ogc_names[i], ".tif"),
@@ -552,10 +552,10 @@ cov_files <- dir_cov %>%
 
 squareshape <- dir_dat %>%
   paste0(., "/testarea_10km/square10km.shp") %>%
-  vect
+  vect()
 
 square_ext <- squareshape %>%
-  ext %>%
+  ext() %>%
   round(-1)
 
 outfolder <- dir_dat %>%

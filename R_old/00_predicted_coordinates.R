@@ -21,7 +21,9 @@ terraOptions(tempdir = tmpfolder)
 
 dir_cov <- dir_dat %>% paste0(., "/covariates")
 cov_files <- dir_cov %>% list.files(full.names = TRUE)
-cov_names <- cov_files %>% basename %>% tools::file_path_sans_ext()
+cov_names <- cov_files %>%
+  basename() %>%
+  tools::file_path_sans_ext()
 
 cov_cats <- dir_code %>%
   paste0(., "/cov_categories_20230323.csv") %>%
@@ -75,7 +77,7 @@ cov_selected <- grep(
   cov_selected,
   invert = TRUE,
   value = TRUE
-  )
+)
 
 cov <- rast(cov_files)
 cov <- subset(cov, cov_selected)
@@ -89,12 +91,12 @@ set.seed(1234)
 # pts <- spatSample(row_col_dem, 10^5, na.rm = TRUE, cells = TRUE, xy = TRUE)
 
 # pts <- select(pts, !dhm2015_terraen_10m)
-# 
+#
 # extr <- extract(
 #   cov,
 #   pts$cell
 # )
-# 
+#
 # pts_2 <- bind_cols(pts, extr)
 
 dir_extr <- dir_dat %>%
@@ -111,7 +113,7 @@ pts_2 <- read.table(
   paste0(dir_extr, "/random_100k.csv"),
   header = TRUE,
   sep = ";"
-  )
+)
 
 # Models for predicting row and col
 
@@ -215,8 +217,8 @@ for (i in 1:length(targets))
       tuneGrid = expand.grid(
         nrounds = models[[i]]$bestTune$nrounds,
         eta = models[[i]]$bestTune$eta,
-        max_depth = max_depth_test,  # NB
-        min_child_weight = min_child_weight_test,  # NB
+        max_depth = max_depth_test, # NB
+        min_child_weight = min_child_weight_test, # NB
         gamma = models[[i]]$bestTune$gamma,
         colsample_bytree = models[[i]]$bestTune$colsample_bytree,
         subsample = models[[i]]$bestTune$subsample
@@ -243,7 +245,7 @@ for (i in 1:length(targets))
         eta = models[[i]]$bestTune$eta,
         max_depth = model2$bestTune$max_depth,
         min_child_weight = model2$bestTune$min_child_weight,
-        gamma = gamma_test,  # NB
+        gamma = gamma_test, # NB
         colsample_bytree = models[[i]]$bestTune$colsample_bytree,
         subsample = models[[i]]$bestTune$subsample
       ),
@@ -284,8 +286,7 @@ models_sum <- lapply(models, function(x) {
   out <- x$results %>%
     filter(RMSE == min(RMSE))
   return(out)
-}
-) %>%
+}) %>%
   bind_rows() %>%
   mutate(
     target = targets,
@@ -342,31 +343,31 @@ imp_all
 #     mutate(
 #       pred = ifelse(pred < 0, 0, pred)
 #     )
-#   
+#
 #   # if (i2 > 4) df %<>% exp
-#   
+#
 #   df %<>% bind_cols(x2$trainingData)
-#   
+#
 #   r2_all <- df %$% get_R2w(cbind(pred, obs), weights)
-#   
+#
 #   r2_bare <- df %>%
 #     filter(!is.na(s2_geomedian_b2)) %$%
 #     get_R2w(cbind(pred, obs), weights)
-#   
+#
 #   r2_covered <- df %>%
 #     filter(is.na(s2_geomedian_b2)) %$%
 #     get_R2w(cbind(pred, obs), weights)
-#   
+#
 #   rmse_all <- df %$% get_RMSEw(cbind(pred, obs), weights)
-#   
+#
 #   rmse_bare <- df %>%
 #     filter(!is.na(s2_geomedian_b2)) %$%
 #     get_RMSEw(cbind(pred, obs), weights)
-#   
+#
 #   rmse_covered <- df %>%
 #     filter(is.na(s2_geomedian_b2)) %$%
 #     get_RMSEw(cbind(pred, obs), weights)
-#   
+#
 #   out <- data.frame(
 #     r2_all,
 #     r2_bare,
@@ -375,17 +376,17 @@ imp_all
 #     rmse_bare,
 #     rmse_covered
 #   )
-#   
+#
 #   return(out)
 # }
-# 
+#
 # library(foreach)
-# 
+#
 # acc_all <- foreach(i = 1:2, .combine = rbind) %do%
 #   get_acc(models[[i]], i)
-# 
+#
 # acc_all %<>% mutate(target = targets, .before = 1)
-# 
+#
 # write.table(
 #   acc_all,
 #   paste0(dir_xy_models, "/acc_xy.csv"),
@@ -429,7 +430,7 @@ tiff(
 allpred %>%
   ggplot(aes(x = obs, y = pred)) +
   geom_point(alpha = .01, shape = 16) +
-  facet_wrap(~ target, nrow = 1, scales = "free") +
+  facet_wrap(~target, nrow = 1, scales = "free") +
   theme(aspect.ratio = 1) +
   scale_x_continuous(expand = c(0, 0)) +
   scale_y_continuous(expand = c(0, 0)) +
@@ -456,12 +457,12 @@ l <- list()
 
 ntop <- 20
 
-for(i in 1:length(models))
+for (i in 1:length(models))
 {
   l[[i]] <- varImp(models[[i]])$importance %>%
     as_tibble(rownames = "covariate") %>%
-    drop_na %>%
-    arrange(- Overall) %>%
+    drop_na() %>%
+    arrange(-Overall) %>%
     slice_head(n = ntop) %>%
     mutate(target = targets[i]) %>%
     mutate(rank = 1:ntop)
@@ -524,7 +525,7 @@ l %>%
   ggplot(aes(x = order, y = Overall, bg = category)) +
   geom_col() +
   facet_wrap(
-    ~ target,
+    ~target,
     ncol = 2,
     scales = "free"
   ) +
@@ -561,7 +562,7 @@ maps_10km <- list()
 
 showConnections()
 
-for(i in 1:length(targets))
+for (i in 1:length(targets))
 {
   targ <- targets[i]
 
@@ -570,14 +571,14 @@ for(i in 1:length(targets))
     models[[i]],
     fun = predict_passna,
     na.rm = FALSE,
-    filename = paste0(predfolder, targ,  "_10km.tif"),
+    filename = paste0(predfolder, targ, "_10km.tif"),
     overwrite = TRUE,
     n_digits = 0
   )
 }
 
 maps_10km <- predfolder %>%
-  paste0(., targets,  "_10km.tif") %>%
+  paste0(., targets, "_10km.tif") %>%
   rast()
 
 names(maps_10km) <- targets
@@ -615,13 +616,15 @@ numCores
 dir_tiles <- dir_dat %>%
   paste0(., "/tiles_591/")
 
-subdir_tiles <- dir_tiles %>% list.dirs() %>% .[-1]
+subdir_tiles <- dir_tiles %>%
+  list.dirs() %>%
+  .[-1]
 
 dir_pred_all <- dir_xy_models %>%
   paste0(., "/predictions/") %T>%
   dir.create()
 
-dir_pred_tiles <- dir_pred_all  %>%
+dir_pred_tiles <- dir_pred_all %>%
   paste0(., "/tiles/") %T>%
   dir.create()
 
@@ -653,7 +656,8 @@ for (i in 1:length(targets)) {
 
   clusterExport(
     cl,
-    c("i",
+    c(
+      "i",
       "model_i",
       "subdir_tiles",
       "dir_pred_tiles_targ",
@@ -720,7 +724,7 @@ for (i in 1:length(targets)) {
     list.files(full.names = TRUE) %>%
     sprc()
 
-  if(i == 2) {
+  if (i == 2) {
     merge(
       outtiles_targ,
       filename = paste0(dir_pred_all, targ, "_merged.tif"),
@@ -752,7 +756,7 @@ f <- function(i) {
 }
 
 # terraOptions(memfrac = 0.4, tempdir = tmpfolder)
-# 
+#
 # app(s_row, f,  filename = paste0(dir_pred_all, "/row_residual.tif"),
 #     overwrite = TRUE)
 # app(s_col, f,  filename = paste0(dir_pred_all, "/col_residual.tif"),
@@ -788,7 +792,7 @@ dir_residual_tiles <- c(dir_row_tiles, dir_col_tiles)
 files_raw <- paste0(tmpfolder, targets, "_raw.tif")
 
 dir_pred_tiles_targets <- dir_pred_tiles %>%
-  paste0(., "/", targets, "/") 
+  paste0(., "/", targets, "/")
 
 # In parallel:
 # 1: crop raw col and row rasters
@@ -804,11 +808,11 @@ numCores
 for (i in 1:length(targets)) {
   pred_files_i <- dir_pred_tiles_targets[[i]] %>%
     list.files(full.names = TRUE)
-  
+
   showConnections()
-  
+
   cl <- makeCluster(numCores)
-  
+
   clusterEvalQ(
     cl,
     {
@@ -819,10 +823,11 @@ for (i in 1:length(targets)) {
       library(tools)
     }
   )
-  
+
   clusterExport(
     cl,
-    c("dir_tiles",
+    c(
+      "dir_tiles",
       "tile_numbers",
       "files_raw",
       "pred_files_i",
@@ -833,7 +838,7 @@ for (i in 1:length(targets)) {
       "targets"
     )
   )
-  
+
   parSapplyLB(
     cl,
     1:length(tile_shapes),
@@ -845,36 +850,36 @@ for (i in 1:length(targets)) {
       tile_shapes <- dir_tiles %>%
         base::paste0(., "/tiles.shp") %>%
         terra::vect()
-      
+
       r_raw <- rast(files_raw[i])
-      
+
       raw_tile <- crop(
         r_raw,
         tile_shapes[j]
       )
-      
+
       s <- c(raw_tile, pred_tile)
-      
+
       outname <- dir_residual_tiles[i] %>%
         paste0(., "/", targets[i], "_residual_tile_", tile_numbers[j], ".tif")
-        
+
       app(
         s,
         f,
         filename = outname,
         overwrite = TRUE,
         wopt = list(datatype = "INT2S")
-        )
+      )
     }
   )
   stopCluster(cl)
   foreach::registerDoSEQ()
   rm(cl)
-  
+
   outtiles_targ_res <- dir_residual_tiles[i] %>%
     list.files(full.names = TRUE) %>%
     sprc()
-  
+
   merge(
     outtiles_targ_res,
     filename = paste0(dir_pred_all, targets[i], "_residual.tif"),

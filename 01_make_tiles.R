@@ -18,7 +18,7 @@ dir_cov <- dir_dat %>% paste0(., "/covariates")
 mycrs <- "EPSG:25832"
 
 dem <- dir_cov %>%
-  paste0('/dhm2015_terraen_10m.tif') %>%
+  paste0("/dhm2015_terraen_10m.tif") %>%
   rast()
 
 # dem1km <- dem %>%
@@ -31,7 +31,7 @@ dem <- dir_cov %>%
 #   )
 
 dem1km <- dir_dat %>%
-  paste0(., '/layers/dhm2015_terraen_1km.tif') %>%
+  paste0(., "/layers/dhm2015_terraen_1km.tif") %>%
   rast()
 
 coords <- crds(dem1km)
@@ -40,20 +40,20 @@ coords <- crds(dem1km)
 # 2: Distance-based clustering for islands
 
 # distances <- dist(coords, method = 'maximum')
-# 
+#
 # clustering <- hclust(distances, method = 'single')
-# 
+#
 # groups <- cutree(clustering, k = 5)
-# 
+#
 # groups_df <- cbind(coords, groups) %>%
 #   as.data.frame()
-# 
+#
 # groups_r <- rast(groups_df)
-# 
+#
 # set.seed(1)
-# 
+#
 # myrandomcolors <- randomColor(length(unique(groups)))
-# 
+#
 # plot(groups_r, col = myrandomcolors)
 
 
@@ -62,12 +62,12 @@ coords <- crds(dem1km)
 dem4km <- dem1km %>%
   is.na(.) %>%
   ifel(., NA, 1) %>%
-    aggregate(
-      fact = 4,
-      na.rm = TRUE,
-      overwrite = TRUE,
-      fun = 'sum'
-    ) %T>%
+  aggregate(
+    fact = 4,
+    na.rm = TRUE,
+    overwrite = TRUE,
+    fun = "sum"
+  ) %T>%
   plot
 
 dem4km_df <- as.data.frame(dem4km, xy = TRUE, cells = TRUE)
@@ -82,9 +82,9 @@ coords_4km <- dem4km_df %>%
 # nrows <- nrow(coords_4km)
 # # my_minleaf <- nrows/40  # 60 tiles
 # my_minleaf <- nrows/300  # 440 tiles
-# 
+#
 # # nrows <- 1000
-# 
+#
 # mytree <- build_single_tree(
 #   coords_4km[1:nrows, ],
 #   coords_4km[1:nrows, ],
@@ -93,81 +93,81 @@ coords_4km <- dem4km_df %>%
 #   Command = 2,
 #   Inv_Cov_Y = solve(cov(coords_4km[1:nrows, ]))
 #   )
-# 
+#
 # mypred <- single_tree_prediction(
 #   mytree,
 #   coords,
 #   2
 #   )
-# 
+#
 # mypred <- paste(mypred[, 1], mypred[, 2])
-# 
+#
 # mydf <- as.data.frame(coords)
-# 
+#
 # mydf$pred <- as.factor(mypred) %>% as.numeric()
-# 
+#
 # set.seed(1)
-# 
+#
 # myrandomcolors2 <- randomColor(length(unique(mydf$pred)))
-# 
+#
 # mydf %>% rast %>% plot(col = myrandomcolors2)
-# 
+#
 # # Turn groups into polygons
-# 
+#
 # rast_mygroups <- rast(mydf)
-# 
+#
 # crs(rast_mygroups) <- mycrs
-# 
+#
 # group_polygons <- rast_mygroups %>%
 #   as.polygons() %>%
 #   disagg()
-# 
+#
 # exts <- list()
-# 
+#
 # for (i in 1:length(group_polygons)) {
 #   exts[[i]] <- ext(group_polygons[i]) %>% as.polygons(crs = mycrs)
 #   exts[[i]]$pred <- group_polygons$pred[i]
 # }
-# 
+#
 # group_boxes <- vect(exts)
-# 
+#
 # crs(group_boxes) <- mycrs
-# 
+#
 # group_boxes_dissolved <- terra::aggregate(group_boxes, by = "pred")
-# 
+#
 # group_polygons2 <- group_boxes_dissolved %>%
 #   disagg()
-# 
+#
 # exts2 <- list()
-# 
+#
 # for (i in 1:length(group_polygons2)) {
 #   exts2[[i]] <- ext(group_polygons2[i]) %>% as.polygons(crs = mycrs)
 #   exts2[[i]]$pred <- group_polygons2$pred[i]
 # }
-# 
+#
 # group_boxes2 <- vect(exts2)
-# 
+#
 # group_boxes_dissolved2 <- terra::aggregate(group_boxes2, by = "pred")
-# 
+#
 # group_polygons3 <- group_boxes_dissolved2 %>%
 #   disagg()
-# 
+#
 # exts3 <- list()
-# 
+#
 # for (i in 1:length(group_polygons3)) {
 #   exts3[[i]] <- ext(group_polygons3[i]) %>% as.polygons(crs = mycrs)
 #   exts3[[i]]$pred <- group_polygons3$pred[i]
 #   exts3[[i]]$id <- i
 # }
-# 
+#
 # group_boxes3 <- vect(exts3)
-# 
+#
 # terra::union(group_boxes3) # no more overlaps
-# 
+#
 # crs(group_boxes3) <- mycrs
-# 
+#
 # myrandomcolors_boxes <- randomColor(length(group_boxes3))
-# 
+#
 # plot(is.na(dem1km))
 # plot(group_boxes3, add = TRUE)
 # plot(group_boxes3, "id", col = myrandomcolors_boxes)
@@ -180,8 +180,9 @@ lapply(1:30, function(x) {
     as.data.frame() %>%
     nrow()
   return(out)
-}
-) %>% unlist() %>% data.frame()
+}) %>%
+  unlist() %>%
+  data.frame()
 
 # External calculation indicates optimum at 11 km side
 
@@ -202,20 +203,19 @@ terra::intersect(dem11_polygons, dem1km_pol) %>% plot()
 group_polygons_loop <- terra::intersect(dem11_polygons, dem1km_pol) %>% disagg()
 
 for (j in 1:3) {
-  
   exts <- list()
-  
+
   for (i in 1:length(group_polygons_loop)) {
     exts[[i]] <- ext(group_polygons_loop[i]) %>% as.polygons(crs = mycrs)
     exts[[i]]$cell <- group_polygons_loop$cell[i]
   }
-  
+
   group_boxes <- vect(exts)
-  
+
   crs(group_boxes) <- mycrs
-  
+
   group_boxes_dissolved <- terra::aggregate(group_boxes, by = "cell")
-  
+
   group_polygons_loop <- group_boxes_dissolved %>%
     disagg()
 }
@@ -242,20 +242,20 @@ groups_merged_boxes <- vect(exts)
 crs(groups_merged_boxes) <- mycrs
 
 groups_merged_boxes$diagonals_m <- sqrt(
-  perim(groups_merged_boxes)^2 - 8*expanse(groups_merged_boxes)
-  )/2
+  perim(groups_merged_boxes)^2 - 8 * expanse(groups_merged_boxes)
+) / 2
 
-max_diagonal <- 1556*10
+max_diagonal <- 1556 * 10
 
 groups_merged_boxes <- subset(
   groups_merged_boxes,
   diagonals_m < max_diagonal,
   NSE = TRUE
-  )
+)
 
 plot(groups_merged_boxes, "diagonals_m")
 
-groups_merged_boxes$id <- 1000*(1:nrow(groups_merged_boxes))
+groups_merged_boxes$id <- 1000 * (1:nrow(groups_merged_boxes))
 
 group_polygons_loop$id <- 1:nrow(group_polygons_loop)
 
@@ -285,7 +285,7 @@ writeVector(
 )
 
 # # Combine groups
-# 
+#
 # df_all <- mydf %>%
 #   select(pred) %>%
 #   bind_cols(groups_df, .) %>%
@@ -301,36 +301,36 @@ writeVector(
 #   mutate(
 #     group_final = group_final %>% as.factor() %>% as.numeric()
 #   )
-# 
+#
 # myrandomcolors3 <- randomColor(max(df_all$group_final))
-# 
+#
 # df_all %>% rast() %>% as.factor() %>% plot(col = myrandomcolors3)
 
 # # Turn combined groups into polygons
-# 
+#
 # rast_all <- rast(df_all)
-# 
+#
 # crs(rast_all) <- mycrs
-# 
+#
 # polygons_all <- as.polygons(rast_all) %T>% plot("group_final")
-# 
+#
 # exts <- list()
-# 
+#
 # for (i in 1:length(unique(df_all$group_final))) {
 #   exts[[i]] <- ext(polygons_all[i]) %>% as.polygons(crs = mycrs)
 # }
-# 
+#
 # final_boxes <- vect(exts)
-# 
+#
 # plot(rast_all, col = myrandomcolors3)
 # plot(final_boxes, add = TRUE)
-# 
+#
 # # Write combined groups to shapefile
-# 
+#
 # dir_tiles <- dir_dat %>%
 #   paste0(., "/tiles_", length(myrandomcolors3), "/") %T>%
 #   dir.create()
-# 
+#
 # writeVector(
 #   final_boxes,
 #   filename = paste0(dir_tiles, "tiles.shp"),

@@ -87,7 +87,7 @@ dir_folds <- dir_dat %>%
   dir.create()
 
 # file_dem_mask_100m <- paste0(dir_folds, "/dem_mask_100m.tif")
-# 
+#
 # terra::aggregate(
 #   DEM_10m,
 #   10,
@@ -95,9 +95,9 @@ dir_folds <- dir_dat %>%
 #   cores = 19,
 #   filename = file_dem_mask_100m
 # )
-# 
+#
 # dem_mask_100m <- rast(file_dem_mask_100m)
-# 
+#
 # dem_mask_100m2 <- ifel(dem_mask_100m == 1, NA, 1)
 
 file_dem_mask_100m_2 <- paste0(dir_folds, "/dem_mask_100m_2.tif")

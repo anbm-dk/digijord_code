@@ -41,7 +41,7 @@ vindum_obs <- dir_dat %>%
     geom = c("UTMX", "UTMY"),
     crs = mycrs,
     keepgeom = TRUE
-    )
+  )
 
 # Load predictions
 
@@ -63,22 +63,22 @@ plot(predictions[[1]], ext = ext(vindum_obs))
 plot(vindum_obs, "LER", add = TRUE)
 
 plot(vindum_extr$clay_10km, vindum_obs$LER)
-abline(1,1)
+abline(1, 1)
 
-cor(vindum_extr$clay_10km, vindum_obs$LER, use =  "pairwise.complete.obs")^2
+cor(vindum_extr$clay_10km, vindum_obs$LER, use = "pairwise.complete.obs")^2
 
 plot(vindum_extr$logSOC_10km, log(vindum_obs$SOC))
-abline(1,1)
+abline(1, 1)
 
 plot(exp(vindum_extr$logSOC_10km), vindum_obs$SOC)
-abline(1,1)
+abline(1, 1)
 
-cor(exp(vindum_extr$logSOC_10km), vindum_obs$SOC, use =  "pairwise.complete.obs")^2
+cor(exp(vindum_extr$logSOC_10km), vindum_obs$SOC, use = "pairwise.complete.obs")^2
 
 plot(exp(predictions[[5]]), ext = ext(vindum_obs))
 plot(vindum_obs, "SOC", add = TRUE)
 
 plot(vindum_extr$logSOC_10km, log(vindum_obs$SOC))
-abline(1,1)
+abline(1, 1)
 
 # END

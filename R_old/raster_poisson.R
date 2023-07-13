@@ -1,15 +1,14 @@
 library(terra)
 
 # Create a SpatRaster from scratch
-x <- rast(nrows=108, ncols=21, xmin=0, xmax=10)
+x <- rast(nrows = 108, ncols = 21, xmin = 0, xmax = 10)
 
 # Create a SpatRaster from a file
-f <- system.file("ex/elev.tif", package="terra")
+f <- system.file("ex/elev.tif", package = "terra")
 r <- rast(f)
 
-fun1 <- function(x)
-{
-  out <- x*0 + rpois(1, 1)
+fun1 <- function(x) {
+  out <- x * 0 + rpois(1, 1)
   return(out)
 }
 

@@ -118,10 +118,10 @@ dsc_extr <- terra::extract(
 # names(buffer_dsc_extr) <- names(cov)
 
 SEGES_extr <- terra::extract(
-    x = cov,
-    y = SEGES,
-    ID = FALSE,
-  )
+  x = cov,
+  y = SEGES,
+  ID = FALSE,
+)
 
 # buffer_SEGES_extr <- exact_extract(
 #   x = cov,
@@ -133,10 +133,10 @@ SEGES_extr <- terra::extract(
 # names(buffer_SEGES_extr) <- names(cov)
 
 SINKS_extr <- terra::extract(
-    x = cov,
-    y = SINKS,
-    ID = FALSE,
-  )
+  x = cov,
+  y = SINKS,
+  ID = FALSE,
+)
 
 profiles_extr <- terra::extract(
   x = cov,

@@ -9,7 +9,7 @@
 # Make new covariate extracts for the points that I use in the model
 # Get proper texture values from the access database (not rounded off)
 
-library(terra)  # NB!
+library(terra) # NB!
 library(tidyverse)
 library(magrittr)
 library(stringr)
@@ -20,14 +20,14 @@ getwd()
 # [1] "D:/anbm/digijord"
 
 root <- getwd()
-cov_dir <- root %>% paste0(., '/covariates')
+cov_dir <- root %>% paste0(., "/covariates")
 
 # 1: Move bare soil composite
 # - remove zeroes
 # - don't include count layer
 
 # reclasser <- matrix(c(0, NA), ncol = 2)
-# 
+#
 # bare_dir <- root %>% paste0(., '/layers/bare-soil')
 # bare_files <- bare_dir %>% list.files(pattern = "tif$"
 #                                       , full.names = TRUE) %>%
@@ -66,20 +66,23 @@ cov_dir <- root %>% paste0(., '/covariates')
 
 # 3: List all files and their categories
 
-cov_dir %>% list.files %>% write.table(
-  file = paste0(root, '/cov_list.csv')
-  , sep = ';'
+cov_dir %>%
+  list.files() %>%
+  write.table(
+    file = paste0(root, "/cov_list.csv"),
+    sep = ";"
   )
 
 cov_cats <- root %>%
-  paste0(., '/cov_categories.csv') %>%
-  read.table(sep = ';'
-             , header = TRUE
-             )
+  paste0(., "/cov_categories.csv") %>%
+  read.table(
+    sep = ";",
+    header = TRUE
+  )
 
 # Anything missing?
 
-cov_names <- cov_dir %>% list.files
+cov_names <- cov_dir %>% list.files()
 
 cov_names[!cov_names %in% cov_cats$name]
 
@@ -87,16 +90,16 @@ cov_names[!cov_names %in% cov_cats$name]
 
 dsc <- root %>%
   paste0(
-    .
-    , '/observations/DanishSoilClassification/DLJ/DLJmDecimaler_DKBH.shp'
+    .,
+    "/observations/DanishSoilClassification/DLJ/DLJmDecimaler_DKBH.shp"
   ) %>%
-  vect
+  vect()
 
 # Fix comma decimals (not relevant for new file)
 
 # fix_these <- c('LABORATORI', 'LER', 'SILT', 'GROVSILT', 'GROVFINSAN', 'FINSAND'
 #                ,'GROVSAND', 'CACO3', 'MULDTLSTAN')
-# 
+#
 # values(dsc) %<>%
 #   mutate(across(all_of(fix_these)
 #                        , str_replace
@@ -109,10 +112,10 @@ dsc <- root %>%
 
 # 5: check if the clay values give percent of the mineral fraction
 
-mineral <- c('Ler', 'Silt', 'FinSD', 'GrovSD')
+mineral <- c("Ler", "Silt", "FinSD", "GrovSD")
 
 dsc %>%
-  values %>%
+  values() %>%
   select(all_of(mineral)) %>%
   apply(., 1, FUN = function(x) sum(x, na.rm = TRUE))
 
@@ -122,7 +125,7 @@ dsc %>%
 
 # test_these <- c('Ler', 'Silt', 'FinSD', 'GrovSD', 'Humus', 'Gsilt', 'GfinSD'
 #                 , 'CaCO3')
-# 
+#
 # test_list <- lapply(1:length(test_these)
 #                     , FUN = function(x)
 #                     {
@@ -130,11 +133,11 @@ dsc %>%
 #                     }
 # ) %>%
 #   unlist(recursive = FALSE)
-# 
+#
 # tex_sums <- numeric()
 # merged_names <- lapply(test_list, function(x){paste0(x, collapse = '+')}) %>%
 #   unlist()
-# 
+#
 # for(i in 1:length(test_list))
 # {
 #   tex_sums[i] <- dsc %>%
@@ -144,12 +147,12 @@ dsc %>%
 #     median(na.rm = TRUE)
 #   c(i, tex_sums[i], merged_names[i]) %>% print
 # }
-# 
+#
 # merged_names[tex_sums == 100]
 
 # These add up to 100
 # "Ler+Silt+FinSD+GrovSD+Humus"
-# "Ler+Silt+FinSD+GrovSD+Humus+CaCO3"       
+# "Ler+Silt+FinSD+GrovSD+Humus+CaCO3"
 # "Ler+Silt+GrovSD+Humus+Gsilt+GfinSD"
 # "Ler+Silt+GrovSD+Humus+Gsilt+GfinSD+CaCO3"
 
@@ -163,23 +166,23 @@ dsc %>%
 
 #       sums vars                                       row  diff
 #      <dbl> <chr>                                    <int> <dbl>
-#   1  100   Ler+Silt+FinSD+GrovSD+Humus                163 0    
-#   2  100   Ler+Silt+FinSD+GrovSD+Humus+CaCO3          221 0    
-#   3  100   Ler+Silt+GrovSD+Humus+Gsilt+GfinSD         229 0    
-#   4  100   Ler+Silt+GrovSD+Humus+Gsilt+GfinSD+CaCO3   252 0    
+#   1  100   Ler+Silt+FinSD+GrovSD+Humus                163 0
+#   2  100   Ler+Silt+FinSD+GrovSD+Humus+CaCO3          221 0
+#   3  100   Ler+Silt+GrovSD+Humus+Gsilt+GfinSD         229 0
+#   4  100   Ler+Silt+GrovSD+Humus+Gsilt+GfinSD+CaCO3   252 0
 #   5   99.7 Silt+FinSD+GrovSD+Humus+Gsilt+CaCO3        241 0.270
 #   6   99.6 Silt+FinSD+GrovSD+Humus+Gsilt              198 0.370
-#   7   98.6 Ler+FinSD+GrovSD+Humus+Gsilt+CaCO3         235 1.35 
-#   8   98.6 Ler+FinSD+GrovSD+Humus+Gsilt               183 1.43 
-#   9   97.2 Ler+Silt+FinSD+GrovSD+CaCO3                166 2.83 
-#   10  97.2 Ler+Silt+FinSD+GrovSD                       93 2.84   
+#   7   98.6 Ler+FinSD+GrovSD+Humus+Gsilt+CaCO3         235 1.35
+#   8   98.6 Ler+FinSD+GrovSD+Humus+Gsilt               183 1.43
+#   9   97.2 Ler+Silt+FinSD+GrovSD+CaCO3                166 2.83
+#   10  97.2 Ler+Silt+FinSD+GrovSD                       93 2.84
 
 #   2  100   Ler+Silt+FinSD+GrovSD+Humus+CaCO3          221 0
 # dsc %>%
 #   values %>%
 #   select(all_of(test_list[[221]])) %>%
 #   apply(., 1, FUN = function(x) sum(x, na.rm = TRUE))
-# 
+#
 # dsc %>%
 #   values %>%
 #   mutate(sum_ex = Ler+Silt+FinSD+GrovSD+Humus+CaCO3) %>%
@@ -189,14 +192,14 @@ dsc %>%
 
 # Correct clay contents so they represent the percentage of the mineral fraction
 
-mineral_cols <- c('Ler', 'Silt', 'FinSD', 'GrovSD')
+mineral_cols <- c("Ler", "Silt", "FinSD", "GrovSD")
 
 # dsc$mineral <- values(dsc) %>%
 #   mutate(mineral = across(all_of(mineral_cols), sum)) %>%
-#   
-dsc$clay <- values(dsc) %>% 
+#
+dsc$clay <- values(dsc) %>%
   select(all_of(mineral_cols)) %>%
-  mutate(clay = Ler * 100 / rowSums(., na.rm = TRUE), .keep = 'none') %>%
+  mutate(clay = Ler * 100 / rowSums(., na.rm = TRUE), .keep = "none") %>%
   .$clay
 
 # log transform HUMUS
@@ -207,15 +210,17 @@ dsc$ln_SOM <- log(dsc$Humus)
 
 # List all covariates
 
-cov_files <- cov_dir %>% list.files(pattern = "tif$"
-                                    , full.names = TRUE)
+cov_files <- cov_dir %>% list.files(
+  pattern = "tif$",
+  full.names = TRUE
+)
 
-cov <- cov_files %>% rast
+cov <- cov_files %>% rast()
 
 # The code below fixed the extents and projections of the covariates
 
 # # Get the extents of all covariates
-# 
+#
 # extents <- lapply(cov_files, function(x)
 # {
 #   out <- x %>% rast %>% ext %>% .@ptr %>% .$vector
@@ -232,19 +237,19 @@ base_covnames <- basename(cov_files)
 
 # Crop all covariates to the same extent as the bare soil composite
 
-cov_crop_dir <- root %>% paste0(., '/covariates_cropped/') %T>% dir.create()
+cov_crop_dir <- root %>% paste0(., "/covariates_cropped/") %T>% dir.create()
 
-terraOptions(tempdir = paste0(root, '/Temp'))
+terraOptions(tempdir = paste0(root, "/Temp"))
 
 bare_ext <- root %>%
-  paste0(., '/layers/bare-soil/s2-geomedian-B2.tif') %>%
-  rast %>%
-  ext
+  paste0(., "/layers/bare-soil/s2-geomedian-B2.tif") %>%
+  rast() %>%
+  ext()
 
 # for(i in 2:length(cov_files))
 # {
 #   r_i <- cov_files[[i]] %>% rast
-#   
+#
 #   if(ext(r_i) != bare_ext)
 #   {
 #     if(nlyr(r_i) > 1)
@@ -302,18 +307,20 @@ bare_ext <- root %>%
 # Fix the remaining variables
 
 cov_files <- cov_dir %>%
-  list.files(pattern = "tif$"
-             , full.names = TRUE)
+  list.files(
+    pattern = "tif$",
+    full.names = TRUE
+  )
 
 proj_ETRS89 <- root %>%
-  paste0(., '/layers/bare-soil/s2-geomedian-B2.tif') %>%
-  rast %>%
-  crs
+  paste0(., "/layers/bare-soil/s2-geomedian-B2.tif") %>%
+  rast() %>%
+  crs()
 
 # for(i in 1:length(cov_files))
 # {
 #   r_i <- cov_files[[i]] %>% rast
-# 
+#
 #   if(ext(r_i) != bare_ext)
 #   {
 #     if(nlyr(r_i) > 1)
@@ -342,15 +349,17 @@ proj_ETRS89 <- root %>%
 #   }
 # }
 
-cov_files <- cov_dir %>% list.files(pattern = "tif$"
-                                    , full.names = TRUE)
+cov_files <- cov_dir %>% list.files(
+  pattern = "tif$",
+  full.names = TRUE
+)
 
 cov_names_sans <- cov_files %>%
-  basename %>%
+  basename() %>%
   tools::file_path_sans_ext(.) %>%
   make.names()
 
-cov <- cov_files %>% rast
+cov <- cov_files %>% rast()
 
 names(cov) <- cov_names_sans
 
@@ -359,7 +368,7 @@ names(cov) <- cov_names_sans
 #   , dsc
 # )
 
-extr_file <- root %>% paste0(., '/extracts/dsc_extr_all.csv')
+extr_file <- root %>% paste0(., "/extracts/dsc_extr_all.csv")
 
 # Drop these (Bornholm missing)
 # Area_Solar_RadiationSpecialDays4hour_ArcGISPro_1
@@ -377,16 +386,16 @@ extr_file <- root %>% paste0(., '/extracts/dsc_extr_all.csv')
 
 dsc_extr <- extr_file %>%
   read.table(
-    header = TRUE
-    , sep = ';'
+    header = TRUE,
+    sep = ";"
   )
-  
+
 # 8: Create folds
 
 library(caret)
 
 # set.seed(1)
-# 
+#
 # dsc %>%
 #   nrow %>%
 #   sample(1:10, ., replace = TRUE) %>%
@@ -398,27 +407,29 @@ library(caret)
 # )
 
 folds_10 <- read.table(
-  file = 'dsc_folds_all.csv'
-  , header = TRUE
-  , sep = ';'
+  file = "dsc_folds_all.csv",
+  header = TRUE,
+  sep = ";"
 )
 
 # 10: Compile data
 
 dsc_cov_folds <- bind_cols(
-  values(dsc)
-  , select(dsc_extr, -1)
-  , folds_10
+  values(dsc),
+  select(dsc_extr, -1),
+  folds_10
 )
 
 tr_dat <- dsc_cov_folds %>%
   filter(
-    DybFra == 0
-    , DybTil == 20
-    , s2.geomedian.B2 > 0
+    DybFra == 0,
+    DybTil == 20,
+    s2.geomedian.B2 > 0
   ) %>%
-  filter_at(vars(all_of(names(cov)))
-            , all_vars(!is.na(.)))
+  filter_at(
+    vars(all_of(names(cov))),
+    all_vars(!is.na(.))
+  )
 
 tr_dat_clay <- tr_dat %>%
   filter(!is.na(clay))
@@ -430,19 +441,18 @@ tr_dat_SOM <- tr_dat %>%
 # Making sure the names match and are legitimate
 
 f_clay <- names(cov) %>%
-  paste(collapse = ' + ') %>%
-  paste0('clay ~ ', .) %>%
-  as.formula
+  paste(collapse = " + ") %>%
+  paste0("clay ~ ", .) %>%
+  as.formula()
 
 f_SOM <- names(cov) %>%
-  paste(collapse = ' + ') %>%
-  paste0('ln_SOM ~ ', .) %>%
-  as.formula
+  paste(collapse = " + ") %>%
+  paste0("ln_SOM ~ ", .) %>%
+  as.formula()
 
 folds_clay <- sapply(
   1:10,
-  function(x)
-  {
+  function(x) {
     ind <- tr_dat_clay$fold != x
     out <- c(1:length(ind))[ind]
     return(out)
@@ -451,8 +461,7 @@ folds_clay <- sapply(
 
 folds_SOM <- sapply(
   1:10,
-  function(x)
-  {
+  function(x) {
     ind <- tr_dat_SOM$fold != x
     out <- c(1:length(ind))[ind]
     return(out)
@@ -460,8 +469,9 @@ folds_SOM <- sapply(
 )
 
 tgrid <- data.frame(
-  committees = c(1, 10, 20)
-  , neighbors = c(0, 0, 0))
+  committees = c(1, 10, 20),
+  neighbors = c(0, 0, 0)
+)
 
 # Clay model
 
@@ -473,28 +483,28 @@ cl <- makePSOCKcluster(12)
 registerDoParallel(cl)
 
 model_clay <- caret::train(
-  f_clay
-  , data = tr_dat_clay
-  , method = 'cubist'
+  f_clay,
+  data = tr_dat_clay,
+  method = "cubist"
   # , trControl = trainControl(method = 'cv'
   #                            , number = 12)
-  , tuneGrid = tgrid
-  , trControl = trainControl(
-    index = folds_clay
-    , savePredictions = 'final'
-    , predictionBounds = c(0, 100)
-    )
+  , tuneGrid = tgrid,
+  trControl = trainControl(
+    index = folds_clay,
+    savePredictions = "final",
+    predictionBounds = c(0, 100)
+  )
 )
 
 registerDoSEQ()
 rm(cl)
 
 model_clay
-model_clay %>% varImp
+model_clay %>% varImp()
 model_clay %>%
-  varImp %>%
+  varImp() %>%
   .$importance %>%
-  rownames_to_column(var = 'covariate') %>%
+  rownames_to_column(var = "covariate") %>%
   arrange(-Overall)
 
 # SOM model
@@ -507,15 +517,15 @@ cl <- makePSOCKcluster(12)
 registerDoParallel(cl)
 
 model_SOM <- caret::train(
-  f_SOM
-  , data = tr_dat_SOM
-  , method = 'cubist'
-  , tuneGrid = tgrid
-  , trControl = trainControl(
-    index = folds_SOM
-    , savePredictions = 'final'
-    , predictionBounds = c(NA, log(100))
-    )
+  f_SOM,
+  data = tr_dat_SOM,
+  method = "cubist",
+  tuneGrid = tgrid,
+  trControl = trainControl(
+    index = folds_SOM,
+    savePredictions = "final",
+    predictionBounds = c(NA, log(100))
+  )
 )
 
 registerDoSEQ()
@@ -524,28 +534,28 @@ rm(cl)
 showConnections()
 
 model_SOM
-model_SOM %>% varImp
+model_SOM %>% varImp()
 model_SOM %>%
-  varImp %>%
+  varImp() %>%
   .$importance %>%
-  rownames_to_column(var = 'covariate') %>%
+  rownames_to_column(var = "covariate") %>%
   arrange(-Overall)
 
 # Make covariates for small test area
 
 squareshape <- root %>%
-  paste0(., '/testarea_10km/square10km.shp') %>%
-  vect
+  paste0(., "/testarea_10km/square10km.shp") %>%
+  vect()
 
 square_ext <- squareshape %>%
-  ext %>%
+  ext() %>%
   round(-1)
 
 outfolder <- root %>%
-  paste0(., '/testarea_10km/covariates/')
+  paste0(., "/testarea_10km/covariates/")
 
 # outfolder %>% dir.create
-# 
+#
 # cropstack <- function(x # list of files
 #                       , y # extent
 #                       , folder # target folder
@@ -582,35 +592,35 @@ outfolder <- root %>%
 
 cov_10km <- outfolder %>%
   list.files(full.names = TRUE) %>%
-  rast
+  rast()
 
 names(cov_10km) <- names(cov)
 
 predfolder <- root %>%
-  paste0(., '/testarea_10km/predictions_', testn, '/') %T>%
+  paste0(., "/testarea_10km/predictions_", testn, "/") %T>%
   dir.create()
 
 t1 <- Sys.time()
- 
-predict(cov_10km
-        , model_clay
-        , na.rm = TRUE
-        , cores = 12
-        , filename = paste0(predfolder, 'clay.tif')
-        , overwrite = TRUE
-        )
+
+predict(cov_10km,
+  model_clay,
+  na.rm = TRUE,
+  cores = 12,
+  filename = paste0(predfolder, "clay.tif"),
+  overwrite = TRUE
+)
 
 Sys.time() - t1
 # Time difference of 2.222116 mins
 
 t1 <- Sys.time()
 
-predict(cov_10km
-        , model_SOM
-        , na.rm = TRUE
-        , cores = 12
-        , filename = paste0(predfolder, 'SOM.tif')
-        , overwrite = TRUE
+predict(cov_10km,
+  model_SOM,
+  na.rm = TRUE,
+  cores = 12,
+  filename = paste0(predfolder, "SOM.tif"),
+  overwrite = TRUE
 )
 
 Sys.time() - t1

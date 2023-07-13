@@ -14,7 +14,9 @@ predict_passna <- function(mod, dat, n_const = 0, n_digits = NULL, ...) {
         ...
       )
     }
-    if (!is.null(n_digits2)) { out2 <- round(out2, digits = n_digits2) }
+    if (!is.null(n_digits2)) {
+      out2 <- round(out2, digits = n_digits2)
+    }
     return(out2)
   }
   out <- rfun2(mod, dat, n_const, n_digits, ...)

@@ -1,10 +1,9 @@
 # Function to calculate JB code
 
-classify_soil_JB <- function(clay, silt, sand_f, SOM, CaCO3, SOM_factor = 1)
-{
+classify_soil_JB <- function(clay, silt, sand_f, SOM, CaCO3, SOM_factor = 1) {
   out <- rep(0, length(clay))
   out[CaCO3 > 10] <- 12
-  out[out == 0 & SOM*SOM_factor > 10] <- 11
+  out[out == 0 & SOM * SOM_factor > 10] <- 11
   out[out == 0 & clay < 5 & silt < 20] <- 1
   out[out == 1 & sand_f > 50] <- 2
   out[out == 0 & clay < 5] <- 10

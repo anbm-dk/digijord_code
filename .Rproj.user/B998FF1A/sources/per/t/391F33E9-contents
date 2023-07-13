@@ -39,14 +39,14 @@ max_char <- length(tile_shapes) %>%
   as.character() %>%
   nchar() %>%
   max()
-  
+
 tile_numbers <- length(tile_shapes) %>%
   1:. %>%
   str_pad(
     .,
     max_char,
     pad = "0"
-    )
+  )
 
 # Cropping function
 
@@ -59,11 +59,11 @@ source("f_cropstack.R")
 # for (j in 1:length(tile_shapes)) {
 # for (j in 1) {
 #   print(j)
-# 
+#
 #   dir_tile_j <- dir_tiles %>%
 #     paste0(., "/tile_", tile_numbers[j], "/") %T>%
 #     dir.create()
-# 
+#
 #   cropstack(
 #     x = cov_files,
 #     y = tile_shapes[j],
@@ -93,7 +93,8 @@ clusterEvalQ(
 
 clusterExport(
   cl,
-  c("dir_dat",
+  c(
+    "dir_dat",
     "dir_tiles",
     "dir_code",
     "tile_numbers",
@@ -106,19 +107,19 @@ parSapplyLB(
   1:length(tile_shapes),
   function(j) {
     tmpfolder <- paste0(dir_dat, "/Temp/")
-    
+
     terraOptions(memfrac = 0.02, tempdir = tmpfolder)
-    
+
     dir_tile_j <- dir_tiles %>%
       paste0(., "/tile_", tile_numbers[j], "/") %T>%
       dir.create()
-    
+
     tile_shapes <- dir_tiles %>%
       base::paste0(., "/tiles.shp") %>%
       terra::vect()
-    
+
     source(paste0(dir_code, "/f_cropstack.R"))
-    
+
     cropstack(
       x = cov_files,
       y = tile_shapes[j],

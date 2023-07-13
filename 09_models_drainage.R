@@ -45,7 +45,7 @@ library(exactextractr)
 library(party)
 library(rpart)
 library(doParallel)
-library(spatstat)  # weights
+library(spatstat) # weights
 
 dir_code <- getwd()
 root <- dirname(dir_code)
@@ -117,7 +117,7 @@ cov_use <- cov_cats %>%
   select(name) %>%
   unlist()
 
-cov_files <- cov_dir %>% list.files
+cov_files <- cov_dir %>% list.files()
 
 cov_names <- cov_files %>% tools::file_path_sans_ext()
 
@@ -136,29 +136,29 @@ dir_extr <- dir_dat %>%
 #   y = obs_drain,
 #   ID = FALSE,
 # )
-# 
+#
 # write.table(
 #   drain_extr,
 #   paste0(dir_extr, "drain_extr.csv"),
 #   row.names = FALSE,
 #   sep = ";"
 # )
-# 
+#
 # buffer_drain <- terra::buffer(
 #   obs_drain,
 #   width = 40
 # ) %>%
 #   st_as_sf()
-# 
+#
 # buffer_drain_extr <- exact_extract(
 #   x = cov,
 #   y = buffer_drain,
 #   fun = "mean",
 #   progress = TRUE
 # )
-# 
+#
 # names(buffer_drain_extr) <- names(cov)
-# 
+#
 # write.table(
 #   buffer_drain_extr,
 #   paste0(dir_extr, "/buffer_drain_extr.csv"),
@@ -188,7 +188,9 @@ if (usebuffer) {
 
 # 6: Merge data
 
-coords_drain <- geom(obs_drain) %>% as.data.frame() %>% select(c(x, y))
+coords_drain <- geom(obs_drain) %>%
+  as.data.frame() %>%
+  select(c(x, y))
 
 names(coords_drain) <- c("UTMX", "UTMY")
 
@@ -219,7 +221,7 @@ dens_drain <- ppp(
 ) %>%
   density(
     sigma = 1000,
-    at = 'points',
+    at = "points",
     leaveoneout = FALSE
   )
 
@@ -238,7 +240,7 @@ folds_drain_list <- lapply(
       mutate(
         is_j = fold != x,
         rnum = row_number(),
-        ind_j = is_j*rnum
+        ind_j = is_j * rnum
       ) %>%
       filter(ind_j != 0) %>%
       select(ind_j) %>%
@@ -282,21 +284,21 @@ rm(cl)
 model_drain
 
 # Without buffers
-# C5.0 
+# C5.0
 # 745 samples
 # 121 predictors
-# Resampling: Bootstrapped (10 reps) 
-#   model  trials  Accuracy   Kappa    
+# Resampling: Bootstrapped (10 reps)
+#   model  trials  Accuracy   Kappa
 # rules  100     0.6987109  0.3931187
 
 # With buffers
-# C5.0 
+# C5.0
 # 745 samples
 # 121 predictors
-# Resampling: Bootstrapped (10 reps) 
-# Summary of sample sizes: 667, 668, 672, 658, 680, 667, ... 
+# Resampling: Bootstrapped (10 reps)
+# Summary of sample sizes: 667, 668, 672, 658, 680, 667, ...
 # Resampling results across tuning parameters:
-#   model  trials  Accuracy   Kappa    
+#   model  trials  Accuracy   Kappa
 # tree    70     0.6968081  0.3854105
 
 model_drain2 <- C5.0(
