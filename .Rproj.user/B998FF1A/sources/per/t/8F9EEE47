@@ -1,26 +1,26 @@
 {
-    "id": "31BEBC41",
-    "path": "C:/Users/au542768/digijord/digijord_code/sample_kmeans_terra.R",
-    "project_path": "sample_kmeans_terra.R",
+    "id": "8F9EEE47",
+    "path": "C:/Users/au542768/digijord/digijord_code/sampletest.R",
+    "project_path": "sampletest.R",
     "type": "r_source",
-    "hash": "2364967021",
+    "hash": "1495417886",
     "contents": "",
     "dirty": false,
-    "created": 1689240849745.0,
+    "created": 1689251902570.0,
     "source_on_save": false,
     "relative_order": 17,
     "properties": {
         "source_window_id": "",
         "Source": "Source",
-        "cursorPosition": "454,35",
-        "scrollLine": "440"
+        "cursorPosition": "64,23",
+        "scrollLine": "40"
     },
     "folds": "",
-    "lastKnownWriteTime": 1689256122,
+    "lastKnownWriteTime": 1689255888,
     "encoding": "UTF-8",
     "collab_server": "",
     "source_window": "",
-    "last_content_update": 1689256122026,
+    "last_content_update": 1689255888120,
     "read_only": false,
     "read_only_alternatives": []
 }

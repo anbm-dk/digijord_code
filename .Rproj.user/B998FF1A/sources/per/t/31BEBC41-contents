@@ -2,11 +2,11 @@
 
 sample_kmeans <- function(
     input = NULL # Raster object
-    , clusters = NULL # Number of clusters
+    , clusters = 3 # Number of clusters
     , ncells = NULL # Number of cells to extract, otherwise uses all cells
     , use_xy = FALSE # Add xy coordinates as variables for clustering
     , only_xy = FALSE # Use only xy coordinates
-    , weights = NULL # Raster layer with weights between 0 and 1
+    , weights = NULL # Raster layer or numeric vector with weights between 0 and 1
     , scale = TRUE # Center and scale variables
     , pca = FALSE # Use principal component analysis on variables
     , tol_pca = 0 # Tolerance for pca (remove PCs below threshold)
@@ -32,7 +32,7 @@ sample_kmeans <- function(
     , shp = FALSE # Write output locations as a shapefile
     , args_pts = NULL # Arguments for writing output pointsx
     , cores = NULL # Number of cpu cores to use
-    , m = 2 # Number of blocks for clusterR
+    # , m = 2 # Number of blocks for clusterR
     , verbose = FALSE # Print messages during processing
     ) {
   backup_options <- options()
@@ -58,17 +58,35 @@ sample_kmeans <- function(
   }
 
   # Extraction for rasters
-  itisasraster <- is(input, "RasterLayer") |
-    is(input, "SpatRaster") |
-    is(input, "stars") |
-    is(input, "RasterStack") |
-    is(input, "RasterBrick")
+  itisasraster <- is(input, "SpatRaster")
+  
+  itispoints <- FALSE
+  if (is(input, "SpatVector")) {
+    if (terra::geomtype(input) == "points") {
+      itispoints <- TRUE
+    }
+  }
+  
+  if (only_xy) {
+    n_vars <- 2
+  } else {
+    if (itisasraster) {
+      n_vars <- terra::nlyr(input)
+    }
+    if (itispoints) {
+      n_vars <- ncol(input)
+    }
+    if (use_xy) {
+      n_vars <- n_vars + 2
+    }
+  }
+  
   if (itisasraster) {
     if (!is.null(input) & !is.null(weights)) {
-      if (compareRaster(input, weights) == FALSE) {
+      if (terra::compareGeom(input, weights) == FALSE) {
         stop("Input and weights rasters do not match")
       }
-      input <- stack(input, weights)
+      input <- c(input, weights)
     }
     if (is.null(ncells)) { # Use all cells if ncells is NULL
       df <- as.data.frame(input, xy = TRUE, na.rm = TRUE)
@@ -77,7 +95,7 @@ sample_kmeans <- function(
       if (ncells < clusters) {
         stop("ncells must be larger than the number of clusters")
       }
-      df <- sampleRandom(input, ncells, xy = TRUE) %>% as.data.frame()
+      df <- terra::spatSample(input, ncells, xy = TRUE, as.df = TRUE)
       ncells <- nrow(df)
     }
     if (!is.null(weights)) # Weighted sampling
@@ -93,14 +111,14 @@ sample_kmeans <- function(
   }
 
   # Extraction for spatial points
-  if (class(input) == "SpatialPointsDataFrame") {
+  if (itispoints) {
     if (!is.null(input) & !is.null(weights)) {
-      if (all.equal(input, weights) == FALSE) {
+      if (length(input) != length(weights)) {
         stop("Input and weights coordinates do not match")
       }
-      input@data <- cbind(input@data, weights@data)
+      input$weights <- weights
     }
-    df <- cbind(coordinates(input), input@data)
+    df <- cbind(terra::crds(input), terra::values(input))
     if (is.null(ncells)) { # Use all points if ncells is NULL
       ncells <- nrow(df)
     } else {
@@ -202,7 +220,8 @@ sample_kmeans <- function(
   }
 
   if (MiniBatch == FALSE) {
-    myclusters <- KMeans_rcpp(df,
+    myclusters <- ClusterR::KMeans_rcpp(
+      df,
       clusters = clusters,
       num_init = num_init,
       max_iters = max_iters,
@@ -214,7 +233,8 @@ sample_kmeans <- function(
       verbose = verbose
     )
   } else {
-    myclusters <- MiniBatchKmeans(df,
+    myclusters <- ClusterR::MiniBatchKmeans(
+      df,
       clusters = clusters,
       num_init = num_init,
       max_iters = max_iters,
@@ -257,7 +277,7 @@ sample_kmeans <- function(
         dist <- x %>%
           matrix(1) %>%
           data.frame() %>%
-          rdist(mycentroids)
+          fields::rdist(., mycentroids)
         out <- c(which.min(dist), min(dist, na.rm = TRUE))
       }
       return(out)
@@ -273,7 +293,7 @@ sample_kmeans <- function(
           "/"(sds) %>%
           matrix(1) %>%
           data.frame() %>%
-          rdist(mycentroids)
+          fields::rdist(., mycentroids)
         out <- c(which.min(dist), min(dist, na.rm = TRUE))
       }
       return(out)
@@ -290,7 +310,7 @@ sample_kmeans <- function(
         colnames(x) <- pcs$rotation %>% rownames()
         dist <- x %>%
           predict(pcs, .) %>%
-          rdist(mycentroids)
+          fields::rdist(., mycentroids)
         out <- c(which.min(dist), min(dist, na.rm = TRUE))
       }
       return(out)
@@ -309,7 +329,7 @@ sample_kmeans <- function(
         colnames(x) <- pcs$rotation %>% rownames()
         dist <- x %>%
           predict(pcs, .) %>%
-          rdist(mycentroids)
+          fields::rdist(., mycentroids)
         out <- c(which.min(dist), min(dist, na.rm = TRUE))
       }
       return(out)
@@ -322,20 +342,21 @@ sample_kmeans <- function(
     if (verbose == TRUE) {
       message("Producing coordinate raster.")
     }
-    xy_r <- input %>%
-      brick(values = FALSE, nl = 2) %>%
-      setValues(values = coordinates(.))
+    xy_r <- c(
+      terra::init(input, "x"),
+      terra::init(input, "y")
+    )
     if (use_xy == TRUE) {
       if (only_xy == TRUE) {
         input <- xy_r
       } else {
-        input <- raster::stack(xy_r, input)
+        input <- c(xy_r, input)
       }
     }
 
     # Drop weights raster from the input
-    if (!is.null(weights) & only_xy == FALSE) {
-      input <- dropLayer(input, nlayers(input))
+    if (terra::nlyr(input) > n_vars) {
+      input <- terra::subset(input, c(1:n_vars))
     }
 
     out$points <- NA
@@ -344,65 +365,58 @@ sample_kmeans <- function(
       message("Mapping clusters.")
     }
     if (is.null(cores)) {
-      out$clusters <- calc(input,
-        fun = map_clusters_fun,
-        forceapply = TRUE
+      out$clusters <- terra::app(
+        input,
+        fun = map_clusters_fun
       )
     } else {
-      require(snow)
-
-      closeAllConnections() # Remove any previous connections in case they are still open.
-
-      print(input) # debug
-      print(map_clusters_fun) # debug
-
-      beginCluster(cores)
-
-      cl <- getCluster()
-
+      showConnections()
+      
+      cl <- parallel::makeCluster(cores)
+      
+      parallel::clusterEvalQ(
+        cl,
+        {
+          library(fields)
+          library(magrittr)
+        }
+      )
+      
       export_this <- c("mycentroids")
-
-      print(mycentroids) # debug
 
       if (exists("pcs")) {
         export_this <- c(export_this, "pcs")
-        print(pcs) # debug
       }
       if (exists("means")) {
         export_this <- c(export_this, "means", "sds")
-        print(means) # debug
-        print(sds) # debug
       }
 
-      print(export_this) # debug
-
-      snow::clusterExport(cl,
-        export_this,
+      parallel::clusterExport(
+        cl,
+        c(
+          export_this
+        ),
         envir = environment()
       )
-
-      print(cl)
-
-      out$clusters <- clusterR(input,
-        calc,
-        args = list(
-          fun = map_clusters_fun,
-          forceapply = TRUE
-        ),
-        m = m,
-        verbose = TRUE
+      
+      out$clusters <- terra::app(
+        input,
+        fun = map_clusters_fun,
+        cores = cl
       )
-
-      endCluster()
+      
+      parallel::stopCluster(cl)
+      foreach::registerDoSEQ()
+      rm(cl)
     }
-
+    
     # Calculate weighted distances
     out$distances <- out$clusters[[2]]
     if (!is.null(weights)) {
       if (verbose == TRUE) {
         message("Calculating weighted distances.")
       }
-      s <- raster::stack(out$distances, weights)
+      s <- c(out$distances, weights)
       calc_wdist <- function(x) {
         if (x %>% sum() %>% is.na()) {
           out <- NA
@@ -417,31 +431,36 @@ sample_kmeans <- function(
       }
 
       if (is.null(cores)) {
-        wdist <- calc(s, fun = calc_wdist, forceapply = TRUE)
+        wdist <- terra::app(s, fun = calc_wdist)
       } else {
-        closeAllConnections()
-
-        beginCluster(cores)
-
-        wdist <- clusterR(s,
-          overlay,
-          args = list(
-            fun = calc_wdist,
-            forceapply = TRUE
-          )
+        cl <- parallel::makeCluster(cores)
+        
+        parallel::clusterEvalQ(
+          cl,
+          {
+            library(magrittr)
+          }
         )
+        
+        wdist <- terra::app(s, fun = calc_wdist, cores = cl)
 
-        endCluster()
+        parallel::stopCluster(cl)
+        foreach::registerDoSEQ()
+        rm(cl)
       }
       out$distances <- wdist
     }
+    
+    names(out$distances) <- "distance"
+    names(out$clusters) <- "cluster"
 
     # Write clusters and distances to files if requested
     if (!is.null(filename_d)) {
       if (verbose == TRUE) {
         message("Writing distance map to file.")
       }
-      do.call(writeRaster,
+      do.call(
+        terra::writeRaster,
         args = c(
           list(
             x = out$distances,
@@ -450,7 +469,7 @@ sample_kmeans <- function(
           args_d
         )
       )
-      out$distances <- raster(filename_d)
+      out$distances <- terra::rast(filename_d)
     }
     if (is.null(filename_cl)) {
       out$clusters <- out$clusters[[1]]
@@ -458,7 +477,8 @@ sample_kmeans <- function(
       if (verbose == TRUE) {
         message("Writing cluster map to file.")
       }
-      do.call(writeRaster,
+      do.call(
+        terra::writeRaster,
         args = c(
           list(
             x = out$clusters[[1]],
@@ -467,15 +487,15 @@ sample_kmeans <- function(
           args_d
         )
       )
-      out$clusters <- raster(filename_cl)
+      out$clusters <- terra::rast(filename_cl)
     }
 
     # Find the cluster centers
     if (verbose == TRUE) {
       message("Identifying cluster centers.")
     }
-    zs <- zonal(out$distances, out$clusters, min)
-    s <- stack(out$clusters, out$distances)
+    zs <- terra::zonal(out$distances, out$clusters, "min", na.rm = TRUE)
+    s <- c(out$clusters, out$distances)
 
     findpoint <- function(x) {
       if (x %>% sum() %>% is.na()) {
@@ -492,53 +512,52 @@ sample_kmeans <- function(
     }
 
     if (is.null(cores)) {
-      pts <- calc(s, fun = findpoint, forceapply = TRUE)
+      pts <- terra::app(s, fun = findpoint)
     } else {
-      closeAllConnections() # Remove any previous connections in case they are still open.
+      showConnections()
+      
+      cl <- parallel::makeCluster(cores)
+      
+      parallel::clusterEvalQ(
+        cl,
+        {
+          library(magrittr)
+        }
+      )
 
-      beginCluster(cores)
-
-      cl <- getCluster()
-
-      snow::clusterExport(cl,
+      parallel::clusterExport(cl,
         "zs",
         envir = environment()
       )
 
-      pts <- clusterR(s,
-        calc,
-        args = list(
-          fun = findpoint,
-          forceapply = TRUE
-        ),
-        m = m,
-        verbose = TRUE
-      )
+      pts <- terra::app(s, fun = findpoint, cores = cl)
 
-      endCluster()
+      parallel::stopCluster(cl)
+      foreach::registerDoSEQ()
+      rm(cl)
     }
+    
+    names(pts) <- "ID"
 
-    out$points <- raster::rasterToPoints(pts, spatial = FALSE) %>%
-      as.data.frame() %>%
-      dplyr::arrange(layer) %>%
-      dplyr::rename(ID = layer)
+    out$points <- as.data.frame(pts, xy = TRUE, na.rm = TRUE) %>%
+      dplyr::arrange(ID)
 
     out$points <- out$points[!duplicated(out$points$ID), ]
   }
 
   # Mapping procedure for spatial points
-  if (class(input) == "SpatialPointsDataFrame") {
+  if (itispoints) {
     if (use_xy == TRUE) {
       if (only_xy == TRUE) {
-        input@data <- coordinates(input)
+        terra::values(input) <- terra::crds(input)
       } else {
-        input@data <- cbind(coordinates(input), input@data)
+        terra::values(input) <- cbind(terra::crds(input), terra::values(input))
       }
     }
 
     # Drop weights from the input
-    if (!is.null(weights) & only_xy == FALSE) {
-      input@data <- input@data[, -ncol(input@data)]
+    if (ncol(terra::values(input)) > n_vars) {
+      terra::values(input) <- terra::values(input)[, c(1:n_vars)]
     }
 
     out$points <- NA
@@ -547,7 +566,8 @@ sample_kmeans <- function(
       message("Mapping clusters.")
     }
 
-    out$clusters <- apply(input@data,
+    out$clusters <- apply(
+      terra::values(input),
       1,
       FUN = map_clusters_fun
     ) %>% t()
@@ -559,7 +579,7 @@ sample_kmeans <- function(
       if (verbose == TRUE) {
         message("Calculating weighted distances.")
       }
-      out$distances <- out$distances / weights@data[, 1]
+      out$distances <- out$distances / weights
     }
 
     # Find the cluster centers
@@ -594,9 +614,9 @@ sample_kmeans <- function(
 
     pts <- apply(s, 1, FUN = findpoint)
 
-    out$points <- cbind(coordinates(input), pts, c(1:nrow(input))) %>%
+    out$points <- cbind(terra::crds(input), pts, c(1:length(pts))) %>%
       as.data.frame() %>%
-      drop_na()
+      stats::complete.cases()
 
     colnames(out$points) <- c("x", "y", "ID", "Index")
 
@@ -604,20 +624,26 @@ sample_kmeans <- function(
       arrange(ID)
   }
 
-  print(out$points) # Debug
-
   # Write points to file if requested
+  if (!is.null(filename_pts)) {
+    require(tools)
+    if (tools::file_ext(filename_pts) == "shp") {
+      shp <- TRUE
+    }
+  }
+  
+  if (shp == TRUE | sp_pts == TRUE) {
+    points_sp <- vect(out$points, geom = c("x", "y"), crs(input))
+  }
+  
   if (!is.null(filename_pts)) {
     if (verbose == TRUE) {
       message("Writing points to file.")
     }
-    require(tools)
-    if (file_ext(filename_pts) == "shp") {
-      shp <- TRUE
-    }
+    
     if (shp == FALSE) {
       do.call(
-        write.table,
+        utils::write.table,
         c(
           list(
             x = out$points,
@@ -627,11 +653,9 @@ sample_kmeans <- function(
         )
       )
     } else {
-      points_sp <- out$points
-      coordinates(points_sp) <- ~ x + y
-      proj4string(points_sp) <- crs(input)
+      
       do.call(
-        shapefile,
+       terra::writeVector,
         c(
           list(
             x = points_sp,
@@ -643,8 +667,7 @@ sample_kmeans <- function(
     }
   }
   if (sp_pts == TRUE) {
-    coordinates(out$points) <- ~ x + y
-    proj4string(out$points) <- crs(input)
+    out$points <- point_sp
   }
 
   options(backup_options)

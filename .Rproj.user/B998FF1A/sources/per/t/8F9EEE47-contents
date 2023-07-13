@@ -1,0 +1,69 @@
+# Sampling test
+
+library(terra)
+library(tidyverse)
+library(ClusterR) # Required in function, not to be confused with the clusterR function from raster
+library(Rcpp) # Required in function
+library(future.apply) # Required in function
+library(magrittr) # Required in function
+library(fields) # Required in function
+library(tools) # Required in function
+library(parallel)
+
+# Empty memory
+
+rm(list = ls())
+
+# Start up
+
+dir_code <- getwd()
+root <- dirname(dir_code)
+dir_dat <- paste0(root, "/digijord_data/")
+
+mycrs <- "EPSG:25832"
+
+try(rm(sample_kmeans))
+source("sample_kmeans_terra.R")
+
+library(obliquer)
+
+myvars <- unwrap(Vindum_covariates)
+
+crs(myvars) <- mycrs
+
+
+# Try it out for Vindum
+
+set.seed(1)
+
+letstry2 <- sample_kmeans(
+  input = myvars,
+  use_xy = TRUE,
+  pca = TRUE,
+  n_pcs = 5,
+  clusters = 10,
+  scale = TRUE,
+  filename_cl = paste0(dir_dat, "vindum_clusters.tif"),
+  args_cl = list(
+    overwrite = TRUE,
+    datatype = "INT2U"
+  ),
+  filename_d = paste0(dir_dat, "vindum_distances.tif"),
+  args_d = list(overwrite = TRUE),
+  filename_pts = paste0(dir_dat, "vindum_points.shp"),
+  args_pts = list(overwrite = TRUE),
+  # cores = 2,
+  verbose = TRUE,
+  sp_pts = FALSE
+)
+
+letstry2
+
+plot(letstry2$clusters)
+points(letstry2$points)
+plot(letstry2$distances, col = cividis(100))
+points(letstry2$points)
+
+
+
+# END
