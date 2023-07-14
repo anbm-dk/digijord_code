@@ -6,16 +6,13 @@ cropstack <- function(
     folder # target folder
     ) {
   for (i in 1:length(x)) {
-    require(raster)
     require(terra)
     require(magrittr)
     require(dplyr)
     require(tools)
     r <- x[i] %>%
       terra::rast(.)
-    dtype <- x[i] %>%
-      raster::raster(.) %>%
-      raster::dataType(.)
+    dtype <- terra::datatype(r)
     outname_base <- x[i] %>%
       base::basename(.) %>%
       tools::file_path_sans_ext(.) %>%

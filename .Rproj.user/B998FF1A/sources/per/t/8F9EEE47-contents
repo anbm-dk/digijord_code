@@ -23,7 +23,7 @@ dir_dat <- paste0(root, "/digijord_data/")
 mycrs <- "EPSG:25832"
 
 try(rm(sample_kmeans))
-source("sample_kmeans_terra.R")
+source("f_sample_kmeans.R")
 
 library(obliquer)
 
@@ -31,6 +31,10 @@ myvars <- unwrap(Vindum_covariates)
 
 crs(myvars) <- mycrs
 
+safe_colorblind_palette <- c(
+  "#88CCEE", "#CC6677", "#DDCC77", "#117733", "#332288", "#AA4499", 
+  "#44AA99", "#999933", "#882255", "#661100", "#6699CC", "#888888"
+)
 
 # Try it out for Vindum
 
@@ -39,8 +43,8 @@ set.seed(1)
 letstry2 <- sample_kmeans(
   input = myvars,
   use_xy = TRUE,
-  pca = TRUE,
-  n_pcs = 5,
+  # pca = TRUE,
+  # n_pcs = 5,
   clusters = 10,
   scale = TRUE,
   filename_cl = paste0(dir_dat, "vindum_clusters.tif"),
@@ -52,15 +56,15 @@ letstry2 <- sample_kmeans(
   args_d = list(overwrite = TRUE),
   filename_pts = paste0(dir_dat, "vindum_points.shp"),
   args_pts = list(overwrite = TRUE),
-  # cores = 2,
+  cores = 2,
   verbose = TRUE,
   sp_pts = FALSE
 )
 
 letstry2
 
-plot(letstry2$clusters)
-points(letstry2$points)
+letstry2$clusters %>% as.factor() %>% plot(col = safe_colorblind_palette)
+points(letstry2$points, pch = 21, bg = "white")
 plot(letstry2$distances, col = cividis(100))
 points(letstry2$points)
 

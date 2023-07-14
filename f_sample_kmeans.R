@@ -412,6 +412,7 @@ sample_kmeans <- function(
     
     # Calculate weighted distances
     out$distances <- out$clusters[[2]]
+    out$clusters <- out$clusters[[1]]
     if (!is.null(weights)) {
       if (verbose == TRUE) {
         message("Calculating weighted distances.")
@@ -667,7 +668,7 @@ sample_kmeans <- function(
     }
   }
   if (sp_pts == TRUE) {
-    out$points <- point_sp
+    out$points <- points_sp
   }
 
   options(backup_options)

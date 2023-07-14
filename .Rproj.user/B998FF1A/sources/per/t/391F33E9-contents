@@ -83,7 +83,6 @@ cl <- makeCluster(numCores)
 clusterEvalQ(
   cl,
   {
-    library(raster)
     library(terra)
     library(magrittr)
     library(dplyr)
