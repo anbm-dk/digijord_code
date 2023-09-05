@@ -26,9 +26,13 @@ dir_dat <- paste0(root, "/digijord_data/")
 # Accuracy by depth (OK)
 # Maps for depths (ok)
 # Adaptive kernel for point densities (OK)
-# Effects of som removal
+# Effects of som removal (OK)
 # Pdp with depth
 # Profile examples
+# Adjust resampling as part of training sequence (OK)
+# Select covariates as part of training sequence (OK)
+# Adjust number of OGCs (OK)
+# Weighted weights calculations based on overlap with interval in question (ok)
 
 # Test 1 - 8: Cubist
 # Test 8: New covariates (chelsa, river valley bottoms, hillyness)
@@ -424,18 +428,21 @@ get_dens <- function(datxy, sig) {
 # Tuning grid
 
 tgrid <- expand.grid(
-  nrounds = 100,
-  eta = seq(0.1, 1, 0.1),
+  nrounds = 10,
+  eta = 0.3,
   max_depth = 6,
   min_child_weight = 1,
   gamma = 0,
-  colsample_bytree = 0.5,
-  subsample = 0.3
+  colsample_bytree = 0.8,
+  subsample = 0.8
 )
 
+eta_test <- seq(0.1, 1, 0.1)
 max_depth_test <- seq(1, 20, 3)
 min_child_weight_test <- c(1, 2, 4, 8, 16, 32)
 gamma_test <- seq(0, 0.5, 0.1)
+colsample_bytree_test <- seq(0.6, 0.9, 0.1)
+subsample_test <- seq(0.6, 0.9, 0.1)
 
 objectives <- c(rep("reg:squarederror", 4), rep("reg:tweedie", 2))
 
@@ -446,12 +453,25 @@ trees_per_round <- 10
 # Remember to include full dataset in the final model
 n <- 1000
 
-use_all_points <- TRUE
-# use_all_points <- FALSE
+# use_all_points <- TRUE
+use_all_points <- FALSE
 
 # 9: Train models
 
+n_ogcs_models <- numeric()
+
+# Covariate selection:
+# Step 1: Decide the optimal number of OGCs
+# Step 2: Drop unimportant covariates
+
+# xgb optimization:
+# Step 1: Adjust learning rate
+# Step 2: Fit max_depth and min_child_weight
+# Step 3: Tune gamma
+# Step 4: Adjust subsampling
+
 extra_tuning_xgb <- TRUE
+# extra_tuning_xgb <- FALSE
 
 models <- list()
 
@@ -464,31 +484,13 @@ for (i in 1:length(fractions))
   if (metrics[i] == "RMSEw_log") {
     sumfun <- WeightedSummary_log
   } else {
-    sumfun <- WeightedSummary
-  }
-
-  cov_c_i <- cov_selected %>%
-    c("upper", "lower") %>%
-    paste0(collapse = " + ")
-  if (i %in% 1:4) {
-    cov_c_i <- cov_selected %>%
-      c("upper", "lower") %>%
-      c(., "SOM_removed") %>%
-      paste0(collapse = " + ")
-  } else {
-    if (i == 5) {
-      cov_c_i <- cov_selected %>%
-        c("upper", "lower") %>%
-        c(., "year") %>%
-        paste0(collapse = " + ")
+    if (metrics[i] == "RMSEw_sqrt") {
+      sumfun <- WeightedSummary_sqrt
+    } else {
+      sumfun <- WeightedSummary
     }
   }
-
-  formula_i <- paste0(frac, " ~ ", cov_c_i) %>%
-    as.formula()
-
-  # trdat <- obs_top %>%
-  #   filter(is.finite(.data[[frac]]))
+  
   trdat <- obs %>%
     filter(is.finite(.data[[frac]])) %>%
     filter(!is.na(UTMX) & !is.na(UTMY)) %>%
@@ -503,6 +505,7 @@ for (i in 1:length(fractions))
   trdat %<>% filter(fold < 4)
 
   if (!use_all_points) {
+    set.seed(1)
     trdat %<>% sample_n(n)
   }
 
@@ -514,6 +517,7 @@ for (i in 1:length(fractions))
   w_iterations <- round((w_maxdepth - w_startdepth) / w_increment, digits = 0)
 
   w_mat <- matrix(numeric(), nrow = nrow(trdat), ncol = w_iterations)
+  cmw_mat <- matrix(numeric(), nrow = nrow(trdat), ncol = w_iterations)
 
   for (j in 1:w_iterations)
   {
@@ -524,45 +528,75 @@ for (i in 1:length(fractions))
     trdat_ind[is.na(trdat_ind)] <- FALSE
 
     trdat_j <- trdat[trdat_ind, ]
+    
+    trdat_j %<>%
+      mutate(
+        thickness = lower - upper,
+        upper_int = case_when(
+          upper > upper_j ~ upper,
+          .default = upper_j
+        ),
+        lower_int = case_when(
+          lower < lower_j ~ lower,
+          .default = lower_j
+        ),
+        cm_int = lower_int - upper_int,
+        cm_w_int = case_when(
+          thickness == 0 ~ 1,
+          .default = cm_int / (w_interval*2)
+        )
+      )
+    
+    cmw_mat[trdat_ind, j] <- trdat_j$cm_w_int
 
-    # Sigma equal to the radius of a circle with an equal area per sample
-    sigma_j <- sqrt(42951 / (nrow(trdat_j) * pi)) * 1000
-
-    # Use the expected mean density as a baseline
-    mean_dens_j <- nrow(trdat_j) / (42951 * 10^6)
+    # # Sigma equal to the radius of a circle with an equal area per sample
+    # sigma_j <- sqrt(43107 / (nrow(trdat_j) * pi)) * 1000
+    # 
+    # # Use the expected mean density as a baseline
+    # mean_dens_j <- nrow(trdat_j) / (43107 * 10^6)
 
     # For SOC:
     # Separate densities for wetlands and uplands
     if (frac == "SOC") {
-      dens_j <- numeric(nrow(trdat_j))
+      areas <- c(39807, 3299)
+      
+      w_j <- numeric(nrow(trdat_j))
 
       for (k in 0:1) {
-        trdat_j_wl_ind <- trdat_j$wetlands_10m == k
+        trdat_j_wl_ind <- trdat_j$cwl_10m_crisp == k
 
         trdat_jk <- trdat_j[trdat_j_wl_ind, ]
+        
+        # Sigma equal to the radius of a circle with an equal area per sample
+        sigma_jk <- sqrt(areas[k + 1] / (nrow(trdat_jk) * pi)) * 1000
+        
+        # Use the expected mean density as a baseline
+        mean_dens_jk <- nrow(trdat_jk) / (areas[k + 1] * 10^6)
 
-        dens_j[trdat_j_wl_ind] <- get_dens(trdat_jk, sigma_j)
+        dens_jk <- get_dens(trdat_jk, sigma_jk)
+        
+        w_j[trdat_j_wl_ind] <- mean_dens_jk / dens_jk
       }
     } else {
+      # Sigma equal to the radius of a circle with an equal area per sample
+      sigma_j <- sqrt(43107 / (nrow(trdat_j) * pi)) * 1000
+      
+      # Use the expected mean density as a baseline
+      mean_dens_j <- nrow(trdat_j) / (43107 * 10^6)
+      
       dens_j <- get_dens(trdat_j, sigma_j)
+      
+      w_j <- mean_dens_j / dens_j
     }
 
-    w_j <- mean_dens_j / dens_j
-    w_j[w_j > 1] <- 1
+    # w_j[w_j > 1] <- 1
     w_mat[trdat_ind, j] <- w_j
   }
 
-  # dens_depth <- apply(
-  #   dens_mat,
-  #   1,
-  #   function(x) {
-  #     out <- mean(x, na.rm = TRUE)
-  #     return(out)
-  #   }
-  # )
-
-  # w_depth <- min(dens_depth, na.rm = TRUE) / dens_depth
-
+  cmw_mat[is.na(cmw_mat)] <- 0
+  
+  w_mat <- w_mat*cmw_mat
+  
   w_depth <- apply(
     w_mat,
     1,
@@ -571,8 +605,9 @@ for (i in 1:length(fractions))
       return(out)
     }
   )
-
+  
   w_depth[!is.finite(w_depth)] <- 1
+  w_depth[w_depth > 1] <- 1
 
   trdat$w <- w_depth
 
@@ -596,11 +631,118 @@ for (i in 1:length(fractions))
 
   showConnections()
 
-  # cl <- makePSOCKcluster(10)
-  # registerDoParallel(cl)
-
+  # Covariate selection
+  cov_c_i <- cov_selected %>%
+    c("upper", "lower")
+  if (i %in% 1:4) {
+    cov_c_i <- cov_selected %>%
+      c("upper", "lower") %>%
+      c(., "SOM_removed")
+  } else {
+    if (i == 5) {
+      cov_c_i <- cov_selected %>%
+        c("upper", "lower") %>%
+        c(., "year")
+    }
+  }
+  
+  # CS Step 1: Decide the optimal number of OGCs
+  ogcs_names <- grep('ogc_pi', cov_c_i, value = TRUE)
+  covs_not_ogc <- grep('ogc_pi', cov_c_i, value = TRUE, invert = TRUE)
+  
+  ogcs_names_list <- list(ogcs_names)
+  n_ogcs_v <- numeric()
+  
+  m <- 1
+  n_ogcs <- length(ogcs_names_list[[m]])
+  n_ogcs_v[m] <- n_ogcs
+  
+  while (n_ogcs > 2) {
+    m <- m + 1
+    ogcs_names_list[[m]] <- ogcs_names_list[[m - 1]][c(TRUE, FALSE)]
+    n_ogcs <- length(ogcs_names_list[[m]])
+    n_ogcs_v[m] <- n_ogcs
+  }
+  
+  ogcs_names_list %<>% lapply(., function(x) {c(covs_not_ogc, x)})
+  ogcs_names_list[[length(ogcs_names_list) + 1]] <- covs_not_ogc
+  n_ogcs_v %<>% c(., 0)
+  
+  print("Testing OGCs")
+  
+  models_ogc_test <- ogcs_names_list %>%
+    lapply(
+      .,
+      function(x) {
+        cov_p_i <- x %>% paste0(collapse = " + ")
+        
+        formula_i <- paste0(frac, " ~ ", cov_p_i) %>%
+          as.formula()
+        
+        set.seed(1)
+        
+        out <- caret::train(
+          form = formula_i,
+          data = trdat,
+          method = "xgbTree",
+          na.action = na.pass,
+          tuneGrid = tgrid,
+          trControl = trainControl(
+            index = folds_i,
+            savePredictions = "final",
+            predictionBounds = c(bounds_lower[i], bounds_upper[i]),
+            summaryFunction = sumfun,
+            allowParallel = FALSE
+          ),
+          metric = metrics[i],
+          maximize = FALSE,
+          weights = trdat$w,
+          num_parallel_tree = trees_per_round,
+          objective = objectives[i]
+        )
+        return(out)
+      }
+    )
+  
+  ogc_results <- models_ogc_test %>% lapply(
+    ., function(x) x$results %>% select(any_of(metrics[i])) %>% min()
+  ) %>%
+    unlist()
+  
+  which_ogc_ind <- which.min(ogc_results)
+  
+  ogc_df <- data.frame(
+    fraction = frac,
+    n_ogcs = n_ogcs_v,
+    acc = ogc_results,
+    metric = metrics[i]
+  )
+  
+  write.table(
+    ogc_df,
+    paste0(dir_results, "ogc_acc_", frac, ".csv"),
+    row.names = FALSE,
+    col.names = TRUE,
+    sep = ";"
+    )
+  
+  n_ogcs_models[i] <- n_ogcs_v[which_ogc_ind]
+  
+  # CS Step 2: Drop unimportant covariates
+  cov_c_i <- varImp(models_ogc_test[[which_ogc_ind]])$importance %>%
+    rownames_to_column() %>%
+    mutate(scaled = Overall/sum(Overall),
+           cumul = cumsum(scaled)) %>%
+    filter(cumul < 0.99) %>%
+    .$rowname
+  
+  cov_p_i <- cov_c_i %>% paste0(collapse = " + ")
+  
+  formula_i <- paste0(frac, " ~ ", cov_p_i) %>%
+    as.formula()
+  
   # xgboost optimization
-  # 1: Fit learning rate (eta) and nrounds
+  # 1: Fit learning rate (eta) [and nrounds]
   print("Step 1")
 
   set.seed(1)
@@ -610,7 +752,15 @@ for (i in 1:length(fractions))
     data = trdat,
     method = "xgbTree",
     na.action = na.pass,
-    tuneGrid = tgrid,
+    tuneGrid = expand.grid(
+      nrounds = tgrid$nrounds,
+      eta = eta_test, # NB
+      max_depth = tgrid$max_depth,
+      min_child_weight = tgrid$min_child_weight,
+      gamma = tgrid$gamma,
+      colsample_bytree = tgrid$colsample_bytree,
+      subsample = tgrid$subsample
+    ),
     trControl = trainControl(
       index = folds_i,
       savePredictions = "final",
@@ -629,7 +779,7 @@ for (i in 1:length(fractions))
   # rm(cl)
 
   if (extra_tuning_xgb) {
-    # 2: Fit max_depth and min_child_weight
+    # xgb opt Step 2: Fit max_depth and min_child_weight
     print("Step 2")
 
     set.seed(1)
@@ -662,7 +812,7 @@ for (i in 1:length(fractions))
       objective = objectives[i]
     )
 
-    # 3: Tune gamma
+    # xgb opt Step 3: Tune gamma
     print("Step 3")
 
     set.seed(1)
@@ -675,8 +825,8 @@ for (i in 1:length(fractions))
       tuneGrid = expand.grid(
         nrounds = models[[i]]$bestTune$nrounds,
         eta = models[[i]]$bestTune$eta,
-        max_depth = model2$bestTune$max_depth,
-        min_child_weight = model2$bestTune$min_child_weight,
+        max_depth = models[[i]]$bestTune$max_depth,
+        min_child_weight = models[[i]]$bestTune$min_child_weight,
         gamma = gamma_test, # NB
         colsample_bytree = models[[i]]$bestTune$colsample_bytree,
         subsample = models[[i]]$bestTune$subsample
@@ -696,6 +846,41 @@ for (i in 1:length(fractions))
     )
 
     models[[i]] <- model3
+    
+    # xgb opt Step 4: Adjust subsampling
+    print("Step 4")
+    
+    set.seed(1)
+    
+    model4 <- caret::train(
+      form = formula_i,
+      data = trdat,
+      method = "xgbTree",
+      na.action = na.pass,
+      tuneGrid = expand.grid(
+        nrounds = models[[i]]$bestTune$nrounds,
+        eta = models[[i]]$bestTune$eta,
+        max_depth = models[[i]]$bestTune$max_depth,
+        min_child_weight = models[[i]]$bestTune$min_child_weight,
+        gamma = models[[i]]$bestTune$gamma,
+        colsample_bytree = colsample_bytree_test,
+        subsample = subsample_test
+      ),
+      trControl = trainControl(
+        index = folds_i,
+        savePredictions = "final",
+        predictionBounds = c(bounds_lower[i], bounds_upper[i]),
+        summaryFunction = sumfun,
+        allowParallel = FALSE
+      ),
+      metric = metrics[i],
+      maximize = FALSE,
+      weights = trdat$w,
+      num_parallel_tree = trees_per_round,
+      objective = objectives[i]
+    )
+    
+    models[[i]] <- model4
   }
   print(models[[i]])
 
@@ -705,7 +890,7 @@ for (i in 1:length(fractions))
   )
 }
 
-# 4: Reduce learning rate, use cv to optimize nrounds, early stopping
+# (last step: Reduce learning rate, use cv to optimize nrounds, early stopping)
 
 models_loaded <- lapply(
   1:6,
@@ -728,8 +913,12 @@ models_sum <- lapply(models, function(x) {
   if ("RMSEw" %in% names(results)) {
     out <- results %>% filter(RMSEw == min(RMSEw))
   } else {
-    out <- results %>%
-      filter(RMSEw_log == min(RMSEw_log))
+    if ("RMSEw_sqrt" %in% names(results)) {
+      out <- results %>% filter(RMSEw_sqrt == min(RMSEw_sqrt))
+    } else {
+      out <- results %>%
+        filter(RMSEw_log == min(RMSEw_log))
+    }
   }
   return(out)
 }) %>%
@@ -737,6 +926,9 @@ models_sum <- lapply(models, function(x) {
   mutate(
     Fraction = fractions,
     .before = 1
+  ) %>% mutate(
+    ogcs = n_ogcs_models,
+    .after = 1
   ) %T>%
   write.table(
     file = paste0(dir_results, "/models_sum.csv"),
@@ -765,6 +957,7 @@ imp_all <- models %>%
     names_from = fraction,
     values_from = Overall
   ) %>%
+  replace(is.na(.), 0) %>%
   rowwise() %>%
   mutate(mean_imp = mean(c_across(-covariate))) %>%
   arrange(-mean_imp) %T>%
@@ -873,7 +1066,7 @@ tiff(
 
 allpred %>%
   ggplot(aes(x = obs, y = pred)) +
-  geom_point(alpha = .01, shape = 16) +
+  geom_point(alpha = 1000/nrow(allpred), shape = 16) +
   facet_wrap(~fraction, nrow = 2, scales = "free") +
   theme(aspect.ratio = 1) +
   scale_x_continuous(expand = c(0, 0)) +
@@ -891,6 +1084,7 @@ dev.off()
 # Accuracy vs depth
 
 depths_acc <- c(0:200)
+d_interval_exp <- 10
 
 d_out <- list()
 
@@ -906,22 +1100,22 @@ for (i in 1:length(fractions)) {
     function(x) {
       ddat <- mdata %>%
         filter(
-          upper < x + 10 & lower > x - 10
+          upper < x + d_interval_exp & lower > x - d_interval_exp
         ) %>%
         mutate(
           thickness = lower - upper,
           upper_int = case_when(
-            upper > x - 10 ~ upper,
-            .default = x - 10
+            upper > x - d_interval_exp ~ upper,
+            .default = x - d_interval_exp
           ),
           lower_int = case_when(
-            lower < x + 10 ~ lower,
-            .default = x + 10
+            lower < x + d_interval_exp ~ lower,
+            .default = x + d_interval_exp
           ),
           cm_int = lower_int - upper_int,
           cm_w_int = case_when(
             thickness == 0 ~ 1,
-            .default = cm_int / thickness
+            .default = cm_int / (d_interval_exp*2)
           ),
           combined_weights = cm_w_int * weights
         )
@@ -1069,6 +1263,7 @@ l %<>% mutate(
     category == "SO" ~ "Soil and organisms",
     category == "CR" ~ "Climate and topography",
     category == "OR" ~ "Organisms and topography",
+    category == "O" ~ "Organisms",
     .default = category
   )
 )
@@ -1124,8 +1319,10 @@ source("f_predict_passna.R")
 
 # Make the maps
 
-uppers <- c(0, 25, 50, 100)
-lowers <- c(25, 50, 100, 200)
+breaks <- c(0, 30, 60, 100, 200)
+
+uppers <- breaks %>% rev() %>% .[-1] %>% rev()
+lowers <- breaks %>% .[-1]
 
 map_spec <- expand_grid(
   fraction_i = 1:6,
@@ -1227,9 +1424,9 @@ for (i in 1:length(fractions)) {
 }
 
 # SOC depth distribution is very obviously wrong. I will need to fix it. (ok)
-# Using a separate density for wetlands fixes this issue.
+# Using a separate density for wetlands fixes this issue. (ok)
 # Ideally, I should use the extent of the central wetlands, which is the survey
-# area for the SINKS dataset-
+# area for the SINKS dataset. (ok)
 
 
 # Figures for 10 km maps
