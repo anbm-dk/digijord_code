@@ -433,16 +433,16 @@ tgrid <- expand.grid(
   max_depth = 6,
   min_child_weight = 1,
   gamma = 0,
-  colsample_bytree = 0.8,
-  subsample = 0.8
+  colsample_bytree = 0.75,
+  subsample = 0.75
 )
 
 eta_test <- seq(0.1, 1, 0.1)
 max_depth_test <- seq(1, 20, 3)
 min_child_weight_test <- c(1, 2, 4, 8, 16, 32)
-gamma_test <- seq(0, 0.5, 0.1)
-colsample_bytree_test <- seq(0.6, 0.9, 0.1)
-subsample_test <- seq(0.6, 0.9, 0.1)
+gamma_test <- seq(0, 0.6, 0.1)
+colsample_bytree_test <- seq(0.5, 1.0, 0.1)
+subsample_test <- seq(0.5, 1.0, 0.1)
 
 objectives <- c(rep("reg:squarederror", 4), rep("reg:tweedie", 2))
 
@@ -453,12 +453,17 @@ trees_per_round <- 10
 # Remember to include full dataset in the final model
 n <- 1000
 
-# use_all_points <- TRUE
-use_all_points <- FALSE
+use_all_points <- TRUE
+# use_all_points <- FALSE
+
+extra_tuning_xgb <- TRUE
+# extra_tuning_xgb <- FALSE
 
 # 9: Train models
 
 n_ogcs_models <- numeric()
+
+weights_objects <- list()
 
 # Covariate selection:
 # Step 1: Decide the optimal number of OGCs
@@ -469,9 +474,7 @@ n_ogcs_models <- numeric()
 # Step 2: Fit max_depth and min_child_weight
 # Step 3: Tune gamma
 # Step 4: Adjust subsampling
-
-extra_tuning_xgb <- TRUE
-# extra_tuning_xgb <- FALSE
+# Step 5: Increase nrounds, readjust learning rate
 
 models <- list()
 
@@ -514,14 +517,15 @@ for (i in 1:length(fractions))
   w_increment <- 1
   w_startdepth <- 0
   w_maxdepth <- 200
-  w_iterations <- round((w_maxdepth - w_startdepth) / w_increment, digits = 0)
+  w_depths <- seq(w_startdepth, w_maxdepth, w_increment)
+  w_iterations <- length(w_depths)
 
   w_mat <- matrix(numeric(), nrow = nrow(trdat), ncol = w_iterations)
-  cmw_mat <- matrix(numeric(), nrow = nrow(trdat), ncol = w_iterations)
+  cm_mat <- matrix(numeric(), nrow = nrow(trdat), ncol = w_iterations)
 
   for (j in 1:w_iterations)
   {
-    upper_j <- w_startdepth + w_increment * (j - 1) - w_interval
+    upper_j <- w_depths[j] - w_interval
     lower_j <- upper_j + w_interval * 2
 
     trdat_ind <- trdat$lower > upper_j & trdat$upper < lower_j
@@ -540,14 +544,13 @@ for (i in 1:length(fractions))
           lower < lower_j ~ lower,
           .default = lower_j
         ),
-        cm_int = lower_int - upper_int,
-        cm_w_int = case_when(
+        cm_int = case_when(
           thickness == 0 ~ 1,
-          .default = cm_int / (w_interval*2)
+          .default = lower_int - upper_int
         )
       )
     
-    cmw_mat[trdat_ind, j] <- trdat_j$cm_w_int
+    cm_mat[trdat_ind, j] <- trdat_j$cm_int
 
     # # Sigma equal to the radius of a circle with an equal area per sample
     # sigma_j <- sqrt(43107 / (nrow(trdat_j) * pi)) * 1000
@@ -589,25 +592,35 @@ for (i in 1:length(fractions))
       w_j <- mean_dens_j / dens_j
     }
 
-    # w_j[w_j > 1] <- 1
+    w_j[w_j > 1] <- 1
     w_mat[trdat_ind, j] <- w_j
   }
 
-  cmw_mat[is.na(cmw_mat)] <- 0
+  cm_mat[is.na(cm_mat)] <- 0
   
-  w_mat <- w_mat*cmw_mat
+  cm_sums <- apply(cm_mat, 1, sum)
   
-  w_depth <- apply(
-    w_mat,
+  w_cm_mat <- w_mat*cm_mat
+  
+  w_cm_sums <- apply(
+    w_cm_mat,
     1,
     function(x) {
-      out <- mean(x, na.rm = TRUE)
+      out <- sum(x, na.rm = TRUE)
       return(out)
     }
   )
   
-  w_depth[!is.finite(w_depth)] <- 1
-  w_depth[w_depth > 1] <- 1
+  w_depth <- w_cm_sums / cm_sums
+  w_depth[!is.finite(w_depth)] <- 0
+  # w_depth[w_depth > 1] <- 1
+  
+  weights_objects[[i]] <- list()
+  weights_objects[[i]]$cm_mat <- cm_mat
+  weights_objects[[i]]$cm_sums <- cm_sums
+  weights_objects[[i]]$w_cm_mat <- w_cm_mat
+  weights_objects[[i]]$w_cm_sums <- w_cm_sums
+  weights_objects[[i]]$w_depth <- w_depth
 
   trdat$w <- w_depth
 
@@ -823,13 +836,13 @@ for (i in 1:length(fractions))
       method = "xgbTree",
       na.action = na.pass,
       tuneGrid = expand.grid(
-        nrounds = models[[i]]$bestTune$nrounds,
-        eta = models[[i]]$bestTune$eta,
-        max_depth = models[[i]]$bestTune$max_depth,
-        min_child_weight = models[[i]]$bestTune$min_child_weight,
+        nrounds = model2$bestTune$nrounds,
+        eta = model2$bestTune$eta,
+        max_depth = model2$bestTune$max_depth,
+        min_child_weight = model2$bestTune$min_child_weight,
         gamma = gamma_test, # NB
-        colsample_bytree = models[[i]]$bestTune$colsample_bytree,
-        subsample = models[[i]]$bestTune$subsample
+        colsample_bytree = model2$bestTune$colsample_bytree,
+        subsample = model2$bestTune$subsample
       ),
       trControl = trainControl(
         index = folds_i,
@@ -858,11 +871,11 @@ for (i in 1:length(fractions))
       method = "xgbTree",
       na.action = na.pass,
       tuneGrid = expand.grid(
-        nrounds = models[[i]]$bestTune$nrounds,
-        eta = models[[i]]$bestTune$eta,
-        max_depth = models[[i]]$bestTune$max_depth,
-        min_child_weight = models[[i]]$bestTune$min_child_weight,
-        gamma = models[[i]]$bestTune$gamma,
+        nrounds = model3$bestTune$nrounds,
+        eta = model3$bestTune$eta,
+        max_depth = model3$bestTune$max_depth,
+        min_child_weight = model3$bestTune$min_child_weight,
+        gamma = model3$bestTune$gamma,
         colsample_bytree = colsample_bytree_test,
         subsample = subsample_test
       ),
@@ -880,7 +893,40 @@ for (i in 1:length(fractions))
       objective = objectives[i]
     )
     
-    models[[i]] <- model4
+    # xgb opt Step 5: Increase nrounds, readjust learning rate
+    print("Step 5")
+    
+    set.seed(1)
+    
+    model5 <- caret::train(
+      form = formula_i,
+      data = trdat,
+      method = "xgbTree",
+      na.action = na.pass,
+      tuneGrid = expand.grid(
+        nrounds = model4$bestTune$nrounds*10,
+        eta = eta_test, # NB
+        max_depth = model4$bestTune$max_depth,
+        min_child_weight = model4$bestTune$min_child_weight,
+        gamma = model4$bestTune$gamma,
+        colsample_bytree = model4$bestTune$colsample_bytree,
+        subsample = model4$bestTune$subsample
+      ),
+      trControl = trainControl(
+        index = folds_i,
+        savePredictions = "final",
+        predictionBounds = c(bounds_lower[i], bounds_upper[i]),
+        summaryFunction = sumfun,
+        allowParallel = FALSE
+      ),
+      metric = metrics[i],
+      maximize = FALSE,
+      weights = trdat$w,
+      num_parallel_tree = trees_per_round,
+      objective = objectives[i]
+    )
+    
+    models[[i]] <- model5
   }
   print(models[[i]])
 
@@ -889,6 +935,13 @@ for (i in 1:length(fractions))
     paste0(dir_results, "/model_", frac, ".rds")
   )
 }
+
+names(weights_objects) <- fractions
+
+saveRDS(
+  weights_objects,
+  paste0(dir_results, "/weights_objects.rds")
+)
 
 # (last step: Reduce learning rate, use cv to optimize nrounds, early stopping)
 
@@ -1081,6 +1134,7 @@ allpred %>%
 
 dev.off()
 
+
 # Accuracy vs depth
 
 depths_acc <- c(0:200)
@@ -1091,52 +1145,41 @@ d_out <- list()
 # This operation is somewhat slow
 # Also calculate statistics by depth for the observations
 
-for (i in 1:length(fractions)) {
+for (i in 1:length(models)) {
+  depth_weights <- weights_objects[[i]]$w_cm_mat / weights_objects[[i]]$w_cm_sums
+  
   mdata <- models[[i]]$pred %>%
     bind_cols(models[[i]]$trainingData)
-
-  d_out[[i]] <- lapply(
-    depths_acc,
+  
+  d_out[[i]] <- apply(
+    depth_weights, 2, 
     function(x) {
-      ddat <- mdata %>%
-        filter(
-          upper < x + d_interval_exp & lower > x - d_interval_exp
-        ) %>%
-        mutate(
-          thickness = lower - upper,
-          upper_int = case_when(
-            upper > x - d_interval_exp ~ upper,
-            .default = x - d_interval_exp
-          ),
-          lower_int = case_when(
-            lower < x + d_interval_exp ~ lower,
-            .default = x + d_interval_exp
-          ),
-          cm_int = lower_int - upper_int,
-          cm_w_int = case_when(
-            thickness == 0 ~ 1,
-            .default = cm_int / (d_interval_exp*2)
-          ),
-          combined_weights = cm_w_int * weights
-        )
-
+      ddat <- data.frame(
+        pred = mdata$pred,
+        obs = mdata$obs,
+        w_div = x,
+        weights = mdata$weights
+      ) %>%
+        drop_na()
+      
       out <- data.frame(
-        Fraction = fractions[i],
-        Depth = x,
         RMSEw = get_RMSEw(
           select(ddat, pred, obs),
-          ddat$combined_weights
+          ddat$w_div
         ),
         R2w = get_R2w(
           select(ddat, pred, obs),
-          ddat$combined_weights
+          ddat$w_div
         ),
-        Weights = sum(ddat$combined_weights) / mean(ddat$cm_w_int)
+        Weights = sum(ddat$w_div)
       )
-
+      
       return(out)
     }
   ) %>% bind_rows()
+  
+  d_out[[i]]$Fraction <- fractions[i]
+  d_out[[i]]$Depth = w_depths
 }
 
 d_out %<>%
