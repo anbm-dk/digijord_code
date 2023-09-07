@@ -441,8 +441,8 @@ eta_test <- seq(0.1, 1, 0.1)
 max_depth_test <- seq(1, 20, 3)
 min_child_weight_test <- c(1, 2, 4, 8, 16, 32)
 gamma_test <- seq(0, 0.6, 0.1)
-colsample_bytree_test <- seq(0.5, 1.0, 0.1)
-subsample_test <- seq(0.5, 1.0, 0.1)
+colsample_bytree_test <- seq(0.4, 1.0, 0.1)
+subsample_test <- seq(0.4, 1.0, 0.1)
 
 objectives <- c(rep("reg:squarederror", 4), rep("reg:tweedie", 2))
 
@@ -824,6 +824,8 @@ for (i in 1:length(fractions))
       num_parallel_tree = trees_per_round,
       objective = objectives[i]
     )
+    
+    models[[i]] <- model2
 
     # xgb opt Step 3: Tune gamma
     print("Step 3")
@@ -893,8 +895,16 @@ for (i in 1:length(fractions))
       objective = objectives[i]
     )
     
+    models[[i]] <- model4
+    
     # xgb opt Step 5: Increase nrounds, readjust learning rate
     print("Step 5")
+    
+    eta_test_final <- model4$bestTune$eta %>%
+      log() %>%
+      seq(., . + log(0.01), length.out = 9) %>%
+      exp() %>%
+      round(3)
     
     set.seed(1)
     
@@ -905,7 +915,7 @@ for (i in 1:length(fractions))
       na.action = na.pass,
       tuneGrid = expand.grid(
         nrounds = model4$bestTune$nrounds*10,
-        eta = eta_test, # NB
+        eta = eta_test_final, # NB
         max_depth = model4$bestTune$max_depth,
         min_child_weight = model4$bestTune$min_child_weight,
         gamma = model4$bestTune$gamma,
@@ -942,8 +952,6 @@ saveRDS(
   weights_objects,
   paste0(dir_results, "/weights_objects.rds")
 )
-
-# (last step: Reduce learning rate, use cv to optimize nrounds, early stopping)
 
 models_loaded <- lapply(
   1:6,
@@ -1307,6 +1315,7 @@ l %<>% mutate(
     category == "CR" ~ "Climate and topography",
     category == "OR" ~ "Organisms and topography",
     category == "O" ~ "Organisms",
+    category == "RP" ~ "Topography and parent materials",
     .default = category
   )
 )
@@ -1561,28 +1570,5 @@ tiff(
 print(plot_jb)
 
 dev.off()
-
-
-int_i <- c(10, 40)
-
-trdat2 <- trdat %>% filter(
-  upper < int_i[2] & lower > int_i[1]
-)
-
-trdat2 %<>%
-  mutate(
-    thickness = lower - upper,
-    upper_int = case_when(
-      upper > int_i[1] ~ upper,
-      .default = int_i[1]
-    ),
-    lower_int = case_when(
-      lower < int_i[2] ~ lower,
-      .default = int_i[2]
-    ),
-    cm_int = lower_int - upper_int
-  )
-
-
 
 # END
