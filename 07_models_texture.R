@@ -1097,14 +1097,32 @@ getpred <- function(x2, i2) {
     mutate(
       pred = ifelse(pred < 0, 0, pred)
     )
-  # if (i2 > 4) df %<>% exp
+  if (i2 == 5) df %<>% log()
+  if (i2 == 6) df %<>% sqrt()
+  depths_x <- x2$trainingData %>%
+    select(upper, lower)
+  df %<>% bind_cols(depths_x)
   df %<>% mutate(
     fraction = fractions[i2],
-    upper = quantile(obs, 0.99)
-  ) %>%
-    filter(obs < upper) %>%
-    filter(pred < upper) %>%
-    filter(obs >= 0)
+    ax_max = quantile(obs, 0.99),
+  ) 
+  if (i2 == 5) {
+    df %<>% mutate(
+      ax_min = quantile(obs, 0.01)
+    )
+  } else {
+    df %<>% mutate(
+      ax_min = 0
+    )
+  }
+  df %<>%
+    filter(
+      obs < ax_max,
+      pred < ax_max,
+      obs >= ax_min,
+      pred >= ax_min
+    )
+
   return(df)
 }
 
@@ -1114,8 +1132,97 @@ allpred <- foreach(i = 1:6, .combine = rbind) %do%
 allpred$fraction %<>% factor(levels = fractions)
 
 levels(allpred$fraction) <- c(
-  "Clay", "Silt", "Fine sand", "Coarse sand", "SOC", "CaCO3"
+  "Clay", "Silt", "Fine sand", "Coarse sand", "log(SOC)", "sqrt(CaCO3)"
 )
+
+my_breaks_dens <- c(0, 0.01, 0.02, 0.03, 0.05, 0.07, 0.1, 0.2, 0.3, 0.5, 0.7, 1)
+
+# mycolors1 <- rgb(
+#   seq(1, 0, length.out = 10),
+#   seq(1, 1, length.out = 10),
+#   seq(1, 1, length.out = 10)
+#   )
+mycolors2 <- rgb(
+  seq(0, 0, length.out = 20),
+  seq(1, 0, length.out = 20),
+  seq(1, 1, length.out = 20)
+)
+mycolors3 <- rgb(
+  seq(0, 0, length.out = 21),
+  seq(0, 0, length.out = 21),
+  seq(1, 0, length.out = 21)
+)
+
+mycolorgradient <- c(
+  # mycolors1,
+  mycolors2[-1],
+  mycolors3[-1])
+
+for (i in 1:(length(breaks) - 1)) {
+  allpred_i <- allpred %>%
+    filter(
+      upper < breaks[i + 1],
+      lower > breaks[i]
+    )
+  
+  myplot <- allpred_i %>%
+    ggplot(aes(x = obs, y = pred)) +
+    ggtitle(
+      paste0(
+        "Accuracy at ", breaks[i], " - ", breaks[i + 1], " cm depth"
+      )
+    ) + 
+    geom_hex(
+      aes(
+        alpha = stat(ndensity),
+        fill = stat(ndensity)
+      ),
+      bins = 30
+    ) +
+    scale_fill_gradientn(
+      colours = mycolorgradient,
+      aesthetics = "fill",
+      breaks = my_breaks_dens,
+      limits= c(0, 1),
+      na.value = 0,
+      trans = "sqrt"
+    ) +
+    guides(
+      fill = "legend"
+      , alpha = "legend"
+    ) +
+    scale_alpha_continuous(
+      limits= c(0, 1),
+      range = c(0.05, 1),
+      breaks = my_breaks_dens,
+      na.value = 0,
+      trans = "sqrt"
+    ) +
+    facet_wrap(~fraction, nrow = 2, scales = "free") +
+    theme_bw() +
+    theme(aspect.ratio = 1) +
+    scale_x_continuous(expand = c(0, 0)) +
+    scale_y_continuous(expand = c(0, 0)) +
+    geom_abline(col = "red") +
+    geom_blank(aes(y = ax_max)) +
+    geom_blank(aes(x = ax_max)) +
+    geom_blank(aes(y = ax_min)) +
+    geom_blank(aes(y = ax_min)) +
+    xlab("Observation (%)") +
+    ylab("Prediction (%)")
+  
+  tiff(
+    paste0(dir_results, "/accuracy_", LETTERS[i], "_test", testn, ".tiff"),
+    width = 15,
+    height = 10,
+    units = "cm",
+    res = 300
+  )
+  
+  print(myplot)
+  
+  try(dev.off())
+}
 
 tiff(
   paste0(dir_results, "/accuracy_test", testn, ".tiff"),
@@ -1127,36 +1234,63 @@ tiff(
 
 allpred %>%
   ggplot(aes(x = obs, y = pred)) +
-  geom_point(alpha = 1000/nrow(allpred), shape = 16) +
+  geom_hex(
+    aes(
+      alpha = stat(ndensity),
+      fill = stat(ndensity)
+        ),
+    bins = 30
+    ) +
+  scale_fill_gradientn(
+    colours = mycolorgradient,
+    aesthetics = "fill",
+    breaks = my_breaks_dens,
+    limits= c(0, 1),
+    na.value = 0,
+    trans = "sqrt"
+  ) +
+  guides(
+    fill = "legend"
+    , alpha = "legend"
+    ) +
+  scale_alpha_continuous(
+    limits= c(0, 1),
+    range = c(0.05, 1),
+    breaks = my_breaks_dens,
+    na.value = 0,
+    trans = "sqrt"
+  ) +
   facet_wrap(~fraction, nrow = 2, scales = "free") +
+  theme_bw() +
   theme(aspect.ratio = 1) +
   scale_x_continuous(expand = c(0, 0)) +
   scale_y_continuous(expand = c(0, 0)) +
   geom_abline(col = "red") +
-  geom_blank(aes(y = upper)) +
-  geom_blank(aes(x = upper)) +
+  geom_blank(aes(y = ax_max)) +
+  geom_blank(aes(x = ax_max)) +
   geom_blank(aes(y = 0)) +
   geom_blank(aes(x = 0)) +
   xlab("Observation (%)") +
   ylab("Prediction (%)")
 
-dev.off()
+try(dev.off())
 
 
 # Accuracy vs depth
 
-depths_acc <- c(0:200)
-d_interval_exp <- 10
+# depths_acc <- c(0:200)
+# d_interval_exp <- 10
 
 d_out <- list()
 
-# This operation is somewhat slow
-# Also calculate statistics by depth for the observations
+# Also calculate statistics by depth for the observations (to do)
 
 for (i in 1:length(models)) {
   depth_weights <- weights_objects[[i]]$w_cm_mat / weights_objects[[i]]$w_cm_sums
   
   mdata <- models[[i]]$pred %>%
+    arrange(rowIndex) %>%
+    distinct(rowIndex, .keep_all = TRUE) %>%
     bind_cols(models[[i]]$trainingData)
   
   d_out[[i]] <- apply(
@@ -1207,8 +1341,12 @@ tiff(
 d_out %>%
   ggplot(aes(x = RMSEw, y = Depth)) +
   facet_wrap(~Fraction, nrow = 1, scales = "free_x") +
-  geom_path() +
-  scale_y_reverse(expand = c(0, 0))
+  geom_path(color = "red") +
+  scale_y_reverse(expand = c(0, 0)) +
+  scale_x_continuous(
+    guide = guide_axis(check.overlap = TRUE)
+    ) +
+  theme_bw()
 
 try(dev.off())
 try(dev.off())
@@ -1223,9 +1361,16 @@ tiff(
 
 d_out %>%
   ggplot(aes(x = R2w, y = Depth)) +
-  facet_wrap(~Fraction, nrow = 1, scales = "free_x") +
-  geom_path() +
-  scale_y_reverse(expand = c(0, 0))
+  facet_wrap(~Fraction, nrow = 1) +
+  geom_path(color = "red") +
+  scale_y_reverse(expand = c(0, 0)) +
+  scale_x_continuous(
+    guide = guide_axis(check.overlap = TRUE),
+    breaks = c(0, 0.3, 0.6),
+    expand = expansion(mult = c(0, 0), 
+                 add = c(0.01, 0.02))
+    ) +
+  theme_bw()
 
 try(dev.off())
 try(dev.off())
@@ -1240,9 +1385,16 @@ tiff(
 
 d_out %>%
   ggplot(aes(x = Weights, y = Depth)) +
-  facet_wrap(~Fraction, nrow = 1, scales = "free_x") +
-  geom_path() +
-  scale_y_reverse(expand = c(0, 0))
+  facet_wrap(~Fraction, nrow = 1) +
+  geom_path(color = "red") +
+  scale_y_reverse(expand = c(0, 0)) +
+  scale_x_continuous(
+    guide = guide_axis(check.overlap = TRUE),
+    breaks = c(0, 2000),
+    expand = expansion(mult = c(0.01, 0.1), 
+                       add = c(0.01, 0.1))
+    ) +
+  theme_bw()
 
 try(dev.off())
 try(dev.off())
