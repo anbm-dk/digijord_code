@@ -55,7 +55,8 @@ mycolnames <- c(
   "pH",
   "N",
   "BD",
-  "CEC"
+  "CEC",
+  "imputed"
 )
 
 # Start up
@@ -192,7 +193,8 @@ dsc2 <- dsc %>%
     fine_sand = FinSD * 100 / (Ler + Silt + FinSD + GrovSD),
     coarse_sand = GrovSD * 100 / (Ler + Silt + FinSD + GrovSD),
     SOC = Humus * 0.587,
-    SOM_removed = 0
+    SOM_removed = 0,
+    imputed = FALSE
   ) %>%
   select(any_of(mycolnames))
 
@@ -226,7 +228,8 @@ seges2 <- SEGES %>%
     ),
     SOM_removed = 1,
     pH = Rt - 0.5,
-    N = TotalNPct
+    N = TotalNPct,
+    imputed = FALSE
   ) %>%
   select(any_of(mycolnames))
 
@@ -355,9 +358,59 @@ plot(log(minvalue), log(maxvalue))
 plot(maxvalue / minvalue)
 
 # I assume that maxvalue is always SOC, and minvalue is always N
-
 sinks3$SOC <- maxvalue
 sinks3$N <- minvalue
+
+# Impute values for missing depth intervals
+sinks2_filled <- sinks2 
+
+maxvalue2 <- pmax(
+  sinks2_filled$TOC1,
+  sinks2_filled$TOC2,
+  sinks2_filled$TOC3,
+  sinks2_filled$NTotal,
+  na.rm = TRUE
+)
+
+minvalue2 <- pmin(
+  sinks2_filled$TOC1,
+  sinks2_filled$TOC2,
+  sinks2_filled$TOC3,
+  sinks2_filled$NTotal,
+  na.rm = TRUE
+)
+
+sinks2_filled$SOC <- maxvalue2
+sinks2_filled$N <- minvalue2
+
+sinks2_filled %<>%
+  mutate(
+    PH = case_when(
+      PH == 0 ~ NA,
+      .default = PH
+    )
+  ) %>%
+  group_by(IDBID) %>%
+  fill(
+    any_of(c("SOC", "N", "PH")),
+    .direction = "down"
+  ) %>%
+  ungroup() %>%
+  mutate(
+    imputed = case_when(
+      is.na(KunPro) ~ TRUE,
+      .default = FALSE
+    ),
+    SOC = case_when(
+      SOC > 12 & imputed == TRUE ~ 12,
+      .default = SOC
+    )
+  )
+
+# end of imputation
+
+sinks3 <- sinks2_filled
+
 sinks3$date <- sinks3$SD_Dato %>%
   as.character() %>%
   stri_replace_all_fixed("-", "") %>%
@@ -382,11 +435,6 @@ sinks4 <- sinks3 %>%
   ) %>%
   right_join(sinks_upperlower) %>%
   select(any_of(mycolnames))
-
-allmydata <- bind_rows(dsc2, seges2, sinks4)
-
-plot(allmydata$UTMX, allmydata$UTMY)
-
 
 # 2.4: Profiles texture
 
@@ -793,7 +841,7 @@ profiles_tex4 %<>%
   mutate(
     TEKTURSUM = case_when(
       TEKTURSUM == 0 ~ NA,
-      .default = TEKTURSUM
+      .default = TEKTURSUM,
     )
   )
 
@@ -891,7 +939,8 @@ profiles_tex5 %<>%
     CaCO3 = CACO3,
     BD = VOLVGT,
     pH = PHCACL2,
-    N = TOTALN
+    N = TOTALN,
+    imputed = FALSE
   ) %>%
   rowwise() %>%
   mutate(
@@ -955,9 +1004,8 @@ profiles_tex5 %<>%
   left_join(profiles_xy_date) %>%
   as.data.frame()
 
+
 # 2.8: Forest samples
-
-
 
 forests_tax2 <- forests_tax %>%
   mutate(
@@ -1018,7 +1066,8 @@ forests_all <- bind_rows(forests_tax2, forests_dsc2) %>%
     clay = Ler * 100 / tsum,
     silt = Silt * 100 / tsum,
     fine_sand = Finsand * 100 / tsum,
-    coarse_sand = Grovsand * 100 / tsum
+    coarse_sand = Grovsand * 100 / tsum,
+    imputed = FALSE
   ) %>%
   select(any_of(mycolnames))
 

@@ -554,9 +554,11 @@ for (i in 1:length(fractions))
 
     # # Sigma equal to the radius of a circle with an equal area per sample
     # sigma_j <- sqrt(43107 / (nrow(trdat_j) * pi)) * 1000
-    # 
-    # # Use the expected mean density as a baseline
-    # mean_dens_j <- nrow(trdat_j) / (43107 * 10^6)
+
+    # Use the expected mean density as a baseline
+    # Do this calculation for the entire area, as a specific calculation for
+    # wetlands will give too much weight to these areas.
+    mean_dens_j <- nrow(trdat_j) / (43107 * 10^6)
 
     # For SOC:
     # Separate densities for wetlands and uplands
@@ -572,20 +574,14 @@ for (i in 1:length(fractions))
         
         # Sigma equal to the radius of a circle with an equal area per sample
         sigma_jk <- sqrt(areas[k + 1] / (nrow(trdat_jk) * pi)) * 1000
-        
-        # Use the expected mean density as a baseline
-        mean_dens_jk <- nrow(trdat_jk) / (areas[k + 1] * 10^6)
 
         dens_jk <- get_dens(trdat_jk, sigma_jk)
         
-        w_j[trdat_j_wl_ind] <- mean_dens_jk / dens_jk
+        w_j[trdat_j_wl_ind] <- mean_dens_j / dens_jk
       }
     } else {
       # Sigma equal to the radius of a circle with an equal area per sample
       sigma_j <- sqrt(43107 / (nrow(trdat_j) * pi)) * 1000
-      
-      # Use the expected mean density as a baseline
-      mean_dens_j <- nrow(trdat_j) / (43107 * 10^6)
       
       dens_j <- get_dens(trdat_j, sigma_j)
       
