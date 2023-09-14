@@ -441,8 +441,8 @@ eta_test <- seq(0.1, 1, 0.1)
 max_depth_test <- seq(1, 20, 3)
 min_child_weight_test <- c(1, 2, 4, 8, 16, 32)
 gamma_test <- seq(0, 0.6, 0.1)
-colsample_bytree_test <- seq(0.4, 1.0, 0.1)
-subsample_test <- seq(0.4, 1.0, 0.1)
+colsample_bytree_test <- seq(0.3, 1.0, 0.1)
+subsample_test <- seq(0.3, 1.0, 0.1)
 
 objectives <- c(rep("reg:squarederror", 4), rep("reg:tweedie", 2))
 
@@ -944,7 +944,7 @@ for (i in 1:length(fractions))
   }
   print(models[[i]])
   
-  models_predictions[trdat_indices, u] <- models[[i]]$pred %>%
+  models_predictions[trdat_indices, i] <- models[[i]]$pred %>%
     arrange(rowIndex) %>%
     distinct(rowIndex, .keep_all = TRUE) %>%
     dplyr::select(., pred) %>%
