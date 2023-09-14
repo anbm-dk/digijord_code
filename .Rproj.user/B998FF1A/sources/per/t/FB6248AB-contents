@@ -476,6 +476,12 @@ weights_objects <- list()
 # Step 4: Adjust subsampling
 # Step 5: Increase nrounds, readjust learning rate
 
+models_predictions <- matrix(
+  numeric(),
+  nrow = nrow(obs),
+  ncol = length(fractions)
+  )
+
 models <- list()
 
 for (i in 1:length(fractions))
@@ -619,6 +625,8 @@ for (i in 1:length(fractions))
   weights_objects[[i]]$w_depth <- w_depth
 
   trdat$w <- w_depth
+  
+  trdat_indices <- which(obs$ID_new %in% trdat$ID_new)
 
   # List of folds
 
@@ -935,6 +943,13 @@ for (i in 1:length(fractions))
     models[[i]] <- model5
   }
   print(models[[i]])
+  
+  models_predictions[trdat_indices, u] <- models[[i]]$pred %>%
+    arrange(rowIndex) %>%
+    distinct(rowIndex, .keep_all = TRUE) %>%
+    dplyr::select(., pred) %>%
+    unlist() %>%
+    unname()
 
   saveRDS(
     models[[i]],
