@@ -22,6 +22,8 @@ dir_code <- getwd()
 root <- dirname(dir_code)
 dir_dat <- paste0(root, "/digijord_data/")
 
+source("f_predict_passna.R")
+
 # To do:
 # Accuracy by depth (OK)
 # Maps for depths (ok)
@@ -510,9 +512,14 @@ for (i in 1:length(fractions))
   }
   
   trdat <- obs %>%
-    filter(is.finite(.data[[frac]])) %>%
-    filter(!is.na(UTMX) & !is.na(UTMY)) %>%
-    filter(lower > 0, upper < 200)
+    filter(
+      is.finite(.data[[frac]]),
+      !is.na(UTMX),
+      !is.na(UTMY),
+      lower > 0,
+      upper < 200,
+      !is.na(dhm2015_terraen_10m)
+    )
 
   # Weighting by depth intervals
   w_interval <- 10
@@ -571,6 +578,8 @@ for (i in 1:length(fractions))
 
       for (k in 0:1) {
         trdat_j_wl_ind <- trdat_j$cwl_10m_crisp == k
+        
+        trdat_j_wl_ind %<>% { ifelse(is.na(.), FALSE, .) }
 
         trdat_jk <- trdat_j[trdat_j_wl_ind, ]
         
@@ -975,7 +984,11 @@ for (i in 1:length(fractions))
     unlist() %>%
     unname()
   
-  models_predictions[holdout_indices, i] <- predict(models[[i]], holdout_i)
+  models_predictions[holdout_indices, i] <- predict_passna(
+    models[[i]],
+    holdout_i,
+    n_const = 3
+    )
   
   saveRDS(
     models[[i]],
@@ -1255,7 +1268,12 @@ allpred <- foreach(i = 1:6, .combine = rbind) %do%
 allpred$fraction %<>% factor(levels = fractions)
 
 levels(allpred$fraction) <- c(
-  "Clay", "Silt", "Fine sand", "Coarse sand", "log(SOC)", "sqrt(CaCO3)"
+  expression("Clay"~"(%)"),
+  expression("Silt"~"(%)"),
+  expression("Fine~sand"~"(%)"),
+  expression("Coarse~sand"~"(%)"),
+  expression("log[SOC"~"(%)]"),
+  expression(sqrt("CaCO"[3]~"(%)"))
 )
 
 my_breaks_dens <- c(0, 0.01, 0.02, 0.03, 0.05, 0.07, 0.1, 0.2, 0.3, 0.5, 0.7, 1)
@@ -1299,8 +1317,8 @@ for (i in 1:(length(breaks) - 1)) {
     ) + 
     geom_hex(
       aes(
-        alpha = stat(ndensity),
-        fill = stat(ndensity)
+        alpha = after_stat(ndensity),
+        fill = after_stat(ndensity)
       ),
       bins = 30
     ) +
@@ -1323,7 +1341,7 @@ for (i in 1:(length(breaks) - 1)) {
       na.value = 0,
       trans = "sqrt"
     ) +
-    facet_wrap(~fraction, nrow = 2, scales = "free") +
+    facet_wrap(~fraction, nrow = 2, scales = "free", labeller = label_parsed) +
     theme_bw() +
     theme(aspect.ratio = 1) +
     scale_x_continuous(expand = c(0, 0)) +
@@ -1332,9 +1350,9 @@ for (i in 1:(length(breaks) - 1)) {
     geom_blank(aes(y = ax_max)) +
     geom_blank(aes(x = ax_max)) +
     geom_blank(aes(y = ax_min)) +
-    geom_blank(aes(y = ax_min)) +
-    xlab("Observation (%)") +
-    ylab("Prediction (%)")
+    geom_blank(aes(x = ax_min)) +
+    xlab("Observation") +
+    ylab("Prediction")
   
   tiff(
     paste0(dir_results, "/accuracy_", LETTERS[i], "_test", testn, ".tiff"),
@@ -1350,7 +1368,7 @@ for (i in 1:(length(breaks) - 1)) {
 }
 
 tiff(
-  paste0(dir_results, "/accuracy_test", testn, ".tiff"),
+  paste0(dir_results, "/accuracy_all_test", testn, ".tiff"),
   width = 15,
   height = 10,
   units = "cm",
@@ -1361,8 +1379,8 @@ allpred %>%
   ggplot(aes(x = obs, y = pred)) +
   geom_hex(
     aes(
-      alpha = stat(ndensity),
-      fill = stat(ndensity)
+      alpha = after_stat(ndensity),
+      fill = after_stat(ndensity)
         ),
     bins = 30
     ) +
@@ -1393,10 +1411,10 @@ allpred %>%
   geom_abline(col = "red") +
   geom_blank(aes(y = ax_max)) +
   geom_blank(aes(x = ax_max)) +
-  geom_blank(aes(y = 0)) +
-  geom_blank(aes(x = 0)) +
-  xlab("Observation (%)") +
-  ylab("Prediction (%)")
+  geom_blank(aes(y = ax_min)) +
+  geom_blank(aes(x = ax_min)) +
+  xlab("Observation") +
+  ylab("Prediction")
 
 try(dev.off())
 
@@ -1719,11 +1737,11 @@ parSapplyLB(
       na.rm = FALSE,
       const = data.frame(
         SOM_removed = 1,
-        year = 2010,
+        # year = 2010,
         upper = uppers[map_spec$interval[x]],
         lower = lowers[map_spec$interval[x]]
       ),
-      n_const = 4,
+      n_const = 3,
       n_digits = 1,
       filename = outname,
       overwrite = TRUE
