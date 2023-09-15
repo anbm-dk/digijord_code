@@ -990,12 +990,7 @@ saveRDS(
   paste0(dir_results, "/weights_objects.rds")
 )
 
-write.table(
-  models_predictions,
-  file = paste0(dir_results, "/models_predictions_raw.csv"),
-  sep = ";",
-  row.names = FALSE
-)
+
 
 write.table(
   models_weights,
@@ -1158,6 +1153,13 @@ models_predictions %<>%
     },
     simplify = FALSE
   ) %>% bind_rows()
+
+write.table(
+  models_predictions,
+  file = paste0(dir_results, "/models_predictions_raw.csv"),
+  sep = ";",
+  row.names = FALSE
+)
 
 source("f_classify_soil_JB.R")
 
