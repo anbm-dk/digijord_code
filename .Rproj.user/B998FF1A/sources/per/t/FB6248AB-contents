@@ -438,11 +438,11 @@ tgrid <- expand.grid(
 )
 
 eta_test <- seq(0.1, 1, 0.1)
-max_depth_test <- seq(1, 20, 3)
-min_child_weight_test <- c(1, 2, 4, 8, 16, 32)
+max_depth_test <- seq(1, 30, 3)
+min_child_weight_test <- c(1, 2, 4, 8, 16, 32, 64)
 gamma_test <- seq(0, 0.6, 0.1)
-colsample_bytree_test <- seq(0.3, 1.0, 0.1)
-subsample_test <- seq(0.3, 1.0, 0.1)
+colsample_bytree_test <- seq(0.2, 1.0, 0.1)
+subsample_test <- seq(0.2, 1.0, 0.1)
 
 objectives <- c(rep("reg:squarederror", 4), rep("reg:tweedie", 2))
 
@@ -482,6 +482,15 @@ models_predictions <- matrix(
   ncol = length(fractions)
   )
 
+models_weights <- matrix(
+  numeric(),
+  nrow = nrow(obs),
+  ncol = length(fractions)
+)
+
+colnames(models_predictions) <- fractions
+colnames(models_weights) <- fractions
+
 models <- list()
 
 for (i in 1:length(fractions))
@@ -504,19 +513,6 @@ for (i in 1:length(fractions))
     filter(is.finite(.data[[frac]])) %>%
     filter(!is.na(UTMX) & !is.na(UTMY)) %>%
     filter(lower > 0, upper < 200)
-
-  # Three folds (placeholder)
-  trdat %<>% mutate(
-    fold = ceiling(fold / 3)
-  )
-  holdout_i <- trdat %>%
-    filter(fold == 4)
-  trdat %<>% filter(fold < 4)
-
-  if (!use_all_points) {
-    set.seed(1)
-    trdat %<>% sample_n(n)
-  }
 
   # Weighting by depth intervals
   w_interval <- 10
@@ -615,7 +611,15 @@ for (i in 1:length(fractions))
   
   w_depth <- w_cm_sums / cm_sums
   w_depth[!is.finite(w_depth)] <- 0
-  # w_depth[w_depth > 1] <- 1
+  
+  # Using the year as a covariate causes the model to identify the SINKS points
+  # based only on the sampling year, as the campaign took place over only two
+  # years, which were also underrepresented in the remaining training data.
+  if (frac == "SOC") {
+    w_year <- 0.99^(max(trdat$year, na.rm = TRUE) - trdat$year)
+    w_year %<>% { ifelse(is.na(.), 0, .) }
+    w_depth %<>% `*`(w_year)
+  }
   
   weights_objects[[i]] <- list()
   weights_objects[[i]]$cm_mat <- cm_mat
@@ -626,7 +630,26 @@ for (i in 1:length(fractions))
 
   trdat$w <- w_depth
   
+  trdat_w_indices <- which(obs$ID_new %in% trdat$ID_new)
+  
+  models_weights[trdat_w_indices, i] <- w_depth
+  
+  # Three folds (placeholder)
+  trdat %<>% mutate(
+    fold = ceiling(fold / 3)
+  )
+  holdout_i <- trdat %>%
+    filter(fold == 4)
+  
+  trdat %<>% filter(fold < 4)
+  
+  if (!use_all_points) {
+    set.seed(1)
+    trdat %<>% sample_n(n)
+  }
+  
   trdat_indices <- which(obs$ID_new %in% trdat$ID_new)
+  holdout_indices <- which(obs$ID_new %in% holdout_i$ID_new)
 
   # List of folds
 
@@ -655,13 +678,14 @@ for (i in 1:length(fractions))
     cov_c_i <- cov_selected %>%
       c("upper", "lower") %>%
       c(., "SOM_removed")
-  } else {
-    if (i == 5) {
-      cov_c_i <- cov_selected %>%
-        c("upper", "lower") %>%
-        c(., "year")
-    }
-  }
+  } 
+  # else {
+  #   if (i == 5) {
+  #     cov_c_i <- cov_selected %>%
+  #       c("upper", "lower") %>%
+  #       c(., "year")
+  #   }
+  # }
   
   # CS Step 1: Decide the optimal number of OGCs
   ogcs_names <- grep('ogc_pi', cov_c_i, value = TRUE)
@@ -950,7 +974,9 @@ for (i in 1:length(fractions))
     dplyr::select(., pred) %>%
     unlist() %>%
     unname()
-
+  
+  models_predictions[holdout_indices, i] <- predict(models[[i]], holdout_i)
+  
   saveRDS(
     models[[i]],
     paste0(dir_results, "/model_", frac, ".rds")
@@ -962,6 +988,20 @@ names(weights_objects) <- fractions
 saveRDS(
   weights_objects,
   paste0(dir_results, "/weights_objects.rds")
+)
+
+write.table(
+  models_predictions,
+  file = paste0(dir_results, "/models_predictions_raw.csv"),
+  sep = ";",
+  row.names = FALSE
+)
+
+write.table(
+  models_weights,
+  file = paste0(dir_results, "/models_weights.csv"),
+  sep = ";",
+  row.names = FALSE
 )
 
 models_loaded <- lapply(
@@ -1100,6 +1140,76 @@ write.table(
   row.names = FALSE
 )
 
+# Standardize and transform predictions
+
+models_predictions
+
+models_predictions %<>%
+  apply(
+    1, function(x) {
+      sum_min <- sum(x[1:4], na.rm = TRUE) %>%
+        { ifelse(. == 0, NA, .) }
+      
+      x[1:4] %<>% `/`(sum_min) %>% `*`(100)
+      
+      x %<>% matrix(ncol = length(x)) %>% as.data.frame()
+      
+      return(x)
+    },
+    simplify = FALSE
+  ) %>% bind_rows()
+
+source("f_classify_soil_JB.R")
+
+JB_predicted <- classify_soil_JB(
+  clay = models_predictions[, 1],
+  silt = models_predictions[, 2],
+  sand_f = models_predictions[, 3],
+  SOM = models_predictions[, 5] / 0.568,
+  CaCO3 = models_predictions[, 6]
+) %>%
+  factor(
+    levels = 1:12,
+    labels = paste0("JB", 1:12)
+    )
+
+JB_observed <- classify_soil_JB(
+  clay = obs$clay,
+  silt = obs$silt,
+  sand_f = obs$fine_sand,
+  SOM = obs$SOC / 0.568,
+  CaCO3 = obs$CaCO3
+) %>%
+  factor(
+    levels = 1:12,
+    labels = paste0("JB", 1:12)
+  )
+
+mean_weights <- apply(models_weights, 1, function(x) { mean(x, na.rm = TRUE) })
+
+JB_df <- data.frame(
+  ID_new = obs$ID_new,
+  observed = JB_observed,
+  predicted = JB_predicted,
+  upper = obs$upper,
+  lower = obs$lower,
+  imputed = obs$imputed,
+  w = NA,
+  fold = obs$fold
+) %>%
+  filter(imputed == FALSE) %>%
+  select(-imputed)
+
+JB_df %>%
+  filter(fold != 10) %>%
+  select(c(predicted, observed)) %>%
+  na.omit() %>%
+  table() %>%
+  confusionMatrix()
+
+
+# Analyse predictions and observations
+
 getpred <- function(x2, i2) {
   df <- x2$pred %>%
     arrange(rowIndex) %>%
@@ -1168,6 +1278,8 @@ mycolorgradient <- c(
   # mycolors1,
   mycolors2[-1],
   mycolors3[-1])
+
+breaks <- c(0, 30, 60, 100, 200)
 
 for (i in 1:(length(breaks) - 1)) {
   allpred_i <- allpred %>%
