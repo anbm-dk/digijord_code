@@ -443,8 +443,8 @@ eta_test <- seq(0.1, 1, 0.1)
 max_depth_test <- seq(1, 30, 3)
 min_child_weight_test <- c(1, 2, 4, 8, 16, 32, 64)
 gamma_test <- seq(0, 0.6, 0.1)
-colsample_bytree_test <- seq(0.2, 1.0, 0.1)
-subsample_test <- seq(0.2, 1.0, 0.1)
+colsample_bytree_test <- seq(0.1, 1, 0.1)
+subsample_test <- seq(0.1, 1, 0.1)
 
 objectives <- c(rep("reg:squarederror", 4), rep("reg:tweedie", 2))
 
@@ -477,6 +477,8 @@ weights_objects <- list()
 # Step 3: Tune gamma
 # Step 4: Adjust subsampling
 # Step 5: Increase nrounds, readjust learning rate
+
+# Test OGC after model tuning?
 
 models_predictions <- matrix(
   numeric(),
@@ -641,14 +643,14 @@ for (i in 1:length(fractions))
   
   trdat_w_indices <- which(obs$ID_new %in% trdat$ID_new)
   
+  weights_objects[[i]]$indices <- trdat_w_indices
+  
   models_weights[trdat_w_indices, i] <- w_depth
   
   # Three folds (placeholder)
   trdat %<>% mutate(
     fold = ceiling(fold / 3)
   )
-  holdout_i <- trdat %>%
-    filter(fold == 4)
   
   trdat %<>% filter(fold < 4)
   
@@ -659,6 +661,8 @@ for (i in 1:length(fractions))
   
   trdat_indices <- which(obs$ID_new %in% trdat$ID_new)
   holdout_indices <- which(obs$ID_new %in% holdout_i$ID_new)
+  
+  holdout_i <- obs[-trdat_indices, ]
 
   # List of folds
 
@@ -696,100 +700,100 @@ for (i in 1:length(fractions))
   #   }
   # }
   
-  # CS Step 1: Decide the optimal number of OGCs
-  ogcs_names <- grep('ogc_pi', cov_c_i, value = TRUE)
-  covs_not_ogc <- grep('ogc_pi', cov_c_i, value = TRUE, invert = TRUE)
-  
-  ogcs_names_list <- list(ogcs_names)
-  n_ogcs_v <- numeric()
-  
-  m <- 1
-  n_ogcs <- length(ogcs_names_list[[m]])
-  n_ogcs_v[m] <- n_ogcs
-  
-  while (n_ogcs > 2) {
-    m <- m + 1
-    ogcs_names_list[[m]] <- ogcs_names_list[[m - 1]][c(TRUE, FALSE)]
-    n_ogcs <- length(ogcs_names_list[[m]])
-    n_ogcs_v[m] <- n_ogcs
-  }
-  
-  ogcs_names_list %<>% lapply(., function(x) {c(covs_not_ogc, x)})
-  ogcs_names_list[[length(ogcs_names_list) + 1]] <- covs_not_ogc
-  n_ogcs_v %<>% c(., 0)
-  
-  print("Testing OGCs")
-  
-  models_ogc_test <- ogcs_names_list %>%
-    lapply(
-      .,
-      function(x) {
-        cov_p_i <- x %>% paste0(collapse = " + ")
-        
-        formula_i <- paste0(frac, " ~ ", cov_p_i) %>%
-          as.formula()
-        
-        set.seed(1)
-        
-        out <- caret::train(
-          form = formula_i,
-          data = trdat,
-          method = "xgbTree",
-          na.action = na.pass,
-          tuneGrid = tgrid,
-          trControl = trainControl(
-            index = folds_i,
-            savePredictions = "final",
-            predictionBounds = c(bounds_lower[i], bounds_upper[i]),
-            summaryFunction = sumfun,
-            allowParallel = FALSE
-          ),
-          metric = metrics[i],
-          maximize = FALSE,
-          weights = trdat$w,
-          num_parallel_tree = trees_per_round,
-          objective = objectives[i]
-        )
-        return(out)
-      }
-    )
-  
-  ogc_results <- models_ogc_test %>% lapply(
-    ., function(x) x$results %>% select(any_of(metrics[i])) %>% min()
-  ) %>%
-    unlist()
-  
-  which_ogc_ind <- which.min(ogc_results)
-  
-  ogc_df <- data.frame(
-    fraction = frac,
-    n_ogcs = n_ogcs_v,
-    acc = ogc_results,
-    metric = metrics[i]
-  )
-  
-  write.table(
-    ogc_df,
-    paste0(dir_results, "ogc_acc_", frac, ".csv"),
-    row.names = FALSE,
-    col.names = TRUE,
-    sep = ";"
-    )
-  
-  n_ogcs_models[i] <- n_ogcs_v[which_ogc_ind]
-  
-  # CS Step 2: Drop unimportant covariates
-  cov_c_i <- varImp(models_ogc_test[[which_ogc_ind]])$importance %>%
-    rownames_to_column() %>%
-    mutate(scaled = Overall/sum(Overall),
-           cumul = cumsum(scaled)) %>%
-    filter(cumul < 0.99) %>%
-    .$rowname
-  
-  cov_p_i <- cov_c_i %>% paste0(collapse = " + ")
-  
-  formula_i <- paste0(frac, " ~ ", cov_p_i) %>%
-    as.formula()
+  # # CS Step 1: Decide the optimal number of OGCs
+  # ogcs_names <- grep('ogc_pi', cov_c_i, value = TRUE)
+  # covs_not_ogc <- grep('ogc_pi', cov_c_i, value = TRUE, invert = TRUE)
+  # 
+  # ogcs_names_list <- list(ogcs_names)
+  # n_ogcs_v <- numeric()
+  # 
+  # m <- 1
+  # n_ogcs <- length(ogcs_names_list[[m]])
+  # n_ogcs_v[m] <- n_ogcs
+  # 
+  # while (n_ogcs > 2) {
+  #   m <- m + 1
+  #   ogcs_names_list[[m]] <- ogcs_names_list[[m - 1]][c(TRUE, FALSE)]
+  #   n_ogcs <- length(ogcs_names_list[[m]])
+  #   n_ogcs_v[m] <- n_ogcs
+  # }
+  # 
+  # ogcs_names_list %<>% lapply(., function(x) {c(covs_not_ogc, x)})
+  # ogcs_names_list[[length(ogcs_names_list) + 1]] <- covs_not_ogc
+  # n_ogcs_v %<>% c(., 0)
+  # 
+  # print("Testing OGCs")
+  # 
+  # models_ogc_test <- ogcs_names_list %>%
+  #   lapply(
+  #     .,
+  #     function(x) {
+  #       cov_p_i <- x %>% paste0(collapse = " + ")
+  #       
+  #       formula_i <- paste0(frac, " ~ ", cov_p_i) %>%
+  #         as.formula()
+  #       
+  #       set.seed(1)
+  #       
+  #       out <- caret::train(
+  #         form = formula_i,
+  #         data = trdat,
+  #         method = "xgbTree",
+  #         na.action = na.pass,
+  #         tuneGrid = tgrid,
+  #         trControl = trainControl(
+  #           index = folds_i,
+  #           savePredictions = "final",
+  #           predictionBounds = c(bounds_lower[i], bounds_upper[i]),
+  #           summaryFunction = sumfun,
+  #           allowParallel = FALSE
+  #         ),
+  #         metric = metrics[i],
+  #         maximize = FALSE,
+  #         weights = trdat$w,
+  #         num_parallel_tree = trees_per_round,
+  #         objective = objectives[i]
+  #       )
+  #       return(out)
+  #     }
+  #   )
+  # 
+  # ogc_results <- models_ogc_test %>% lapply(
+  #   ., function(x) x$results %>% select(any_of(metrics[i])) %>% min()
+  # ) %>%
+  #   unlist()
+  # 
+  # which_ogc_ind <- which.min(ogc_results)
+  # 
+  # ogc_df <- data.frame(
+  #   fraction = frac,
+  #   n_ogcs = n_ogcs_v,
+  #   acc = ogc_results,
+  #   metric = metrics[i]
+  # )
+  # 
+  # write.table(
+  #   ogc_df,
+  #   paste0(dir_results, "ogc_acc_", frac, ".csv"),
+  #   row.names = FALSE,
+  #   col.names = TRUE,
+  #   sep = ";"
+  #   )
+  # 
+  # n_ogcs_models[i] <- n_ogcs_v[which_ogc_ind]
+  # 
+  # # CS Step 2: Drop unimportant covariates
+  # cov_c_i <- varImp(models_ogc_test[[which_ogc_ind]])$importance %>%
+  #   rownames_to_column() %>%
+  #   mutate(scaled = Overall/sum(Overall),
+  #          cumul = cumsum(scaled)) %>%
+  #   filter(cumul < 0.99) %>%
+  #   .$rowname
+  # 
+  # cov_p_i <- cov_c_i %>% paste0(collapse = " + ")
+  # 
+  # formula_i <- paste0(frac, " ~ ", cov_p_i) %>%
+  #   as.formula()
   
   # xgboost optimization
   # 1: Fit learning rate (eta) [and nrounds]
@@ -824,6 +828,19 @@ for (i in 1:length(fractions))
     num_parallel_tree = trees_per_round,
     objective = objectives[i]
   )
+  
+  # CS Step 1: Drop unimportant covariates
+  cov_c_i <- varImp(models[[i]])$importance %>%
+    rownames_to_column() %>%
+    mutate(scaled = Overall/sum(Overall),
+           cumul = cumsum(scaled)) %>%
+    filter(cumul < 0.99) %>%
+    .$rowname
+
+  cov_p_i <- cov_c_i %>% paste0(collapse = " + ")
+
+  formula_i <- paste0(frac, " ~ ", cov_p_i) %>%
+    as.formula()
 
   # registerDoSEQ()
   # rm(cl)
@@ -974,6 +991,88 @@ for (i in 1:length(fractions))
     )
     
     models[[i]] <- model5
+    
+    # CS Step 2: Decide the optimal number of OGCs
+    ogcs_names <- grep('ogc_pi', cov_c_i, value = TRUE)
+    covs_not_ogc <- grep('ogc_pi', cov_c_i, value = TRUE, invert = TRUE)
+
+    ogcs_names_list <- list(ogcs_names)
+    n_ogcs_v <- numeric()
+
+    m <- 1
+    n_ogcs <- length(ogcs_names_list[[m]])
+    n_ogcs_v[m] <- n_ogcs
+
+    while (n_ogcs > 2) {
+      m <- m + 1
+      ogcs_names_list[[m]] <- ogcs_names_list[[m - 1]][c(TRUE, FALSE)]
+      n_ogcs <- length(ogcs_names_list[[m]])
+      n_ogcs_v[m] <- n_ogcs
+    }
+
+    ogcs_names_list %<>% lapply(., function(x) {c(covs_not_ogc, x)})
+    ogcs_names_list[[length(ogcs_names_list) + 1]] <- covs_not_ogc
+    n_ogcs_v %<>% c(., 0)
+
+    print("Testing OGCs")
+
+    models_ogc_test <- ogcs_names_list %>%
+      lapply(
+        .,
+        function(x) {
+          cov_p_i <- x %>% paste0(collapse = " + ")
+
+          formula_i <- paste0(frac, " ~ ", cov_p_i) %>%
+            as.formula()
+
+          set.seed(1)
+
+          out <- caret::train(
+            form = formula_i,
+            data = trdat,
+            method = "xgbTree",
+            na.action = na.pass,
+            tuneGrid = tgrid,
+            trControl = trainControl(
+              index = folds_i,
+              savePredictions = "final",
+              predictionBounds = c(bounds_lower[i], bounds_upper[i]),
+              summaryFunction = sumfun,
+              allowParallel = FALSE
+            ),
+            metric = metrics[i],
+            maximize = FALSE,
+            weights = trdat$w,
+            num_parallel_tree = trees_per_round,
+            objective = objectives[i]
+          )
+          return(out)
+        }
+      )
+
+    ogc_results <- models_ogc_test %>% lapply(
+      ., function(x) x$results %>% select(any_of(metrics[i])) %>% min()
+    ) %>%
+      unlist()
+
+    which_ogc_ind <- which.min(ogc_results)
+
+    ogc_df <- data.frame(
+      fraction = frac,
+      n_ogcs = n_ogcs_v,
+      acc = ogc_results,
+      metric = metrics[i]
+    )
+
+    write.table(
+      ogc_df,
+      paste0(dir_results, "ogc_acc_", frac, ".csv"),
+      row.names = FALSE,
+      col.names = TRUE,
+      sep = ";"
+      )
+
+    n_ogcs_models[i] <- n_ogcs_v[which_ogc_ind]
   }
   print(models[[i]])
   
@@ -1155,10 +1254,11 @@ models_predictions
 models_predictions %<>%
   apply(
     1, function(x) {
-      sum_min <- sum(x[1:4], na.rm = TRUE) %>%
-        { ifelse(. == 0, NA, .) }
+      sum_min <- sum(x[1:4])
       
-      x[1:4] %<>% `/`(sum_min) %>% `*`(100)
+      if (!is.na(sum_min)) {
+        x[1:4] %<>% `/`(sum_min) %>% `*`(100)
+      }
       
       x %<>% matrix(ncol = length(x)) %>% as.data.frame()
       
@@ -1166,6 +1266,8 @@ models_predictions %<>%
     },
     simplify = FALSE
   ) %>% bind_rows()
+
+colnames(models_predictions) <- fractions
 
 write.table(
   models_predictions,
@@ -1224,41 +1326,64 @@ JB_df %>%
 
 
 # Analyse predictions and observations
+# To do:
+# Separate figures for holdout dataset
+# Include weights
 
-getpred <- function(x2, i2) {
-  df <- x2$pred %>%
-    arrange(rowIndex) %>%
-    distinct(rowIndex, .keep_all = TRUE) %>%
-    dplyr::select(., c(pred, obs)) %>%
-    mutate(
-      pred = ifelse(pred < 0, 0, pred)
-    )
+getpred <- function(
+    x2, i2, axmaxmin = TRUE, drop_imputed = TRUE, drop_inf = TRUE
+) {
+  
+  df <- obs %>% select(any_of(fractions[i2]))
+  colnames(df) <- "obs"
+  df$pred = models_predictions[, i2]
+  
   if (i2 == 5) df %<>% log()
   if (i2 == 6) df %<>% sqrt()
-  depths_x <- x2$trainingData %>%
-    select(upper, lower)
+  
+  depths_x <- obs %>%
+    select(upper, lower, fold, ID_new, imputed)
   df %<>% bind_cols(depths_x)
   df %<>% mutate(
     fraction = fractions[i2],
-    ax_max = quantile(obs, 0.99),
-  ) 
-  if (i2 == 5) {
-    df %<>% mutate(
-      ax_min = quantile(obs, 0.01)
-    )
-  } else {
-    df %<>% mutate(
-      ax_min = 0
-    )
-  }
-  df %<>%
+    w = models_weights[, i2]
+  ) %>%
     filter(
-      obs < ax_max,
-      pred < ax_max,
-      obs >= ax_min,
-      pred >= ax_min
+      !is.na(obs),
+      !is.na(w)
+      )
+  
+  if (drop_inf) {
+    df %<>% filter(is.finite(obs))
+  }
+  
+  if (drop_imputed) {
+    df %<>% filter(imputed == FALSE)
+  }
+  
+  if (axmaxmin) {
+    if (i2 == 5) {
+      df %<>%
+        mutate(
+          ax_min = quantile(obs, 0.01)
+        )
+    } else {
+      df %<>% mutate(
+        ax_min = 0
+      )
+    }
+    df %<>% mutate(
+      ax_max = quantile(obs, 0.99)
     )
-
+    df %<>%
+      filter(
+        obs < ax_max,
+        pred < ax_max,
+        obs >= ax_min,
+        pred >= ax_min
+      )
+  }
+  
   return(df)
 }
 
@@ -1270,8 +1395,8 @@ allpred$fraction %<>% factor(levels = fractions)
 levels(allpred$fraction) <- c(
   expression("Clay"~"(%)"),
   expression("Silt"~"(%)"),
-  expression("Fine~sand"~"(%)"),
-  expression("Coarse~sand"~"(%)"),
+  expression("Fine"~"sand"~"(%)"),
+  expression("Coarse"~"sand"~"(%)"),
   expression("log[SOC"~"(%)]"),
   expression(sqrt("CaCO"[3]~"(%)"))
 )
@@ -1301,70 +1426,84 @@ mycolorgradient <- c(
 
 breaks <- c(0, 30, 60, 100, 200)
 
-for (i in 1:(length(breaks) - 1)) {
-  allpred_i <- allpred %>%
-    filter(
-      upper < breaks[i + 1],
-      lower > breaks[i]
-    )
+tr_partitions <- c("CV", "Holdout")
+
+for (k in 1:2) {
+  if (k == 1) {
+    allpred_k <- allpred %>%
+      filter(fold < 10)
+  } else {
+    allpred_k <- allpred %>%
+      filter(fold == 10)
+  }
   
-  myplot <- allpred_i %>%
-    ggplot(aes(x = obs, y = pred)) +
-    ggtitle(
-      paste0(
-        "Accuracy at ", breaks[i], " - ", breaks[i + 1], " cm depth"
+  for (i in 1:(length(breaks) - 1)) {
+    allpred_i <- allpred_k %>%
+      filter(
+        upper < breaks[i + 1],
+        lower > breaks[i]
       )
-    ) + 
-    geom_hex(
-      aes(
-        alpha = after_stat(ndensity),
-        fill = after_stat(ndensity)
-      ),
-      bins = 30
-    ) +
-    scale_fill_gradientn(
-      colours = mycolorgradient,
-      aesthetics = "fill",
-      breaks = my_breaks_dens,
-      limits= c(0, 1),
-      na.value = 0,
-      trans = "sqrt"
-    ) +
-    guides(
-      fill = "legend"
-      , alpha = "legend"
-    ) +
-    scale_alpha_continuous(
-      limits= c(0, 1),
-      range = c(0.05, 1),
-      breaks = my_breaks_dens,
-      na.value = 0,
-      trans = "sqrt"
-    ) +
-    facet_wrap(~fraction, nrow = 2, scales = "free", labeller = label_parsed) +
-    theme_bw() +
-    theme(aspect.ratio = 1) +
-    scale_x_continuous(expand = c(0, 0)) +
-    scale_y_continuous(expand = c(0, 0)) +
-    geom_abline(col = "red") +
-    geom_blank(aes(y = ax_max)) +
-    geom_blank(aes(x = ax_max)) +
-    geom_blank(aes(y = ax_min)) +
-    geom_blank(aes(x = ax_min)) +
-    xlab("Observation") +
-    ylab("Prediction")
-  
-  tiff(
-    paste0(dir_results, "/accuracy_", LETTERS[i], "_test", testn, ".tiff"),
-    width = 15,
-    height = 10,
-    units = "cm",
-    res = 300
-  )
-  
-  print(myplot)
-  
-  try(dev.off())
+    
+    myplot <- allpred_i %>%
+      ggplot(aes(x = obs, y = pred, weight = w)) +
+      ggtitle(
+        paste0(
+          "Accuracy at ", breaks[i], " - ", breaks[i + 1], " cm depth, ",
+          tr_partitions[k]
+        )
+      ) + 
+      geom_hex(
+        aes(
+          alpha = after_stat(ndensity),
+          fill = after_stat(ndensity)
+        ),
+        bins = 30
+      ) +
+      scale_fill_gradientn(
+        colours = mycolorgradient,
+        aesthetics = "fill",
+        breaks = my_breaks_dens,
+        limits = c(0, 1),
+        na.value = 0,
+        trans = "sqrt"
+      ) +
+      guides(
+        fill = "legend"
+        , alpha = "legend"
+      ) +
+      scale_alpha_continuous(
+        limits= c(0, 1),
+        range = c(0.05, 1),
+        breaks = my_breaks_dens,
+        na.value = 0,
+        trans = "sqrt"
+      ) +
+      facet_wrap(~fraction, nrow = 2, scales = "free", labeller = label_parsed) +
+      theme_bw() +
+      theme(aspect.ratio = 1) +
+      scale_x_continuous(expand = c(0, 0)) +
+      scale_y_continuous(expand = c(0, 0)) +
+      geom_abline(col = "red") +
+      geom_blank(aes(y = ax_max)) +
+      geom_blank(aes(x = ax_max)) +
+      geom_blank(aes(y = ax_min)) +
+      geom_blank(aes(x = ax_min)) +
+      xlab("Observation") +
+      ylab("Prediction")
+    
+    tiff(
+      paste0(dir_results, "/", tr_partitions[k], "_accuracy_", LETTERS[i],
+             "_test", testn, ".tiff"),
+      width = 15,
+      height = 10,
+      units = "cm",
+      res = 300
+    )
+    
+    print(myplot)
+    
+    try(dev.off())
+  }
 }
 
 tiff(
@@ -1376,7 +1515,7 @@ tiff(
 )
 
 allpred %>%
-  ggplot(aes(x = obs, y = pred)) +
+  ggplot(aes(x = obs, y = pred, weight = w)) +
   geom_hex(
     aes(
       alpha = after_stat(ndensity),
@@ -1403,7 +1542,7 @@ allpred %>%
     na.value = 0,
     trans = "sqrt"
   ) +
-  facet_wrap(~fraction, nrow = 2, scales = "free") +
+  facet_wrap(~fraction, nrow = 2, scales = "free", labeller = label_parsed) +
   theme_bw() +
   theme(aspect.ratio = 1) +
   scale_x_continuous(expand = c(0, 0)) +
@@ -1428,35 +1567,62 @@ d_out <- list()
 
 # Also calculate statistics by depth for the observations (to do)
 
+allpred_depth <- foreach(i = 1:6) %do%
+  getpred(
+    models[[i]], i, axmaxmin = FALSE, drop_imputed = FALSE, drop_inf = FALSE
+  )
+
 for (i in 1:length(models)) {
   depth_weights <- weights_objects[[i]]$w_cm_mat / weights_objects[[i]]$w_cm_sums
   
-  mdata <- models[[i]]$pred %>%
-    arrange(rowIndex) %>%
-    distinct(rowIndex, .keep_all = TRUE) %>%
-    bind_cols(models[[i]]$trainingData)
+  mdata <- allpred_depth[[i]]
   
   d_out[[i]] <- apply(
     depth_weights, 2, 
     function(x) {
-      ddat <- data.frame(
-        pred = mdata$pred,
-        obs = mdata$obs,
-        w_div = x,
-        weights = mdata$weights
-      ) %>%
-        drop_na()
+      ddat <- mdata %>%
+        mutate(
+          w_div = x
+        ) %>%
+        filter(
+          is.finite(w_div),
+          is.finite(obs),
+          is.finite(pred)
+        )
+      
+      if (i == 5) {
+        ddat %<>% filter(imputed == FALSE)
+      }
+      
+      RMSEws <- numeric()
+      R2ws <- numeric()
+      weights_ks <- numeric()
+      
+      for (k in 1:2) {
+        if (k == 1) {
+          ddat_k <- ddat %>%
+            filter(fold < 10)
+        } else {
+          ddat_k <- ddat %>%
+            filter(fold == 10)
+        }
+        
+        RMSEws[k] <- get_RMSEw(
+          select(ddat_k, c(pred, obs)),
+          ddat_k$w_div
+        )
+        R2ws[k] <- get_R2w(
+          select(ddat_k, c(pred, obs)),
+          ddat_k$w_div
+        )
+        weights_ks[k] <- sum(ddat_k$w_div)
+      }
       
       out <- data.frame(
-        RMSEw = get_RMSEw(
-          select(ddat, pred, obs),
-          ddat$w_div
-        ),
-        R2w = get_R2w(
-          select(ddat, pred, obs),
-          ddat$w_div
-        ),
-        Weights = sum(ddat$w_div)
+        RMSEw = RMSEws,
+        R2w = R2ws,
+        Weights = weights_ks,
+        Dataset = tr_partitions
       )
       
       return(out)
@@ -1464,14 +1630,35 @@ for (i in 1:length(models)) {
   ) %>% bind_rows()
   
   d_out[[i]]$Fraction <- fractions[i]
-  d_out[[i]]$Depth = w_depths
+  d_out[[i]]$Depth = rep(w_depths, each = 2)
 }
 
 d_out %<>%
   bind_rows() %>%
   mutate(
-    Fraction = factor(Fraction, levels = fractions, labels = fraction_names)
+    Fraction = factor(
+      Fraction,
+      levels = fractions,
+      labels = c(
+        expression("Clay"~"(%)"),
+        expression("Silt"~"(%)"),
+        expression("Fine"~"sand"~"(%)"),
+        expression("Coarse"~"sand"~"(%)"),
+        expression("log[SOC"~"(%)]"),
+        expression(sqrt("CaCO"[3]~"(%)"))
+      )
+    ),
+    Dataset = as.factor(Dataset)
   )
+
+myBreaks <- function(x) {
+  breaks <- c(
+    0,
+    (max(x)*1/2) %>% log2() %>% round(., digits = 0) %>% (2)^.
+    )
+  names(breaks) <- attr(breaks,"labels")
+  return(breaks)
+}
 
 tiff(
   paste0(dir_results, "/depth_RMSEw_test_", testn, ".tiff"),
@@ -1482,14 +1669,24 @@ tiff(
 )
 
 d_out %>%
-  ggplot(aes(x = RMSEw, y = Depth)) +
-  facet_wrap(~Fraction, nrow = 1, scales = "free_x") +
-  geom_path(color = "red") +
+  ggplot(aes(x = RMSEw, y = Depth, color = Dataset)) +
+  facet_wrap(~Fraction, nrow = 1, scales = "free_x", labeller = label_parsed) +
+  geom_path() +
   scale_y_reverse(expand = c(0, 0)) +
   scale_x_continuous(
-    guide = guide_axis(check.overlap = TRUE)
+    guide = guide_axis(check.overlap = TRUE),
+    breaks = myBreaks,
+    limits = c(0, NA),
+    expand = expansion(mult = c(0, 0.2), 
+                       add = c(0, 0))
     ) +
-  theme_bw()
+  theme_bw() + 
+  theme(strip.text.x = element_text(size = 6)) +
+  labs(
+    x = bquote(RMSE[w]),
+    y = "Depth (cm)"
+  )
+
 
 try(dev.off())
 try(dev.off())
@@ -1503,9 +1700,9 @@ tiff(
 )
 
 d_out %>%
-  ggplot(aes(x = R2w, y = Depth)) +
-  facet_wrap(~Fraction, nrow = 1) +
-  geom_path(color = "red") +
+  ggplot(aes(x = R2w, y = Depth, color = Dataset)) +
+  facet_wrap(~Fraction, nrow = 1, labeller = label_parsed) +
+  geom_path() +
   scale_y_reverse(expand = c(0, 0)) +
   scale_x_continuous(
     guide = guide_axis(check.overlap = TRUE),
@@ -1513,7 +1710,12 @@ d_out %>%
     expand = expansion(mult = c(0, 0), 
                  add = c(0.01, 0.02))
     ) +
-  theme_bw()
+  theme_bw() + 
+  theme(strip.text.x = element_text(size = 6)) +
+  labs(
+    x = bquote({R^2}[w]),
+    y = "Depth (cm)"
+  )
 
 try(dev.off())
 try(dev.off())
@@ -1527,9 +1729,9 @@ tiff(
 )
 
 d_out %>%
-  ggplot(aes(x = Weights, y = Depth)) +
-  facet_wrap(~Fraction, nrow = 1) +
-  geom_path(color = "red") +
+  ggplot(aes(x = Weights, y = Depth, color = Dataset)) +
+  facet_wrap(~Fraction, nrow = 1, labeller = label_parsed) +
+  geom_path() +
   scale_y_reverse(expand = c(0, 0)) +
   scale_x_continuous(
     guide = guide_axis(check.overlap = TRUE),
@@ -1537,7 +1739,12 @@ d_out %>%
     expand = expansion(mult = c(0.01, 0.1), 
                        add = c(0.01, 0.1))
     ) +
-  theme_bw()
+  theme_bw() + 
+  theme(strip.text.x = element_text(size = 6)) +
+  labs(
+    x = "Total weights",
+    y = "Depth (cm)"
+  )
 
 try(dev.off())
 try(dev.off())
