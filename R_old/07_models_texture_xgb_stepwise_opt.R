@@ -25,17 +25,23 @@ dir_dat <- paste0(root, "/digijord_data/")
 source("f_predict_passna.R")
 
 # To do:
+# Accuracy by depth (OK)
+# Maps for depths (ok)
+# Adaptive kernel for point densities (OK)
+# Effects of som removal (OK)
 # Pdp with depth
 # Profile examples
+# Adjust resampling as part of training sequence (OK)
+# Select covariates as part of training sequence (OK)
+# Adjust number of OGCs (OK)
+# Weighted weights calculations based on overlap with interval in question (ok)
 
 # Test 1 - 8: Cubist
 # Test 8: New covariates (chelsa, river valley bottoms, hillyness)
 # Test 9: xgboost
 # Test 10: Predicted row and column (poor accuracy)
 # Test 11: Fever data, more
-# Test 12: Depth boundaries as covariates, stepwise xgb optimization
-# Test 13: Bayesian optimization
-testn <- 13
+testn <- 12
 mycrs <- "EPSG:25832"
 
 # Results folder
@@ -246,7 +252,9 @@ fraction_names <- c(
   "Clay", "Silt", "Fine sand", "Coarse sand", "SOC", "CaCO3"
 )
 
+# bounds_lower <- c(0, 0, 0, 0, NA, NA)
 bounds_lower <- rep(0, 6)
+# bounds_upper <- c(100, 100, 100, 100, log(100), log(100))
 bounds_upper <- rep(100, 6)
 
 
@@ -442,127 +450,20 @@ objectives <- c(rep("reg:squarederror", 4), rep("reg:tweedie", 2))
 
 trees_per_round <- 10
 
-# Identify OGCs and make a list with the numbers of OGCs to be tested in the
-# models
-
-ogcs_names <- extr %>%
-  names() %>%
-  grep('ogc_pi', ., value = TRUE)
-
-ogcs_names_list <- list(ogcs_names)
-n_ogcs_v <- numeric()
-
-m <- 1
-n_ogcs <- length(ogcs_names_list[[m]])
-n_ogcs_v[m] <- n_ogcs
-
-while (n_ogcs > 2) {
-  m <- m + 1
-  ogcs_names_list[[m]] <- ogcs_names_list[[m - 1]][c(TRUE, FALSE)]
-  n_ogcs <- length(ogcs_names_list[[m]])
-  n_ogcs_v[m] <- n_ogcs
-}
-
-ogcs_names_list[[length(ogcs_names_list) + 1]] <- character()
-n_ogcs_v %<>% c(., 0)
-
-# Bayesian optimization
-
-library(ParBayesianOptimization)
-
-bounds <- list(
-  eta = c(0.1, 1),
-  max_depth = c(1L, 30L),
-  min_child_weight = c(1, 64),
-  gamma = c(0, 0.6),
-  colsample_bytree = c(0.1, 1),
-  subsample = c(0.1, 1),
-  colsample_bylevel = c(0.1, 1),
-  ogcs_index = c(1L, 7L),
-  total_imp = c(0.5, 1)
-)
-
-scoringFunction <- function(
-    eta,  # OK
-    max_depth,  # OK
-    min_child_weight,  # OK
-    gamma,  # OK
-    colsample_bytree,  # OK
-    subsample,  # OK
-    colsample_bylevel,
-    ogcs_index,  # OK
-    total_imp,  # OK
-    ) {
-  # Drop unimportant covariates
-  cov_i_filtered <- cov_i_ranked %>%
-    filter(cumul < total_imp) %>%  #!
-    .$rowname
-  
-  # Add OGCs
-  cov_i_filtered %<>% c(., ogcs_names_list[[ogcs_index]])  # !
-  
-  # Make formula
-  cov_formula <- cov_i_filtered %>% paste0(collapse = " + ")
-  
-  formula_i <- paste0(frac, " ~ ", cov_formula) %>%
-    as.formula()
-  
-  set.seed(1)
-  
-  model_out <- caret::train(
-    form = formula_i,
-    data = trdat,
-    method = "xgbTree",
-    na.action = na.pass,
-    tuneGrid = expand.grid(
-      nrounds = tgrid$nrounds,
-      eta = eta,  # !
-      max_depth = max_depth,  # !
-      min_child_weight = min_child_weight, # !
-      gamma = gamma, # !
-      colsample_bytree = colsample_bytree, # !
-      subsample = subsample # !
-    ),
-    trControl = trainControl(
-      index = folds_i,
-      savePredictions = "final",
-      predictionBounds = c(bounds_lower[i], bounds_upper[i]),
-      summaryFunction = sumfun,
-      allowParallel = FALSE
-    ),
-    metric = metrics[i],
-    maximize = FALSE,
-    weights = trdat$w,
-    num_parallel_tree = trees_per_round,
-    objective = objectives[i],
-    colsample_bylevel = colsample_bylevel
-  )
-  
-  min_RMSEw <- model_out$results %>% select(any_of(metrics[i])) %>% min()
-  
-  return(
-    list(
-      Score = 0 - min_RMSEw
-    )
-  )
-}
-
-xgb_opt_stepwise <- FALSE
 
 # Small random sample for testing
 # Remember to include full dataset in the final model
 n <- 1000
 
-# use_all_points <- TRUE
-use_all_points <- FALSE
+use_all_points <- TRUE
+# use_all_points <- FALSE
 
-# extra_tuning_xgb <- TRUE
-extra_tuning_xgb <- FALSE
+extra_tuning_xgb <- TRUE
+# extra_tuning_xgb <- FALSE
 
 # 9: Train models
 
 n_ogcs_models <- numeric()
-total_imp_models <- numeric()
 
 weights_objects <- list()
 
@@ -796,9 +697,112 @@ for (i in 1:length(fractions))
       c("upper", "lower") %>%
       c(., "SOM_removed")
   } 
+  # else {
+  #   if (i == 5) {
+  #     cov_c_i <- cov_selected %>%
+  #       c("upper", "lower") %>%
+  #       c(., "year")
+  #   }
+  # }
   
-  # Identify covariates that are not OGCs
+  # # CS Step 1: Decide the optimal number of OGCs
+  # ogcs_names <- grep('ogc_pi', cov_c_i, value = TRUE)
+  # covs_not_ogc <- grep('ogc_pi', cov_c_i, value = TRUE, invert = TRUE)
+  # 
+  # ogcs_names_list <- list(ogcs_names)
+  # n_ogcs_v <- numeric()
+  # 
+  # m <- 1
+  # n_ogcs <- length(ogcs_names_list[[m]])
+  # n_ogcs_v[m] <- n_ogcs
+  # 
+  # while (n_ogcs > 2) {
+  #   m <- m + 1
+  #   ogcs_names_list[[m]] <- ogcs_names_list[[m - 1]][c(TRUE, FALSE)]
+  #   n_ogcs <- length(ogcs_names_list[[m]])
+  #   n_ogcs_v[m] <- n_ogcs
+  # }
+  # 
+  # ogcs_names_list %<>% lapply(., function(x) {c(covs_not_ogc, x)})
+  # ogcs_names_list[[length(ogcs_names_list) + 1]] <- covs_not_ogc
+  # n_ogcs_v %<>% c(., 0)
+  # 
+  # print("Testing OGCs")
+  # 
+  # models_ogc_test <- ogcs_names_list %>%
+  #   lapply(
+  #     .,
+  #     function(x) {
+  #       cov_p_i <- x %>% paste0(collapse = " + ")
+  #       
+  #       formula_i <- paste0(frac, " ~ ", cov_p_i) %>%
+  #         as.formula()
+  #       
+  #       set.seed(1)
+  #       
+  #       out <- caret::train(
+  #         form = formula_i,
+  #         data = trdat,
+  #         method = "xgbTree",
+  #         na.action = na.pass,
+  #         tuneGrid = tgrid,
+  #         trControl = trainControl(
+  #           index = folds_i,
+  #           savePredictions = "final",
+  #           predictionBounds = c(bounds_lower[i], bounds_upper[i]),
+  #           summaryFunction = sumfun,
+  #           allowParallel = FALSE
+  #         ),
+  #         metric = metrics[i],
+  #         maximize = FALSE,
+  #         weights = trdat$w,
+  #         num_parallel_tree = trees_per_round,
+  #         objective = objectives[i]
+  #       )
+  #       return(out)
+  #     }
+  #   )
+  # 
+  # ogc_results <- models_ogc_test %>% lapply(
+  #   ., function(x) x$results %>% select(any_of(metrics[i])) %>% min()
+  # ) %>%
+  #   unlist()
+  # 
+  # which_ogc_ind <- which.min(ogc_results)
+  # 
+  # ogc_df <- data.frame(
+  #   fraction = frac,
+  #   n_ogcs = n_ogcs_v,
+  #   acc = ogc_results,
+  #   metric = metrics[i]
+  # )
+  # 
+  # write.table(
+  #   ogc_df,
+  #   paste0(dir_results, "ogc_acc_", frac, ".csv"),
+  #   row.names = FALSE,
+  #   col.names = TRUE,
+  #   sep = ";"
+  #   )
+  # 
+  # n_ogcs_models[i] <- n_ogcs_v[which_ogc_ind]
+  # 
+  # # CS Step 2: Drop unimportant covariates
+  # cov_c_i <- varImp(models_ogc_test[[which_ogc_ind]])$importance %>%
+  #   rownames_to_column() %>%
+  #   mutate(scaled = Overall/sum(Overall),
+  #          cumul = cumsum(scaled)) %>%
+  #   filter(cumul < 0.99) %>%
+  #   .$rowname
+  # 
+  # cov_p_i <- cov_c_i %>% paste0(collapse = " + ")
+  # 
+  # formula_i <- paste0(frac, " ~ ", cov_p_i) %>%
+  #   as.formula()
   
+  # Identify OGCs and other covariates
+  
+  ogcs_names <- grep('ogc_pi', cov_c_i, value = TRUE)
   covs_not_ogc <- grep('ogc_pi', cov_c_i, value = TRUE, invert = TRUE)
   
   cov_p_i <- covs_not_ogc %>% paste0(collapse = " + ")
@@ -837,30 +841,27 @@ for (i in 1:length(fractions))
     maximize = FALSE,
     weights = trdat$w,
     num_parallel_tree = trees_per_round,
-    objective = objectives[i],
-    colsample_bylevel = 0.1
+    objective = objectives[i]
   )
   
   models_tr_summaries[[i]][[tr_step]] <- models[[i]]$results
   print(models_tr_summaries[[i]][[tr_step]])
   tr_step %<>% `+`(1)
   
-  if (extra_tuning_xgb & xgb_opt_stepwise) {
-    # CS Step 1: Drop unimportant covariates
-    cov_i_ranked <- varImp(models[[i]])$importance %>%
-      rownames_to_column() %>%
-      mutate(scaled = Overall/sum(Overall),
-             cumul = cumsum(scaled))
-    
-    cov_c_i <- cov_i_ranked %>%
-      filter(cumul < 0.99) %>%
-      .$rowname
-    
-    cov_p_i <- cov_c_i %>% paste0(collapse = " + ")
-    
-    formula_i <- paste0(frac, " ~ ", cov_p_i) %>%
-      as.formula()
-    
+  # CS Step 1: Drop unimportant covariates
+  cov_c_i <- varImp(models[[i]])$importance %>%
+    rownames_to_column() %>%
+    mutate(scaled = Overall/sum(Overall),
+           cumul = cumsum(scaled)) %>%
+    filter(cumul < 0.99) %>%
+    .$rowname
+
+  cov_p_i <- cov_c_i %>% paste0(collapse = " + ")
+
+  formula_i <- paste0(frac, " ~ ", cov_p_i) %>%
+    as.formula()
+
+  if (extra_tuning_xgb) {
     # xgb opt Step 2: Fit max_depth and min_child_weight
     print("Step 2: Fit max_depth and min_child_weight")
 
@@ -1129,89 +1130,6 @@ for (i in 1:length(fractions))
     print(models_tr_summaries[[i]][[tr_step]])
     tr_step %<>% `+`(1)
   }
-  
-  # Bayes optimization
-  if (extra_tuning_xgb & !xgb_opt_stepwise) {
-    ScoreResult <- bayesOpt(
-      FUN = scoringFunction,
-      bounds = bounds,
-      initPoints = 3,
-      iters.n = 3,
-      iters.k = 1,
-      acq = "ei",
-      gsPoints = 10,
-      parallel = FALSE,
-      verbose = 1,
-    )
-    
-    ScoreResult
-    
-    ScoreResult$scoreSummary[which.max(ScoreResult$scoreSummary$Score), ]
-    
-    best_pars <- getBestPars(ScoreResult)
-    
-    best_pars
-    
-    print("Training final model")
-    
-    # Drop unimportant covariates
-    cov_i_filtered <- cov_i_ranked %>%
-      filter(cumul < best_pars$total_imp) %>%  #!
-      .$rowname
-    total_imp_models[i] <- best_pars$total_imp
-    
-    # Add OGCs
-    cov_i_filtered %<>% c(., ogcs_names_list[[best_pars$ogcs_index]])  # !
-    n_ogcs_models[i] <- n_ogcs_v[best_pars$ogcs_index]
-    
-    # Make formula
-    cov_formula <- cov_i_filtered %>% paste0(collapse = " + ")
-    
-    formula_i <- paste0(frac, " ~ ", cov_formula) %>%
-      as.formula()
-    
-    # Lower eta
-    
-    eta_test_final <- best_pars$eta %>%
-      log() %>%
-      seq(., . + log(0.01), length.out = 9) %>%
-      exp() %>%
-      round(3)
-    
-    set.seed(1)
-    
-    model_final <- caret::train(
-      form = formula_i,
-      data = trdat,
-      method = "xgbTree",
-      na.action = na.pass,
-      tuneGrid = expand.grid(
-        nrounds = tgrid$nrounds*10,
-        eta = eta_test_final, # NB
-        max_depth = best_pars$max_depth,
-        min_child_weight = best_pars$min_child_weight,
-        gamma = best_pars$gamma,
-        colsample_bytree = best_pars$colsample_bytree,
-        subsample = best_pars$subsample
-      ),
-      trControl = trainControl(
-        index = folds_i,
-        savePredictions = "final",
-        predictionBounds = c(bounds_lower[i], bounds_upper[i]),
-        summaryFunction = sumfun,
-        allowParallel = FALSE
-      ),
-      metric = metrics[i],
-      maximize = FALSE,
-      weights = trdat$w,
-      num_parallel_tree = trees_per_round,
-      objective = objectives[i],
-      colsample_bylevel = best_pars$colsample_bylevel
-    )
-    
-    models[[i]] <- model_final
-  }
-  
   print(models[[i]])
   
   models_predictions[trdat_indices, i] <- models[[i]]$pred %>%
@@ -1221,16 +1139,10 @@ for (i in 1:length(fractions))
     unlist() %>%
     unname()
   
-  if (i %in% 1:4) {
-    n_const_i <- 3
-  } else {
-    n_const_i <- 2
-  }
-  
   models_predictions[holdout_indices, i] <- predict_passna(
     models[[i]],
     holdout_i,
-    n_const = n_const_i
+    n_const = 3
     )
   
   saveRDS(
@@ -1294,7 +1206,6 @@ models_sum <- lapply(models, function(x) {
     .before = 1
   ) %>% mutate(
     ogcs = n_ogcs_models,
-    total_imp = total_imp_models,
     .after = 1
   ) %T>%
   write.table(
@@ -1475,6 +1386,9 @@ JB_df %>%
 
 
 # Analyse predictions and observations
+# To do:
+# Separate figures for holdout dataset
+# Include weights
 
 getpred <- function(
     x2, i2, axmaxmin = TRUE, drop_imputed = TRUE, drop_inf = TRUE
@@ -1707,6 +1621,9 @@ try(dev.off())
 
 
 # Accuracy vs depth
+
+# depths_acc <- c(0:200)
+# d_interval_exp <- 10
 
 d_out <- list()
 
