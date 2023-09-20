@@ -535,7 +535,8 @@ scoringFunction <- function(
     weights = trdat$w,
     num_parallel_tree = trees_per_round,
     objective = objectives[i],
-    colsample_bylevel = colsample_bylevel
+    colsample_bylevel = colsample_bylevel,
+    nthread = 20
   )
   
   min_RMSEw <- model_out$results %>% select(any_of(metrics[i])) %>% min()
@@ -840,7 +841,8 @@ for (i in 1:length(fractions))
     weights = trdat$w,
     num_parallel_tree = trees_per_round,
     objective = objectives[i],
-    colsample_bylevel = 0.1
+    colsample_bylevel = 0.75,
+    nthread = 20
   )
   
   models_tr_summaries[[i]][[tr_step]] <- models[[i]]$results
@@ -1140,11 +1142,11 @@ for (i in 1:length(fractions))
     ScoreResult <- bayesOpt(
       FUN = scoringFunction,
       bounds = bounds,
-      initPoints = 10,
+      initPoints = 20,
       iters.n = 10,
       iters.k = 1,
       acq = "ei",
-      gsPoints = 10,
+      gsPoints = 20,
       parallel = FALSE,
       verbose = 1,
     )
