@@ -474,7 +474,7 @@ bounds <- list(
   eta = c(0.1, 1),
   max_depth = c(1L, 30L),
   min_child_weight = c(1, 64),
-  gamma = c(0, 0.6),
+  gamma = c(0, 1),
   colsample_bytree = c(0.1, 1),
   subsample = c(0.1, 1),
   colsample_bylevel = c(0.1, 1),
@@ -491,7 +491,7 @@ scoringFunction <- function(
     subsample,  # OK
     colsample_bylevel,
     ogcs_index,  # OK
-    total_imp,  # OK
+    total_imp  # OK
     ) {
   # Drop unimportant covariates
   cov_i_filtered <- cov_i_ranked %>%
@@ -542,7 +542,8 @@ scoringFunction <- function(
   
   return(
     list(
-      Score = 0 - min_RMSEw
+      Score = 0 - min_RMSEw,
+      n_ogcs = length(ogcs_names_list[[ogcs_index]]) 
     )
   )
 }
@@ -553,11 +554,11 @@ xgb_opt_stepwise <- FALSE
 # Remember to include full dataset in the final model
 n <- 1000
 
-# use_all_points <- TRUE
-use_all_points <- FALSE
+use_all_points <- TRUE
+# use_all_points <- FALSE
 
-# extra_tuning_xgb <- TRUE
-extra_tuning_xgb <- FALSE
+extra_tuning_xgb <- TRUE
+# extra_tuning_xgb <- FALSE
 
 # 9: Train models
 
@@ -628,6 +629,7 @@ for (i in 1:length(fractions))
     )
 
   # Weighting by depth intervals
+  print("Calculating weights")
   w_interval <- 10
   w_increment <- 1
   w_startdepth <- 0
@@ -845,13 +847,16 @@ for (i in 1:length(fractions))
   print(models_tr_summaries[[i]][[tr_step]])
   tr_step %<>% `+`(1)
   
+  # Scaled cumulative covariate importance
+  cov_i_ranked <- varImp(models[[i]])$importance %>%
+    rownames_to_column() %>%
+    mutate(
+      scaled = Overall/sum(Overall),
+      cumul = cumsum(scaled)
+    )
+  
   if (extra_tuning_xgb & xgb_opt_stepwise) {
     # CS Step 1: Drop unimportant covariates
-    cov_i_ranked <- varImp(models[[i]])$importance %>%
-      rownames_to_column() %>%
-      mutate(scaled = Overall/sum(Overall),
-             cumul = cumsum(scaled))
-    
     cov_c_i <- cov_i_ranked %>%
       filter(cumul < 0.99) %>%
       .$rowname
@@ -1135,22 +1140,24 @@ for (i in 1:length(fractions))
     ScoreResult <- bayesOpt(
       FUN = scoringFunction,
       bounds = bounds,
-      initPoints = 3,
-      iters.n = 3,
+      initPoints = 10,
+      iters.n = 10,
       iters.k = 1,
       acq = "ei",
       gsPoints = 10,
       parallel = FALSE,
       verbose = 1,
     )
+
+    print(
+      ScoreResult$scoreSummary
+    )
     
-    ScoreResult
-    
-    ScoreResult$scoreSummary[which.max(ScoreResult$scoreSummary$Score), ]
+    print(
+      ScoreResult$scoreSummary[which.max(ScoreResult$scoreSummary$Score), ]
+    )
     
     best_pars <- getBestPars(ScoreResult)
-    
-    best_pars
     
     print("Training final model")
     
@@ -1238,6 +1245,8 @@ for (i in 1:length(fractions))
     paste0(dir_results, "/model_", frac, ".rds")
   )
 }
+
+# End of model training
 
 names(weights_objects) <- fractions
 
@@ -2246,8 +2255,8 @@ plot_jb <- autoplot(maps_10km_jb) +
 
 tiff(
   paste0(dir_results, "/JB_test_", testn, ".tiff"),
-  width = 15,
-  height = 10,
+  width = 16,
+  height = 14,
   units = "cm",
   res = 300
 )
