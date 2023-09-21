@@ -499,7 +499,7 @@ scoringFunction <- function(
     .$rowname
   
   # Make sure SOM removal is a covariate
-  if (i %in% 1:4 & !"SOM_removed" %in% cov_i_filtered) {
+  if ((i %in% 1:4) & !("SOM_removed" %in% cov_i_filtered)) {
     cov_i_filtered %<>% c(., "SOM_removed")
   }
   
@@ -536,20 +536,22 @@ scoringFunction <- function(
     trControl = trainControl(
       index = folds_i,
       savePredictions = "final",
-      predictionBounds = c(bounds_lower[i], bounds_upper[i]),
+      predictionBounds = c(bounds_lower_i, bounds_upper_i),
       summaryFunction = sumfun,
       allowParallel = FALSE
     ),
-    metric = metrics[i],
+    metric = metrics_i,
     maximize = FALSE,
     weights = trdat$w,
     num_parallel_tree = trees_per_round,
-    objective = objectives[i],
+    objective = objectives_i,
     colsample_bylevel = colsample_bylevel,
     nthread = 1
   )
   
-  min_RMSEw <- model_out$results %>% select(any_of(metrics[i])) %>% min()
+  min_RMSEw <- model_out$results %>%
+    select(any_of(metrics_i)) %>%
+    min()
   
   return(
     list(
@@ -568,8 +570,8 @@ xgb_opt_stepwise <- FALSE
 # Remember to include full dataset in the final model
 n <- 1000
 
-use_all_points <- TRUE
-# use_all_points <- FALSE
+# use_all_points <- TRUE
+use_all_points <- FALSE
 
 extra_tuning_xgb <- TRUE
 # extra_tuning_xgb <- FALSE
@@ -787,7 +789,7 @@ for (i in 1:length(fractions))
   
   trdat_indices <- which(obs$ID_new %in% trdat$ID_new)
   
-  models_indices[, i] <- trdat_indices
+  models_indices[, i] <- obs$ID_new %in% trdat$ID_new
   
   holdout_i <- obs[-trdat_indices, ]
   holdout_indices <- which(obs$ID_new %in% holdout_i$ID_new)
@@ -1199,17 +1201,23 @@ for (i in 1:length(fractions))
       }
     )
     
+    bounds_lower_i <- bounds_lower[i]
+    bounds_upper_i <- bounds_upper[i]
+    metrics_i <- metrics[i]
+    objectives_i <- objectives[i]
+    
     clusterExport(
       cl,
       c("i",
         "frac",
-        "bounds_lower",
-        "bounds_upper",
+        "bounds_lower_i",
+        "bounds_upper_i",
         "cov_i_ranked",
         "folds_i",
         "get_RMSEw",
         "get_R2w",
-        "metrics",
+        "metrics_i",
+        "objectives_i",
         "ogcs_names_list",
         "sumfun",
         "tgrid",
@@ -1228,10 +1236,14 @@ for (i in 1:length(fractions))
       iters.k = 19,
       acq =  "ucb",
       gsPoints = 190,
-      parallel = FALSE,
+      parallel = TRUE,
       verbose = 1,
       acqThresh = 0.95
     )
+    
+    stopCluster(cl)
+    foreach::registerDoSEQ()
+    rm(cl)
 
     print(
       ScoreResult$scoreSummary
