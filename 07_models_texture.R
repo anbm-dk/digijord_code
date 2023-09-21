@@ -275,6 +275,14 @@ obs %<>%
   mutate(ID_new = rowname, .before = everything()) %>%
   select(-rowname)
 
+write.table(
+  obs,
+  paste0(dir_results, "observations_texture.csv"),
+  row.names = FALSE,
+  col.names = TRUE,
+  sep = ";"
+)
+
 obs_top <- obs %>%
   filter(
     upper < 25,
