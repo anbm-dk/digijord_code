@@ -472,9 +472,9 @@ library(ParBayesianOptimization)
 
 bounds <- list(
   eta = c(0.1, 1),
-  max_depth = c(1L, 30L),
-  min_child_weight = c(1, 64),
-  gamma = c(0, 1),
+  max_depth = c(1L, 40L),
+  min_child_weight_sqrt = c(1, sqrt(64)),
+  gamma_sqrt = c(0, sqrt(20)),
   colsample_bytree = c(0.1, 1),
   subsample = c(0.1, 1),
   colsample_bylevel = c(0.1, 1),
@@ -485,8 +485,8 @@ bounds <- list(
 scoringFunction <- function(
     eta,  # OK
     max_depth,  # OK
-    min_child_weight,  # OK
-    gamma,  # OK
+    min_child_weight_sqrt,  # OK
+    gamma_sqrt,  # OK
     colsample_bytree,  # OK
     subsample,  # OK
     colsample_bylevel,
@@ -498,6 +498,11 @@ scoringFunction <- function(
     filter(cumul < total_imp) %>%  #!
     .$rowname
   
+  # Make sure SOM removal is a covariate
+  if (i %in% 1:4 & !"SOM_removed" %in% cov_i_filtered) {
+    cov_i_filtered %<>% c(., "SOM_removed")
+  }
+  
   # Add OGCs
   cov_i_filtered %<>% c(., ogcs_names_list[[ogcs_index]])  # !
   
@@ -506,6 +511,11 @@ scoringFunction <- function(
   
   formula_i <- paste0(frac, " ~ ", cov_formula) %>%
     as.formula()
+  
+  my_gamma <- gamma_sqrt^2
+  my_min_child_weight <- min_child_weight_sqrt^2
+  
+  showConnections()
   
   set.seed(1)
   
@@ -518,8 +528,8 @@ scoringFunction <- function(
       nrounds = tgrid$nrounds,
       eta = eta,  # !
       max_depth = max_depth,  # !
-      min_child_weight = min_child_weight, # !
-      gamma = gamma, # !
+      min_child_weight = my_min_child_weight, # !
+      gamma = my_gamma, # !
       colsample_bytree = colsample_bytree, # !
       subsample = subsample # !
     ),
@@ -536,7 +546,7 @@ scoringFunction <- function(
     num_parallel_tree = trees_per_round,
     objective = objectives[i],
     colsample_bylevel = colsample_bylevel,
-    nthread = 20
+    nthread = 1
   )
   
   min_RMSEw <- model_out$results %>% select(any_of(metrics[i])) %>% min()
@@ -544,7 +554,10 @@ scoringFunction <- function(
   return(
     list(
       Score = 0 - min_RMSEw,
-      n_ogcs = length(ogcs_names_list[[ogcs_index]]) 
+      n_ogcs = length(ogcs_names_list[[ogcs_index]]),
+      gamma = my_gamma,
+      min_child_weight = my_min_child_weight,
+      n_cov = length(cov_i_filtered)
     )
   )
 }
@@ -590,6 +603,12 @@ models_predictions <- matrix(
   )
 
 models_weights <- matrix(
+  numeric(),
+  nrow = nrow(obs),
+  ncol = length(fractions)
+)
+
+models_indices <- matrix(
   numeric(),
   nrow = nrow(obs),
   ncol = length(fractions)
@@ -768,6 +787,8 @@ for (i in 1:length(fractions))
   
   trdat_indices <- which(obs$ID_new %in% trdat$ID_new)
   
+  models_indices[, i] <- trdat_indices
+  
   holdout_i <- obs[-trdat_indices, ]
   holdout_indices <- which(obs$ID_new %in% holdout_i$ID_new)
 
@@ -812,6 +833,25 @@ for (i in 1:length(fractions))
   # xgboost optimization
   # 1: Fit learning rate (eta)
   print("Step 1: Fit learning rate (eta)")
+  
+  showConnections()
+  cl <- makePSOCKcluster(19)
+  registerDoParallel(cl)
+  
+  clusterEvalQ(
+    cl,
+    {
+      library(boot)
+    }
+  )
+  
+  clusterExport(
+    cl,
+    c(
+      "get_RMSEw",
+      "get_R2w"
+    )
+  )
 
   set.seed(1)
 
@@ -834,7 +874,7 @@ for (i in 1:length(fractions))
       savePredictions = "final",
       predictionBounds = c(bounds_lower[i], bounds_upper[i]),
       summaryFunction = sumfun,
-      allowParallel = FALSE
+      allowParallel = TRUE
     ),
     metric = metrics[i],
     maximize = FALSE,
@@ -842,8 +882,12 @@ for (i in 1:length(fractions))
     num_parallel_tree = trees_per_round,
     objective = objectives[i],
     colsample_bylevel = 0.75,
-    nthread = 20
+    nthread = 1
   )
+  
+  stopCluster(cl)
+  foreach::registerDoSEQ()
+  rm(cl)
   
   models_tr_summaries[[i]][[tr_step]] <- models[[i]]$results
   print(models_tr_summaries[[i]][[tr_step]])
@@ -1139,16 +1183,54 @@ for (i in 1:length(fractions))
   
   # Bayes optimization
   if (extra_tuning_xgb & !xgb_opt_stepwise) {
+    showConnections()
+    
+    cl <- makeCluster(19)
+    registerDoParallel(cl)
+    clusterEvalQ(
+      cl,
+      {
+        library(caret)
+        library(xgboost)
+        library(magrittr)
+        library(dplyr)
+        library(tools)
+        library(boot)
+      }
+    )
+    
+    clusterExport(
+      cl,
+      c("i",
+        "frac",
+        "bounds_lower",
+        "bounds_upper",
+        "cov_i_ranked",
+        "folds_i",
+        "get_RMSEw",
+        "get_R2w",
+        "metrics",
+        "ogcs_names_list",
+        "sumfun",
+        "tgrid",
+        "trdat",
+        "trees_per_round"
+      )
+    )
+    
+    set.seed(321)
+    
     ScoreResult <- bayesOpt(
       FUN = scoringFunction,
       bounds = bounds,
-      initPoints = 20,
-      iters.n = 10,
-      iters.k = 1,
-      acq = "ei",
-      gsPoints = 20,
+      initPoints = 19,
+      iters.n = 190,
+      iters.k = 19,
+      acq =  "ucb",
+      gsPoints = 190,
       parallel = FALSE,
       verbose = 1,
+      acqThresh = 0.95
     )
 
     print(
@@ -1167,6 +1249,12 @@ for (i in 1:length(fractions))
     cov_i_filtered <- cov_i_ranked %>%
       filter(cumul < best_pars$total_imp) %>%  #!
       .$rowname
+    
+    # Make sure SOM removal is a covariate
+    if (i %in% 1:4 & !"SOM_removed" %in% cov_i_filtered) {
+      cov_i_filtered %<>% c(., "SOM_removed")
+    }
+    
     total_imp_models[i] <- best_pars$total_imp
     
     # Add OGCs
@@ -1187,6 +1275,25 @@ for (i in 1:length(fractions))
       exp() %>%
       round(3)
     
+    showConnections()
+    cl <- makePSOCKcluster(19)
+    registerDoParallel(cl)
+    
+    clusterEvalQ(
+      cl,
+      {
+        library(boot)
+      }
+    )
+    
+    clusterExport(
+      cl,
+      c(
+        "get_RMSEw",
+        "get_R2w"
+      )
+    )
+
     set.seed(1)
     
     model_final <- caret::train(
@@ -1198,8 +1305,8 @@ for (i in 1:length(fractions))
         nrounds = tgrid$nrounds*10,
         eta = eta_test_final, # NB
         max_depth = best_pars$max_depth,
-        min_child_weight = best_pars$min_child_weight,
-        gamma = best_pars$gamma,
+        min_child_weight = best_pars$min_child_weight_sqrt^2,
+        gamma = best_pars$gamma_sqrt^2,
         colsample_bytree = best_pars$colsample_bytree,
         subsample = best_pars$subsample
       ),
@@ -1208,15 +1315,20 @@ for (i in 1:length(fractions))
         savePredictions = "final",
         predictionBounds = c(bounds_lower[i], bounds_upper[i]),
         summaryFunction = sumfun,
-        allowParallel = FALSE
+        allowParallel = TRUE
       ),
       metric = metrics[i],
       maximize = FALSE,
       weights = trdat$w,
       num_parallel_tree = trees_per_round,
       objective = objectives[i],
-      colsample_bylevel = best_pars$colsample_bylevel
+      colsample_bylevel = best_pars$colsample_bylevel,
+      nthread = 1
     )
+    
+    stopCluster(cl)
+    foreach::registerDoSEQ()
+    rm(cl)
     
     models[[i]] <- model_final
   }
@@ -1265,6 +1377,13 @@ saveRDS(
 write.table(
   models_weights,
   file = paste0(dir_results, "/models_weights.csv"),
+  sep = ";",
+  row.names = FALSE
+)
+
+write.table(
+  models_indices,
+  file = paste0(dir_results, "/models_indices.csv"),
   sep = ";",
   row.names = FALSE
 )
@@ -2049,7 +2168,7 @@ map_spec <- expand_grid(
 
 showConnections()
 
-numCores <- 20
+numCores <- 19
 
 cl <- makeCluster(numCores)
 
