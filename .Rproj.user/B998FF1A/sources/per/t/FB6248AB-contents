@@ -1,8 +1,5 @@
 # 07: Train texture models
 
-# xgboost
-# Use all observations, including NA (OK)
-
 # 1: Start up
 
 # library(Cubist)
@@ -472,9 +469,9 @@ library(ParBayesianOptimization)
 
 bounds <- list(
   eta = c(0.1, 1),
-  max_depth = c(1L, 40L),
+  max_depth = c(1L, 50L),
   min_child_weight_sqrt = c(1, sqrt(64)),
-  gamma_sqrt = c(0, sqrt(20)),
+  gamma_sqrt = c(0, sqrt(30)),
   colsample_bytree = c(0.1, 1),
   subsample = c(0.1, 1),
   colsample_bylevel = c(0.1, 1),
@@ -570,8 +567,8 @@ xgb_opt_stepwise <- FALSE
 # Remember to include full dataset in the final model
 n <- 1000
 
-# use_all_points <- TRUE
-use_all_points <- FALSE
+use_all_points <- TRUE
+# use_all_points <- FALSE
 
 extra_tuning_xgb <- TRUE
 # extra_tuning_xgb <- FALSE
@@ -584,6 +581,9 @@ total_imp_models <- numeric()
 weights_objects <- list()
 
 models_tr_summaries <- list()
+
+models_scoreresults <- list()
+models_bestscores <- list()
 
 # Covariate selection:
 # Step 1: Decide the optimal number of OGCs
@@ -1228,7 +1228,7 @@ for (i in 1:length(fractions))
     
     set.seed(321)
     
-    ScoreResult <- bayesOpt(
+    models_scoreresults[[i]] <- bayesOpt(
       FUN = scoringFunction,
       bounds = bounds,
       initPoints = 19,
@@ -1244,16 +1244,19 @@ for (i in 1:length(fractions))
     stopCluster(cl)
     foreach::registerDoSEQ()
     rm(cl)
-
-    print(
-      ScoreResult$scoreSummary
-    )
     
     print(
-      ScoreResult$scoreSummary[which.max(ScoreResult$scoreSummary$Score), ]
+      models_scoreresults[[i]]$scoreSummary
     )
     
-    best_pars <- getBestPars(ScoreResult)
+    models_bestscores[[i]] <- models_scoreresults[[i]]$scoreSummary %>%
+      filter(Score == max(Score, na.rm = TRUE))
+    
+    print(
+      models_bestscores[[i]]
+    )
+    
+    best_pars <- getBestPars(models_scoreresults[[i]])
     
     print("Training final model")
     
@@ -1384,6 +1387,16 @@ saveRDS(
 saveRDS(
   models_tr_summaries,
   paste0(dir_results, "/models_tr_summaries.rds")
+)
+
+saveRDS(
+  models_scoreresults,
+  paste0(dir_results, "/models_scoreresults.rds")
+)
+
+saveRDS(
+  models_bestscores,
+  paste0(dir_results, "/models_bestscores.rds")
 )
 
 write.table(
