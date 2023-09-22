@@ -219,21 +219,36 @@ forests_extr <- dir_extr %>%
   paste0(., "/forests_extr.rds") %>%
   readRDS()
 
-# 6: Merge data and transform the target variables
+# 6: Merge data
 
-obs_data <- list(dsc, SEGES, SINKS, profiles_texture, forest_samples) %>%
-  vect() %>%
+obs_v <- list(dsc, SEGES, SINKS, profiles_texture, forest_samples) %>%
+  vect()
+
+# Extract mask values for all the observations
+
+mask_LU <- paste0(dir_dat, "/layers/Mask_LU.tif") %>% rast()
+
+mask_LU_extr <- terra::extract(
+  mask_LU,
+  obs_v,
+  ID = FALSE
+)
+
+mask_LU_extr %<>% unlist() %>% unname()
+
+obs_data <- obs_v %>%
   values() %>%
   mutate(
-    logSOC = log(SOC),
-    logCaCO3 = log(CaCO3),
+    # logSOC = log(SOC),
+    # logCaCO3 = log(CaCO3),
     year = date %>%
       as.character() %>%
       substr(start = 1, stop = 4) %>%
-      as.numeric()
+      as.numeric(),
+    mask_LU = mask_LU_extr
   )
 
-fractions <- c("clay", "silt", "fine_sand", "coarse_sand", "logSOC", "logCaCO3")
+# fractions <- c("clay", "silt", "fine_sand", "coarse_sand", "logSOC", "logCaCO3")
 
 fractions_alt <- c("clay", "silt", "fine_sand", "coarse_sand", "SOC", "CaCO3")
 
@@ -268,7 +283,14 @@ extr <- bind_rows(
 )
 
 obs <- cbind(obs_data, extr, folds) %>%
-  filter(!is.na(UTMX) & !is.na(UTMY))
+  filter(
+    !is.na(UTMX),
+    !is.na(UTMY),
+    !is.na(mask_LU),
+    is.finite(fold)
+    )
+
+# Make new ID
 
 obs %<>%
   rownames_to_column() %>%
@@ -285,44 +307,88 @@ write.table(
 
 obs_top <- obs %>%
   filter(
-    upper < 25,
-    is.finite(fold)
+    upper < 30,
+    lower > 0
   )
 
 obs_prf <- obs %>%
   filter(
-    db == "Profile database",
-    is.finite(fold)
+    db == "Profile database"
   )
-
-# Make new ID
 
 obs_top_v <- obs_top %>% vect(geom = c("UTMX", "UTMY"))
 
+library(tidyterra)
+
+my_breaks <- function(x) {
+  x <- unique(x)
+  n <- 6
+  i <- seq(0, 1, length.out = n)
+  breaks <- quantile(x, i, na.rm = TRUE)
+  breaks <- round(breaks, digits = 1)
+  breaks <- unique(breaks)
+  if ((breaks[1] %% 1) != 0) {
+    breaks[1] <- breaks[1] - 0.000001
+  }
+  if ((breaks[n] %% 1) != 0) {
+    breaks[n] <- breaks[n] + 0.000001
+  }
+  return(breaks)
+}
+
+set.seed(1)
+
+obs_top_plot <- obs_top_v %>%
+  mutate(random = runif(length(.))) %>%
+  arrange(random) %>%
+  select(any_of(fractions))
+
+frac_labels = c(
+  expression("Clay"~"(%)"),
+  expression("Silt"~"(%)"),
+  expression("Fine"~"sand"~"(%)"),
+  expression("Coarse"~"sand"~"(%)"),
+  expression("SOC"~"(%)"),
+  expression("CaCO"[3]~"(%)")
+)
+
 library(viridisLite)
+
+mycolors <- cividis(6) %>% rev() %>% .[-1] %>% rev()
 
 tiff(
   paste0(dir_results, "/obs_map_test", testn, ".tiff"),
-  width = 15,
+  width = 16,
   height = 10,
   units = "cm",
   res = 300
 )
 
+par(oma = c(2, 2, 0, 1))
+
 plot(
-  obs_top_v, "clay",
-  breaks = 5, breakby = "cases", col = cividis(5),
-  cex = 0.2
+  obs_top_plot,
+  y = 1:length(fractions),
+  breaks = 5,
+  breakby = my_breaks,
+  col = viridis(5),
+  colNA = NA,
+  cex = 0.1,
+  mar = c(0, 0, 1, 0),
+  main = frac_labels,
+  plg = list(x = "topright", text.col = viridis(5), 
+             # cex = 1, bty="o", 
+             # box.lwd = 0, bg="grey70",
+             fill = viridis(5),
+             text.font = 2)
+  # ,
+  # background = 'white'
 )
 
 try(dev.off())
 try(dev.off())
 
-plot(
-  obs_top_v, "clay",
-  breaks = 5, breakby = "cases", col = cividis(5),
-  cex = 0.4
-)
+par()
 
 # 8: Set up models
 
