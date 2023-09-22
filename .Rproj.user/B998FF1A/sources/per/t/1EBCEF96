@@ -1,27 +1,27 @@
 {
-    "id": "185D5392",
-    "path": "C:/Users/au542768/digijord/digijord_code/08_texture_maps.R",
-    "project_path": "08_texture_maps.R",
+    "id": "1EBCEF96",
+    "path": "C:/Users/au542768/digijord/digijord_code/02_Cov_mask.R",
+    "project_path": "02_Cov_mask.R",
     "type": "r_source",
-    "hash": "946671275",
+    "hash": "3945355373",
     "contents": "",
     "dirty": false,
-    "created": 1681738942955.0,
+    "created": 1695368580235.0,
     "source_on_save": false,
-    "relative_order": 9,
+    "relative_order": 3,
     "properties": {
         "tempName": "Untitled1",
         "source_window_id": "",
         "Source": "Source",
-        "cursorPosition": "290,13",
-        "scrollLine": "0"
+        "cursorPosition": "91,0",
+        "scrollLine": "87"
     },
     "folds": "",
-    "lastKnownWriteTime": 1689241270,
+    "lastKnownWriteTime": 1695372126,
     "encoding": "UTF-8",
     "collab_server": "",
     "source_window": "",
-    "last_content_update": 1689241270,
+    "last_content_update": 1695372126464,
     "read_only": false,
     "read_only_alternatives": []
 }

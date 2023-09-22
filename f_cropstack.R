@@ -2,8 +2,9 @@
 
 cropstack <- function(
     x, # list of files
-    y, # extent
-    folder # target folder
+    y, # extent, polygon or raster
+    folder, # target folder
+    mask = FALSE # Use y for masking?
     ) {
   for (i in 1:length(x)) {
     require(terra)
@@ -19,7 +20,7 @@ cropstack <- function(
       base::make.names(.)
     outfile <- outname_base %>%
       base::paste0(folder, "/", ., ".tif")
-    crop_r <- terra::crop(x = r, y = y)
+    crop_r <- terra::crop(x = r, y = y, mask = mask)
     names(crop_r) <- outname_base
     crop_r %>%
       terra::writeRaster(

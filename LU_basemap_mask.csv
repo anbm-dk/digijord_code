@@ -1,0 +1,36 @@
+﻿OID;COUNT;C_01;C_02;C_03;Mask
+0;136029;110000;110000 Bygning;110000 Building;0
+1;21715444;121000;121000 Lav bebyggelse;121000 Low built up;0
+2;5467969;121110;"121110 Lav bebyggelse; Bygning";"121110 Low built up; Building";0
+3;501700;122000;122000 Høj bebyggelse;122000 High built up;0
+4;198580;122110;"122110 Høj bebyggelse; Bygning";"122110 High built up; Building";0
+5;142953;123000;123000 Bykerne;123000 City centre;0
+6;135016;123110;"123110 Bykerne; Bygning";"123110 City centre; Building";0
+7;592382;124000;124000 Andet bebyggelse;124000 Other built up;0
+8;46763;124110;"124110 Andet bebyggelse; Bygning";"124110 Other built up; Building";0
+9;2506437;125000;125000 Erhverv;125000 Industry / business;0
+10;997114;125110;"125110 Erhverv; Bygning";"125110 Industry / business; Building";0
+11;232854;126000;126000 Lufthavn / landingsbane;126000 Airport / runway;0
+12;9008;126110;"126110 Lufthavn / landingsbane; Bygning";"126110 Airport / runway; Building";0
+13;3628272;130000;130000 Rekreativt område / sportsanlæg;130000 Recreation area / sports ground;0
+14;111163;130110;"130110 Rekreativt område / sportsanlæg; Bygning";"130110 Recreation area / sports ground; Building";0
+15;13154818;141000;141000 Vej, befæstet;141000 Road, paved;0
+16;9946443;142000;142000 Vej, ikke befæstet;142000 Road, not paved;0
+17;567590;150000;150000 Jernbane;150000 Railway;0
+18;10055;150110;"150110 Jernbane; Bygning";"150110 Railway; Building";0
+19;520016;160000;160000 Råstofudvinding;160000 Resource extraction;0
+20;230724319;211000;211000 Landbrug, intensivt, midlertidige afgrøder;211000 Agriculture, intensive, temporary crops;1
+21;3852496;212000;212000 Landbrug, intensivt, permanente afgrøder;212000 Agriculture, intensive, permanent crops;1
+22;18975390;220000;220000 Landbrug, ekstensivt;220000 Agriculture, extensive;1
+23;865491;230000;230000 Landbrug, ikke klassificeret;230000 Agriculture, not classified;1
+24;56603450;311000;311000 Skov;311000 Forest;1
+25;532473;312000;312000 Skov, våd;312000 Forest, wet;1
+26;10973397;321000;321000 Natur, tør;321000 Nature, dry;1
+27;4528456;321220;321220 Natur, tør, Landbrug, ekstensivt;321220 Nature, dry, Agriculture, extensive;1
+28;11865171;322000;322000 Natur, våd;322000 Nature, wet;1
+29;12403555;322220;322220 Natur, våd, Landbrug, ekstensiv;322220 Nature, wet, Agriculture, extensive;1
+30;8020060;411000;411000 Sø;411000 Lake;0
+31;4092830;412000;412000 Vandløb;412000 Stream;0
+32;302025061;420000;420000 Hav;420000 Sea;0
+33;6842202;800000;800000 Ikke kortlagt;800000 Unmapped;1
+34;15836666;999999;999999 Tyskland;999999 Germany;0

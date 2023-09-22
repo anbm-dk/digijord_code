@@ -17,6 +17,8 @@ mycrs <- "EPSG:25832"
 dir_tiles <- dir_dat %>%
   paste0(., "/tiles_591/")
 
+dir_mask_tiles <- dir_dat %>%
+  paste0(., "/layers/Mask_LU_tiles/")
 
 # Load tile shape polygons
 
@@ -52,24 +54,7 @@ tile_numbers <- length(tile_shapes) %>%
 
 source("f_cropstack.R")
 
-# Loop for tile creation
-
-# Include parallel operation
-
-# for (j in 1:length(tile_shapes)) {
-# for (j in 1) {
-#   print(j)
-#
-#   dir_tile_j <- dir_tiles %>%
-#     paste0(., "/tile_", tile_numbers[j], "/") %T>%
-#     dir.create()
-#
-#   cropstack(
-#     x = cov_files,
-#     y = tile_shapes[j],
-#     folder = dir_tile_j
-#   )
-# }
+# Process for tile creation
 
 library(parallel)
 
@@ -97,7 +82,8 @@ clusterExport(
     "dir_tiles",
     "dir_code",
     "tile_numbers",
-    "cov_files"
+    "cov_files",
+    "dir_mask_tiles"
   )
 )
 
@@ -113,16 +99,24 @@ parSapplyLB(
       paste0(., "/tile_", tile_numbers[j], "/") %T>%
       dir.create()
 
-    tile_shapes <- dir_tiles %>%
-      base::paste0(., "/tiles.shp") %>%
-      terra::vect()
+    # tile_shapes <- dir_tiles %>%
+    #   base::paste0(., "/tiles.shp") %>%
+    #   terra::vect()
+    
+    # my_ext <- tile_shapes[j]
+    
+    my_ext <- paste0(
+      dir_mask_tiles, "/Mask_LU_tile_", tile_numbers[j], ".tif"
+    ) %>%
+      rast()
 
     source(paste0(dir_code, "/f_cropstack.R"))
 
     cropstack(
       x = cov_files,
-      y = tile_shapes[j],
-      folder = dir_tile_j
+      y = my_ext,
+      folder = dir_tile_j,
+      mask = TRUE
     )
   }
 )
