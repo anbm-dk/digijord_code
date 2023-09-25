@@ -238,12 +238,13 @@ for (j in 1:(length(breaks) - 1)) {
   breaks_j <- breaks[j:(j + 1)]
   breaks_j_chr <- breaks_chr[j:(j + 1)]
   
+  # Predict raw values
   dir_mineral_raw_j <- dir_pred_all %>%
     paste0(
       ., "mineral_raw_",
       breaks_j_chr[1], "_", breaks_j_chr[2], "_cm/",
       basename(subdir_tiles)
-      ) %T>%
+    ) %T>%
     lapply(function(x) dir.create(x, showWarnings = FALSE, recursive = TRUE))
   
   for (i in 1:4) {
@@ -252,8 +253,6 @@ for (j in 1:(length(breaks) - 1)) {
     
     cov_selected <- (varImp(models[[i]])$importance %>% row.names()) %>%
       .[. %in% cov_cats$name]
-    
-    # Predict raw values
     
     showConnections()
     
@@ -277,7 +276,6 @@ for (j in 1:(length(breaks) - 1)) {
         "i",
         "model_i",
         "subdir_tiles",
-        # "dir_pred_tiles_frac",
         "frac",
         "cov_selected",
         "predict_passna",
