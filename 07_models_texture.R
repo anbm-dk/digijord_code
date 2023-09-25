@@ -543,9 +543,9 @@ library(ParBayesianOptimization)
 
 bounds <- list(
   eta = c(0.1, 1),
-  max_depth = c(1L, 50L),
+  max_depth = c(1L, 60L),
   min_child_weight_sqrt = c(1, sqrt(64)),
-  gamma_sqrt = c(0, sqrt(30)),
+  gamma_sqrt = c(0, sqrt(40)),
   colsample_bytree = c(0.1, 1),
   subsample = c(0.1, 1),
   colsample_bylevel = c(0.1, 1),
@@ -720,7 +720,7 @@ for (i in 1:length(fractions))
       !is.na(UTMX),
       !is.na(UTMY),
       lower > 0,
-      upper < 200,
+      (upper < 200) | (upper == 200 & lower == 200),
       !is.na(dhm2015_terraen_10m)
     )
 
@@ -1473,6 +1473,14 @@ saveRDS(
   paste0(dir_results, "/models_bestscores.rds")
 )
 
+models_bestscores %>%
+  bind_rows() %>%
+  write.table(
+    file = paste0(dir_results, "/models_bestscores.csv"),
+    sep = ";",
+    row.names = FALSE
+  )
+
 write.table(
   models_weights,
   file = paste0(dir_results, "/models_weights.csv"),
@@ -1567,55 +1575,52 @@ imp_all
 
 # Inspect models
 
-get_acc <- function(x2, i2) {
-  df <- x2$pred %>%
-    arrange(rowIndex) %>%
-    distinct(rowIndex, .keep_all = TRUE) %>%
-    dplyr::select(., c(pred, obs, weights)) %>%
+breaks <- c(0, 30, 60, 100, 200)
+
+lookup <- c(obs = fractions[i2])
+obs %>%
+  mutate(
+    pred = models_predictions[, i2],
+    weights = models_weights[, i2],
+    indices = factor(!models_indices[, i2], labels = c("CV", "Holdout")),
+    bare = !is.na(s2_geomedian_b2),
+    mean_d = (upper + lower)/2,
+    depth = cut(mean_d, breaks)
+  ) %>%
+  rename(any_of(lookup)) %>%
+  filter(
+    indices == "Holdout",
+    depth == "(100,200]"
+  ) %>% select(c(pred, obs, indices, depth))
+
+get_acc <- function(i2) {
+  lookup <- c(obs = fractions[i2])
+  out <- obs %>%
     mutate(
-      pred = ifelse(pred < 0, 0, pred)
-    )
-
-  # if (i2 > 4) df %<>% exp
-
-  df %<>% bind_cols(x2$trainingData)
-
-  r2_all <- df %$% get_R2w(cbind(pred, obs), weights)
-
-  r2_bare <- df %>%
-    filter(!is.na(s2_geomedian_b2)) %$%
-    get_R2w(cbind(pred, obs), weights)
-
-  r2_covered <- df %>%
-    filter(is.na(s2_geomedian_b2)) %$%
-    get_R2w(cbind(pred, obs), weights)
-
-  rmse_all <- df %$% get_RMSEw(cbind(pred, obs), weights)
-
-  rmse_bare <- df %>%
-    filter(!is.na(s2_geomedian_b2)) %$%
-    get_RMSEw(cbind(pred, obs), weights)
-
-  rmse_covered <- df %>%
-    filter(is.na(s2_geomedian_b2)) %$%
-    get_RMSEw(cbind(pred, obs), weights)
-
-  out <- data.frame(
-    r2_all,
-    r2_bare,
-    r2_covered,
-    rmse_all,
-    rmse_bare,
-    rmse_covered
-  )
-
+      pred = models_predictions[, i2],
+      weights = models_weights[, i2],
+      indices = factor(!models_indices[, i2], labels = c("CV", "Holdout")),
+      bare = !is.na(s2_geomedian_b2),
+      mean_d = (upper + lower)/2,
+      depth = cut(mean_d, breaks, include.lowest = TRUE)
+    ) %>%
+    rename(any_of(lookup)) %>%
+    filter(
+      is.finite(obs),
+      is.finite(pred),
+      is.finite(weights),
+      !is.na(depth)
+    ) %>% group_by(indices, bare, depth) %>%
+    summarise(
+      r2 = get_R2w(cbind(pred, obs), weights),
+      rmse = get_RMSEw(cbind(pred, obs), weights)
+    ) %>%
+    mutate(Fraction = fraction_names[i2], .before = everything())
   return(out)
 }
 
-acc_all <- foreach(i = 1:6, .combine = rbind) %do%
-  get_acc(models[[i]], i)
-
-acc_all %<>% mutate(fraction = fraction_names, .before = 1)
+acc_all <- foreach(i = 1:length(fractions), .combine = rbind) %do%
+  get_acc(i)
 
 write.table(
   acc_all,
@@ -2336,7 +2341,7 @@ parSapplyLB(
       overwrite = TRUE
     )
 
-    return(NA)
+    return(NULL)
   }
 )
 
