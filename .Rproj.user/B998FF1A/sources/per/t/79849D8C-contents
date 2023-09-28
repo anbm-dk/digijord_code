@@ -208,4 +208,42 @@ write.table(
   sep = ";"
 )
 
+
+# Raster layers for poisson bootstrap
+
+fun1 <- function(x, n_layers = 1) {
+  # if (is.matrix(x) & ncol(x) > 1) {
+  #   x <- x[, 1]
+  # }
+  out <- matrix(numeric(), nrow = length(x), ncol = n_layers)
+  sumNA <- sum(is.na(x))
+  out[!is.na(x), ] <- 0 + rpois(n_layers*(length(x) - sumNA), 1)
+  # out <- x * 0 + rpois(n_layers, 1)
+  # out <- as.matrix(out, nrow = length(x))
+  return(out)
+}
+
+nlyr_out <- 100
+
+# set.seed(8863)
+# 
+# r_poisson <- app(
+#   dem_mask_100m2,
+#   fun = function(i, ff, outlayers) ff(i, n_layers = outlayers),
+#   cores = 19,
+#   ff = fun1,
+#   outlayers = nlyr_out,
+#   filename  = paste0(dir_folds, "/poisson_100m.tif"),
+#   overwrite = TRUE,
+#   wopt = list(
+#     datatype = "INT1U"
+#   )
+# )
+
+poisson_r <- paste0(dir_folds, "/poisson_100m.tif") %>% rast()
+
+poisson_r
+
+plot(poisson_r[[1]])
+
 # END

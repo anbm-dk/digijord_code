@@ -124,7 +124,7 @@ for (k in 1:nrow(SOC_CaCO3_depth_grid)) {
 
   model_i <- models[[i]]
   
-  cov_selected <- (varImp(models[[i]])$importance %>% row.names()) %>%
+  cov_selected <- (varImp(model_i)$importance %>% row.names()) %>%
     .[. %in% cov_cats$name]
 
   showConnections()
@@ -251,7 +251,7 @@ for (j in 1:(length(breaks) - 1)) {
     frac <- fraction_names_underscore[i]
     model_i <- models[[i]]
     
-    cov_selected <- (varImp(models[[i]])$importance %>% row.names()) %>%
+    cov_selected <- (varImp(model_i)$importance %>% row.names()) %>%
       .[. %in% cov_cats$name]
     
     showConnections()
@@ -475,6 +475,12 @@ source("f_classify_soil_JB.R")
 
 for (j in 1:(length(breaks) - 1)) {
   breaks_j_chr <- breaks_chr[j:(j + 1)]
+  
+  dir_pred_tiles_100 <- dir_pred_tiles %>%
+    paste0(
+      ., "/tex_100_",
+      breaks_j_chr[1], "_", breaks_j_chr[2], "_cm/"
+    )
   
   dir_pred_tiles_JB <- dir_pred_tiles %>%
     paste0(., "/JB_", breaks_j_chr[1], "_", breaks_j_chr[2], "_cm/") %T>%
