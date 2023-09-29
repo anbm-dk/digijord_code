@@ -1,37 +1,38 @@
-# 06: Models for soil drainage
+# 09: Models for soil drainage
 
-# TO DO
-# Import artificial drainge points [ok]
+# TO DO:
+
+# First: Predict soil drainage classes:
 # Import soil drainage classes (get correct coordinates first)
-# Extract covariates
-# - AD [ok]
-# - DC
-# Extract folds
-# - AD [ok]
-# - DC
-# Use C5.0 models (also try cubist for DC).
-# - AD [ok]
-# - DC
-# Make small maps
-# - AD
-# - DC
-# Make big maps
-# - AD
-# - DC
+# Extract coordinates
+# Include texture predictions as covariates
+# Rearrange tiles for texture predictions to fit covariate structure
+# Make summary function with weighted MAE for accuracy
+# Calculate weights
+# Train xgboost regression model
 # Analyse results
-# - AD
-# - DC
-# Use weights
-# Use texture as covariates
+# Make map for test area
+# Make national map
 
+# Secondly: Predict artificially drained areas
+# Import and merge data:
+# - 7 km grid (original coordinates) (or new LR pts?)
+# - data from orbicon
+# - data from Landskontoret for Planteavl
+# Aggregate relevant covariates at field scale (including new texture maps and
+# soil drainage classes)
+# Split into tiles
+# Extract covariates
+# Make summary function for weighted accuracy (or weighted AUC?)
+# Calculate weights (sum of weights should be equal for drained and undrained
+# points)
+# Train xgboost classification model
+# Analyse results
+# Make map for test area
+# Make national map
 
 # 1: Start up
 
-library(devtools)
-
-devtools::install_github("topepo/C5.0")
-
-library(Cubist)
 library(terra)
 library(magrittr)
 library(tools)
@@ -39,19 +40,19 @@ library(dplyr)
 library(caret)
 library(tibble)
 library(tidyr)
-library(C50)
 library(sf)
 library(exactextractr)
 library(party)
 library(rpart)
 library(doParallel)
 library(spatstat) # weights
+library(RODBC)
 
 dir_code <- getwd()
 root <- dirname(dir_code)
 dir_dat <- paste0(root, "/digijord_data/")
 
-testn <- 6
+testn <- 13
 mycrs <- "EPSG:25832"
 
 # Results folder
@@ -59,6 +60,116 @@ mycrs <- "EPSG:25832"
 dir_results <- dir_dat %>%
   paste0(., "/results_test_", testn, "/") %T>%
   dir.create()
+
+# Part 1: Soil drainage classes
+
+profiles_shp <- dir_dat %>%
+  paste0(
+    .,
+    "/observations/profiles/Profiles_coordinates_new/",
+    "Profiles_coordinates_new.shp"
+  ) %>%
+  vect()
+
+# 1.4.2: Profiles: Texture
+
+profiles_db <- dir_dat %>%
+  paste0(., "/observations/profiles/DDJD2023.accdb")
+
+con3 <- odbcConnectAccess2007(profiles_db)
+
+profiles_DC <- sqlFetch(con3, "PROFIL") %>%
+  select(c(PROFILNR, DRAENKL)) %>%
+  drop_na() %>%
+  filter(DRAENKL %in% 1:5)
+
+profiles_DC %<>% inner_join(
+  x = values(profiles_shp),
+  y = .,
+  by = "PROFILNR"
+) %>% arrange(
+  PROFILNR
+) %>% vect(
+  geom = c("x", "y"),
+  crs = mycrs,
+  keepgeom = TRUE
+)
+
+plot(profiles_DC, "DRAENKL")
+
+# 2 Aggregate covariates to field level
+# Load field data (first used repair geometry in ArcGIS)
+
+DK_fields <- dir_dat %>%
+  paste0(., "fields_2022/Marker_2022_slut.shp") %>%
+  vect()
+  
+# Load covariates
+
+cov_dir <- dir_dat %>% paste0(., "/covariates")
+cov_files <- cov_dir %>% list.files()
+cov_names <- cov_files %>% tools::file_path_sans_ext()
+cov <- paste0(cov_dir, "/", cov_files) %>%
+  rast()
+names(cov) <- cov_names
+crs(cov) <- mycrs
+
+cov_cats <- dir_code %>%
+  paste0(., "/cov_categories_20230712.csv") %>%
+  read.table(
+    sep = ";",
+    header = TRUE
+  )
+
+cov_selected <- cov_cats %>%
+  filter(anbm_use == 1) %>%
+  dplyr::select(., name) %>%
+  unlist() %>%
+  unname()
+
+cov %<>% subset(cov_selected)
+
+# Deselect covariates that should not be aggregated at field level:
+# - field data (imk)
+# - climatic data (chelsa)
+# - land use (lu)
+# - oblique geographic coordinates (ogc_pi)
+# - wetlands (wetlands_10m)
+# - landscape elements (landscape_)
+# - georegions (georeg_)
+# - river valley bottoms (rvb_bios)
+# - central wetlands (cwl_10m_fuzzy)
+
+cov_exclude <- c(
+  grep('imk_', names(cov), value = TRUE),
+  grep('chelsa_', names(cov), value = TRUE),
+  grep('lu_', names(cov), value = TRUE),
+  grep('ogc_pi', names(cov), value = TRUE),
+  grep('wetlands_10m', names(cov), value = TRUE),
+  grep('landscape_', names(cov), value = TRUE),
+  grep('georeg_', names(cov), value = TRUE),
+  grep('rvb_bios', names(cov), value = TRUE),
+  grep('cwl_10m_fuzzy', names(cov), value = TRUE)
+)
+
+cov_for_aggr <- setdiff(names(cov), cov_exclude)
+
+# Extract to field level (mean)
+# Count NA per field
+# Rasterize
+# Split into tiles
+# Extract for both drainage datasets
+
+
+# END of new script
+
+# Old script
+
+# library(devtools)
+# 
+# devtools::install_github("topepo/C5.0")
+# library(Cubist)
+# library(C50)
 
 # 2 Load observations
 
