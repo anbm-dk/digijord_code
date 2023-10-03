@@ -4,7 +4,7 @@
 
 # First: Predict soil drainage classes:
 # Import soil drainage classes (get correct coordinates first)
-# Extract coordinates
+# Extract covariates
 # Include texture predictions as covariates
 # Rearrange tiles for texture predictions to fit covariate structure
 # Make summary function with weighted MAE for accuracy
@@ -71,7 +71,7 @@ profiles_shp <- dir_dat %>%
   ) %>%
   vect()
 
-# 1.4.2: Profiles: Texture
+# 1.1: Correct coordinates for profiles
 
 profiles_db <- dir_dat %>%
   paste0(., "/observations/profiles/DDJD2023.accdb")
@@ -95,16 +95,12 @@ profiles_DC %<>% inner_join(
   keepgeom = TRUE
 )
 
-plot(profiles_DC, "DRAENKL")
+library(viridisLite)
 
-# 2 Aggregate covariates to field level
-# Load field data (first used repair geometry in ArcGIS)
+plot(profiles_DC, "DRAENKL", col = rev(cividis(5)))
 
-DK_fields <- dir_dat %>%
-  paste0(., "fields_2022/Marker_2022_slut.shp") %>%
-  vect()
-  
-# Load covariates
+
+# 1.2:  Load covariates
 
 cov_dir <- dir_dat %>% paste0(., "/covariates")
 cov_files <- cov_dir %>% list.files()
@@ -128,6 +124,36 @@ cov_selected <- cov_cats %>%
   unname()
 
 cov %<>% subset(cov_selected)
+
+# 1.3 Load texture predictions 
+
+
+
+# 3: Extract folds
+
+dir_folds <- dir_dat %>%
+  paste0(., "/folds/")
+
+file_folds_10_100m <- paste0(dir_folds, "/folds_10_100m.tif")
+
+folds_10_100m <- rast(file_folds_10_100m)
+
+folds_drain <- terra::extract(
+  x = folds_10_100m,
+  y = obs_drain,
+  ID = FALSE,
+)
+
+# Part 2: Artificially drained areas
+
+
+
+# 2 Aggregate covariates to field level
+# Load field data (first used repair geometry in ArcGIS)
+
+DK_fields <- dir_dat %>%
+  paste0(., "fields_2022/Marker_2022_slut.shp") %>%
+  vect()
 
 # Deselect covariates that should not be aggregated at field level:
 # - field data (imk)
