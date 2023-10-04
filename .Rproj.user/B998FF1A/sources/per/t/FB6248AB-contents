@@ -21,7 +21,7 @@ dir_dat <- paste0(root, "/digijord_data/")
 
 source("f_predict_passna.R")
 
-train_models <- FALSE
+train_models <- TRUE
 
 # To do:
 # Pdp with depth
@@ -399,7 +399,6 @@ cov_selected <- cov_cats %>%
   unlist() %>%
   unname()
 
-
 # Template for custom eval
 # evalerror <- function(preds, dtrain) {
 #   labels <- getinfo(dtrain, "label")
@@ -407,71 +406,7 @@ cov_selected <- cov_cats %>%
 #   return(list(metric = "error", value = err))
 # }
 
-# Weighted RMSE
-get_RMSEw <- function(d, w) {
-  if (nrow(d) == 0) {
-    out <- NA
-  } else {
-    sqe <- w * (d[, 1] - d[, 2])^2
-    msqe <- sum(sqe) / sum(w)
-    out <- sqrt(msqe)
-  }
-  return(out)
-}
-
-# Weighted R^2
-get_R2w <- function(d, w) {
-  if (nrow(d) < 3) {
-    out <- NA
-  } else {
-    require(boot)
-    out <- boot::corr(d[, 1:2], w)^2
-  }
-  return(out)
-}
-
-# Weighted summary function
-WeightedSummary <- function(
-    data,
-    lev = NULL,
-    model = NULL,
-    ...) {
-  out <- numeric()
-  out[1] <- get_RMSEw(data[, 1:2], data$weights)
-  out[2] <- get_R2w(data[, 1:2], data$weights)
-  names(out) <- c("RMSEw", "R2w")
-  return(out)
-}
-
-# Weighted summary function with log transformation
-WeightedSummary_log <- function(
-    data,
-    lev = NULL,
-    model = NULL,
-    ...) {
-  out <- numeric()
-  data[, 1:2] <- log(data[, 1:2])
-  data <- data[is.finite(rowSums(data)), ]
-  out[1] <- get_RMSEw(data[, 1:2], data$weights)
-  out[2] <- get_R2w(data[, 1:2], data$weights)
-  names(out) <- c("RMSEw_log", "R2w_log")
-  return(out)
-}
-
-# Weighted summary function with square root transformation
-WeightedSummary_sqrt <- function(
-    data,
-    lev = NULL,
-    model = NULL,
-    ...) {
-  out <- numeric()
-  data[, 1:2] <- sqrt(data[, 1:2])
-  data <- data[is.finite(rowSums(data)), ]
-  out[1] <- get_RMSEw(data[, 1:2], data$weights)
-  out[2] <- get_R2w(data[, 1:2], data$weights)
-  names(out) <- c("RMSEw_sqrt", "R2w_sqrt")
-  return(out)
-}
+source("f_weighted_summaries.R")
 
 metrics <- rep("RMSEw", length(fractions))
 metrics[fractions == "SOC"] <- "RMSEw_log"
@@ -2367,7 +2302,7 @@ for (i in 1:length(models))
     arrange(-Overall) %>%
     slice_head(n = ntop) %>%
     mutate(target = fractions[i]) %>%
-    mutate(rank = 1:ntop)
+    rowid_to_column("rank")
 }
 
 l %<>% bind_rows() %>%

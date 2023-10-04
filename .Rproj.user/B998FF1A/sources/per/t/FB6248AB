@@ -3,7 +3,7 @@
     "path": "C:/Users/au542768/digijord/digijord_code/07_models_texture.R",
     "project_path": "07_models_texture.R",
     "type": "r_source",
-    "hash": "565525550",
+    "hash": "2532823629",
     "contents": "",
     "dirty": false,
     "created": 1681739734164.0,
@@ -12,15 +12,15 @@
     "properties": {
         "source_window_id": "",
         "Source": "Source",
-        "cursorPosition": "2702,5",
-        "scrollLine": "23"
+        "cursorPosition": "400,0",
+        "scrollLine": "394"
     },
     "folds": "",
-    "lastKnownWriteTime": 1696419173,
+    "lastKnownWriteTime": 1696423379,
     "encoding": "UTF-8",
     "collab_server": "",
     "source_window": "",
-    "last_content_update": 1696419173327,
+    "last_content_update": 1696423379822,
     "read_only": false,
     "read_only_alternatives": []
 }

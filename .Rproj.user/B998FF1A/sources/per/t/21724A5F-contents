@@ -29,6 +29,7 @@ optimize_xgboost <- function(
     trees_per_round = NULL, # numeric, length 1, number of trees that xgboost should train in each round
     objective = NULL, # character, length 1, objective function for xgboost
     colsample_bylevel_basic = 0.75, # numeric, colsample_bylevel for basic model
+    cov_keep = NULL, # Character vector, covariates that should always be present
 ) {
   require(ParBayesianOptimization)
   require(caret)
@@ -52,24 +53,17 @@ optimize_xgboost <- function(
   }
   ogcs_names_list[[length(ogcs_names_list) + 1]] <- character()
   n_ogcs_v %<>% c(., 0)
-  
-  # Identify covariates that are not OGCs
-  cov_p_i <- cov_names %>%
+  # Identify covariates that are not OGCs and make formula
+  formula_basic <- cov_names %>%
     grep('ogc_pi', ., value = TRUE, invert = TRUE) %>%
-    paste0(collapse = " + ")
-  
-  # Basic model
-  formula_basic <- paste0(target, " ~ ", cov_p_i) %>%
+    paste0(collapse = " + ") %>%
+    paste0(target, " ~ ", .) %>%
     as.formula()
-  
+  # Basic model
   showConnections()
   cl <- makePSOCKcluster(cores)
   registerDoParallel(cl)
-  clusterEvalQ(cl, { require(boot) } )
-  clusterExport(cl, c("get_RMSEw", "get_R2w"))
-  
-  set.seed(1)
-  
+  set.seed(321)
   basic_model <- caret::train(
     form = formula_basic,
     data = data,
@@ -91,16 +85,14 @@ optimize_xgboost <- function(
     colsample_bylevel = colsample_bylevel_basic,
     nthread = 1
   )
-  
   stopCluster(cl)
   foreach::registerDoSEQ()
   rm(cl)
-  
+  showConnections()
   tr_step <- 1
   tr_summaries <- list()
   tr_summaries[[tr_step]] <- basic_model$results
   tr_step %<>% `+`(1)
-  
   # Scaled cumulative covariate importance
   cov_ranked <- basic_model %>%
     varImp(basic_model) %>%
@@ -111,8 +103,7 @@ optimize_xgboost <- function(
       scaled = Overall/sum(Overall),
       cumul = cumsum(scaled)
     )
-  
-  # Bayesian optimization
+  # Scoring function for Bayesian optimization
   scoringFunction <- function(
     eta,  # OK
     max_depth,  # OK
@@ -124,35 +115,29 @@ optimize_xgboost <- function(
     ogcs_index,  # OK
     total_imp  # OK
   ) {
-    # Drop unimportant covariates
+    # Drop unimportant covariates and add OGCs
     cov_i_filtered <- cov_ranked %>%
       filter(cumul < total_imp) %>%  #!
-      .$rowname
-    
+      .$rowname %>%
+      c(., ogcs_names_list[[ogcs_index]])  # !
     # Make sure SOM removal is a covariate
-    if ((i %in% 1:4) & !("SOM_removed" %in% cov_i_filtered)) {
-      cov_i_filtered %<>% c(., "SOM_removed")
+    if (!is.null(cov_keep)) {
+      cov_i_filtered %<>%
+        c(., cov_keep) %>%
+        unique()
     }
-    
-    # Add OGCs
-    cov_i_filtered %<>% c(., ogcs_names_list[[ogcs_index]])  # !
-    
     # Make formula
-    cov_formula <- cov_i_filtered %>% paste0(collapse = " + ")
-    
-    formula_i <- paste0(frac, " ~ ", cov_formula) %>%
+    formula_i <- cov_i_filtered %>%
+      paste0(collapse = " + ") %>%
+      paste0(target, " ~ ", .) %>%
       as.formula()
-    
     my_gamma <- gamma_sqrt^2
     my_min_child_weight <- min_child_weight_sqrt^2
-    
-    showConnections()
-    
-    set.seed(1)
-    
+    # Train model
+    set.seed(321)
     model_out <- caret::train(
       form = formula_i,
-      data = trdat,
+      data = data,
       method = "xgbTree",
       na.action = na.pass,
       tuneGrid = expand.grid(
@@ -165,28 +150,33 @@ optimize_xgboost <- function(
         subsample = subsample # !
       ),
       trControl = trainControl(
-        index = folds_i,
+        index = folds,
         savePredictions = "final",
         predictionBounds = bounds_pred,
         summaryFunction = sumfun,
         allowParallel = FALSE
       ),
-      metric = metrics_i,
-      maximize = FALSE,
-      weights = trdat$w,
+      metric = metric,
+      maximize = max_metric,
+      weights = weights,
       num_parallel_tree = trees_per_round,
-      objective = objectives_i,
+      objective = objective,
       colsample_bylevel = colsample_bylevel,
       nthread = 1
     )
-    
-    min_RMSEw <- model_out$results %>%
-      select(any_of(metrics_i)) %>%
-      min()
-    
+    if (max_metric) {
+      out_score <- model_out$results %>%
+        select(any_of(metric)) %>%
+        max()
+    } else {
+      out_score <- model_out$results %>%
+        select(any_of(metric)) %>%
+        min() %>%
+        "*"(-1)
+    }
     return(
       list(
-        Score = 0 - min_RMSEw,
+        Score = out_score,
         n_ogcs = length(ogcs_names_list[[ogcs_index]]),
         gamma = my_gamma,
         min_child_weight = my_min_child_weight,
@@ -194,85 +184,62 @@ optimize_xgboost <- function(
       )
     )
   }
-  
-  
+  # Bayesian optimization
+  showConnections()
+  cl <- makeCluster(cores)
+  registerDoParallel(cl)
+  clusterEvalQ(
+    cl,
+    {
+      require(caret)
+      require(xgboost)
+      require(magrittr)
+      require(dplyr)
+      require(tools)
+      require(boot)
+    }
+  )
+  clusterExport(
+    cl,
+    c(
+      "target",
+      "bounds_pred",
+      "cov_i_ranked",
+      "folds",
+      "sumfun",
+      "metric",
+      "objective",
+      "ogcs_names_list",
+      "tgrid",
+      "data",
+      "trees_per_round"
+    ),
+    envir = environment()
+  )
+  set.seed(321)
+  scoreresults <- bayesOpt(
+    FUN = scoringFunction,
+    bounds = bounds_bayes,
+    initPoints = cores,
+    iters.n = cores*10,
+    iters.k = cores,
+    acq = "ucb",
+    gsPoints = cores*10,
+    parallel = TRUE,
+    verbose = 0,
+    acqThresh = 0.95
+  )
+  stopCluster(cl)
+  foreach::registerDoSEQ()
+  rm(cl)
+  showConnections()
+  bestscores <- scoreresults$scoreSummary %>%
+    filter(Score == max(Score, na.rm = TRUE))
+  best_pars <- getBestPars(scoreresults)
 }
 
-showConnections()
 
-cl <- makeCluster(19)
-registerDoParallel(cl)
-clusterEvalQ(
-  cl,
-  {
-    library(caret)
-    library(xgboost)
-    library(magrittr)
-    library(dplyr)
-    library(tools)
-    library(boot)
-  }
-)
-
-bounds_lower_i <- bounds_lower[i]
-bounds_upper_i <- bounds_upper[i]
-metrics_i <- metrics[i]
-objectives_i <- objectives[i]
-
-clusterExport(
-  cl,
-  c("i",
-    "frac",
-    "bounds_lower_i",
-    "bounds_upper_i",
-    "cov_i_ranked",
-    "folds_i",
-    "get_RMSEw",
-    "get_R2w",
-    "metrics_i",
-    "objectives_i",
-    "ogcs_names_list",
-    "sumfun",
-    "tgrid",
-    "trdat",
-    "trees_per_round"
-  )
-)
-
-set.seed(321)
-
-models_scoreresults[[i]] <- bayesOpt(
-  FUN = scoringFunction,
-  bounds = bounds_bayes,
-  initPoints = 19,
-  iters.n = 190,
-  iters.k = 19,
-  acq =  "ucb",
-  gsPoints = 190,
-  parallel = TRUE,
-  verbose = 1,
-  acqThresh = 0.95
-)
-
-stopCluster(cl)
-foreach::registerDoSEQ()
-rm(cl)
-
-print(
-  models_scoreresults[[i]]$scoreSummary
-)
-
-models_bestscores[[i]] <- models_scoreresults[[i]]$scoreSummary %>%
-  filter(Score == max(Score, na.rm = TRUE))
-
-print(
-  models_bestscores[[i]]
-)
-
-best_pars <- getBestPars(models_scoreresults[[i]])
-
-print("Training final model")
-
+# Final model
 # Drop unimportant covariates
 cov_i_filtered <- cov_i_ranked %>%
   filter(cumul < best_pars$total_imp) %>%  #!
@@ -319,10 +286,11 @@ clusterExport(
   c(
     "get_RMSEw",
     "get_R2w"
-  )
+  ),
+  envir = environment()
 )
 
-set.seed(1)
+set.seed(321)
 
 model_final <- caret::train(
   form = formula_i,

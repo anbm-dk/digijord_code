@@ -1,0 +1,131 @@
+# Weighted summary functions
+
+# Weighted RMSE
+get_RMSEw <- function(d, w) {
+  if (nrow(d) == 0) {
+    out <- NA
+  } else {
+    sqe <- w * (d[, 1] - d[, 2])^2
+    msqe <- sum(sqe) / sum(w)
+    out <- sqrt(msqe)
+  }
+  return(out)
+}
+
+# Weighted R^2
+get_R2w <- function(d, w) {
+  require(boot)
+  if (nrow(d) < 3) {
+    out <- NA
+  } else {
+    require(boot)
+    out <- boot::corr(d[, 1:2], w)^2
+  }
+  return(out)
+}
+
+# Weighted summary function
+WeightedSummary <- function(
+    data,
+    lev = NULL,
+    model = NULL,
+    ...) {
+  get_RMSEw <- function(d, w) {
+    if (nrow(d) == 0) {
+      out <- NA
+    } else {
+      sqe <- w * (d[, 1] - d[, 2])^2
+      msqe <- sum(sqe) / sum(w)
+      out <- sqrt(msqe)
+    }
+    return(out)
+  }
+  get_R2w <- function(d, w) {
+    require(boot)
+    if (nrow(d) < 3) {
+      out <- NA
+    } else {
+      require(boot)
+      out <- boot::corr(d[, 1:2], w)^2
+    }
+    return(out)
+  }
+  out <- numeric()
+  out[1] <- get_RMSEw(data[, 1:2], data$weights)
+  out[2] <- get_R2w(data[, 1:2], data$weights)
+  names(out) <- c("RMSEw", "R2w")
+  return(out)
+}
+
+# Weighted summary function with log transformation
+WeightedSummary_log <- function(
+    data,
+    lev = NULL,
+    model = NULL,
+    ...) {
+  get_RMSEw <- function(d, w) {
+    if (nrow(d) == 0) {
+      out <- NA
+    } else {
+      sqe <- w * (d[, 1] - d[, 2])^2
+      msqe <- sum(sqe) / sum(w)
+      out <- sqrt(msqe)
+    }
+    return(out)
+  }
+  get_R2w <- function(d, w) {
+    require(boot)
+    if (nrow(d) < 3) {
+      out <- NA
+    } else {
+      require(boot)
+      out <- boot::corr(d[, 1:2], w)^2
+    }
+    return(out)
+  }
+  out <- numeric()
+  data[, 1:2] <- log(data[, 1:2])
+  data <- data[is.finite(rowSums(data)), ]
+  out[1] <- get_RMSEw(data[, 1:2], data$weights)
+  out[2] <- get_R2w(data[, 1:2], data$weights)
+  names(out) <- c("RMSEw_log", "R2w_log")
+  return(out)
+}
+
+# Weighted summary function with square root transformation
+WeightedSummary_sqrt <- function(
+    data,
+    lev = NULL,
+    model = NULL,
+    ...) {
+  get_RMSEw <- function(d, w) {
+    if (nrow(d) == 0) {
+      out <- NA
+    } else {
+      sqe <- w * (d[, 1] - d[, 2])^2
+      msqe <- sum(sqe) / sum(w)
+      out <- sqrt(msqe)
+    }
+    return(out)
+  }
+  get_R2w <- function(d, w) {
+    require(boot)
+    if (nrow(d) < 3) {
+      out <- NA
+    } else {
+      require(boot)
+      out <- boot::corr(d[, 1:2], w)^2
+    }
+    return(out)
+  }
+  out <- numeric()
+  data[, 1:2] <- sqrt(data[, 1:2])
+  data <- data[is.finite(rowSums(data)), ]
+  out[1] <- get_RMSEw(data[, 1:2], data$weights)
+  out[2] <- get_R2w(data[, 1:2], data$weights)
+  names(out) <- c("RMSEw_sqrt", "R2w_sqrt")
+  return(out)
+}
+
+
+# END
