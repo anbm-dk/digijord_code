@@ -34,7 +34,8 @@ train_models <- FALSE
 # Test 11: Fever data, more
 # Test 12: Depth boundaries as covariates, stepwise xgb optimization
 # Test 13: Bayesian optimization
-testn <- 13
+# Test 14: Test gravity of error in covariate selection
+testn <- 14
 mycrs <- "EPSG:25832"
 
 # Results folder
@@ -658,8 +659,8 @@ xgb_opt_stepwise <- FALSE
 # Remember to include full dataset in the final model
 n <- 1000
 
-use_all_points <- TRUE
-# use_all_points <- FALSE
+# use_all_points <- TRUE
+use_all_points <- FALSE
 
 extra_tuning_xgb <- TRUE
 # extra_tuning_xgb <- FALSE
@@ -973,6 +974,7 @@ if (train_models) {
     # Scaled cumulative covariate importance
     cov_i_ranked <- varImp(models[[i]])$importance %>%
       rownames_to_column() %>%
+      arrange(desc(Overall)) %>%
       mutate(
         scaled = Overall/sum(Overall),
         cumul = cumsum(scaled)

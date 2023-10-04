@@ -55,6 +55,10 @@ dir_dat <- paste0(root, "/digijord_data/")
 testn <- 13
 mycrs <- "EPSG:25832"
 
+fraction_names_underscore <- c(
+  "Clay", "Silt", "Fine_sand", "Coarse_sand", "SOC", "CaCO3"
+)
+
 # Results folder
 
 dir_results <- dir_dat %>%
@@ -127,9 +131,52 @@ cov %<>% subset(cov_selected)
 
 # 1.3 Load texture predictions 
 
+dir_pred_all <- dir_results %>%
+  paste0(., "/predictions/")
 
+tex_pred <- dir_pred_all %>% list.files(
+  pattern = ".tif",
+  full.names = TRUE
+) %>%
+  grep(".ovr", ., names(cov), value = TRUE, invert = TRUE) %>%
+  grep(".aux.xml", ., names(cov), value = TRUE, invert = TRUE) %>%
+  grep(".vat.cpg", ., names(cov), value = TRUE, invert = TRUE) %>%
+  grep(".vat.dbf", ., names(cov), value = TRUE, invert = TRUE) %>%
+  grep(
+    pattern = paste(fraction_names_underscore, collapse = "|"),
+    tex_pred,
+    value = TRUE
+  ) %>%
+  rast()
 
-# 3: Extract folds
+cov_DC <- c(cov, tex_pred)
+
+# obs_DC <- terra::extract(
+#   cov_DC,
+#   profiles_DC,
+#   bind = TRUE,
+#   ID = FALSE
+# )
+
+dir_extr <- dir_dat %>%
+  paste0(., "/extracts/")
+
+# obs_DC %>%
+#   values() %>% 
+#   write.table(
+#     file = paste0(dir_extr, "obs_DC_extr.csv"),
+#     row.names = FALSE,
+#     col.names = TRUE,
+#     sep = ";"
+#   )
+
+obs_DC <- read.table(
+  paste0(dir_extr, "obs_DC_extr.csv"),
+  header = TRUE,
+  sep = ";"
+)
+
+# 3: Extract folds and mask
 
 dir_folds <- dir_dat %>%
   paste0(., "/folds/")
@@ -138,11 +185,28 @@ file_folds_10_100m <- paste0(dir_folds, "/folds_10_100m.tif")
 
 folds_10_100m <- rast(file_folds_10_100m)
 
-folds_drain <- terra::extract(
+folds_DC <- terra::extract(
   x = folds_10_100m,
-  y = obs_drain,
+  y = profiles_DC,
   ID = FALSE,
-)
+) %>% unlist() %>% unname()
+
+mask_LU <- paste0(dir_dat, "/layers/Mask_LU.tif") %>% rast()
+
+mask_LU_DC <- terra::extract(
+  mask_LU,
+  profiles_DC,
+  ID = FALSE
+) %>% unlist() %>% unname()
+
+obs_DC %<>%
+  mutate(
+    fold = folds_DC,
+    mask_LU = mask_LU_DC
+  ) %>%
+  filter(
+    !is.na(mask_LU)
+  )
 
 # Part 2: Artificially drained areas
 
