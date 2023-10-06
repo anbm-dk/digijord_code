@@ -113,7 +113,6 @@ WeightedSummary_sqrt <- function(
     if (nrow(d) < 3) {
       out <- NA
     } else {
-      require(boot)
       out <- boot::corr(d[, 1:2], w)^2
     }
     return(out)
@@ -127,5 +126,39 @@ WeightedSummary_sqrt <- function(
   return(out)
 }
 
+# Weighted summary for drainage classes
+
+WeightedSummary_DC <- function(
+    data,
+    lev = NULL,
+    model = NULL,
+    ...) {
+  get_MAEw <- function(d, w) {
+    require(stats)
+    if (nrow(d) == 0) {
+      out <- NA
+    } else {
+      ae <- abs(d[, 1] - d[, 2])
+      out <- stats::weighted.mean(x = ae, w = w, na.rm = TRUE)
+    }
+    return(out)
+  }
+  get_OAw <- function(d, w) {
+    require(stats)
+    if (nrow(d) == 0) {
+      out <- NA
+    } else {
+      d_int <- round(d, digits = 0)
+      d_equal <- d_int[, 1] == d_int[, 2]
+      out <- stats::weighted.mean(x = d_equal, w = w, na.rm = TRUE)
+    }
+    return(out)
+  }
+  out <- numeric()
+  out[1] <- get_MAEw(data[, 1:2], data$weights)
+  out[2] <- get_OAw(data[, 1:2], data$weights)
+  names(out) <- c("MAEw", "OAw")
+  return(out)
+}
 
 # END

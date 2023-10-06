@@ -416,23 +416,7 @@ metrics[fractions == "CaCO3"] <- "RMSEw_sqrt"
 
 qnorm(seq(0.55, 0.95, 0.1), 0, 1)
 
-get_dens <- function(datxy, sig) {
-  dens_out <- ppp(
-    datxy$UTMX,
-    datxy$UTMY,
-    c(441000, 894000),
-    c(6049000, 6403000)
-  ) %>%
-    density(
-      sigma = sig,
-      at = "points",
-      leaveoneout = FALSE
-    )
-
-  attributes(dens_out) <- NULL
-
-  return(dens_out)
-}
+source("f_get_dens.R")
 
 # Parameters for weights calculations
 
@@ -668,7 +652,6 @@ if (train_models) {
     
     # Weighting by depth intervals
     print("Calculating weights")
-    
     
     w_mat <- matrix(numeric(), nrow = nrow(trdat), ncol = w_iterations)
     cm_mat <- matrix(numeric(), nrow = nrow(trdat), ncol = w_iterations)

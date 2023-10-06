@@ -9,7 +9,7 @@
 # Rearrange tiles for texture predictions to fit covariate structure
 # Make summary function with weighted MAE for accuracy
 # Calculate weights
-# Train xgboost regression model
+# Train xgboost regression model,
 # Analyse results
 # Make map for test area
 # Make national map
@@ -144,7 +144,7 @@ tex_pred <- dir_pred_all %>% list.files(
   grep(".vat.dbf", ., names(cov), value = TRUE, invert = TRUE) %>%
   grep(
     pattern = paste(fraction_names_underscore, collapse = "|"),
-    tex_pred,
+    .,
     value = TRUE
   ) %>%
   rast()
@@ -176,6 +176,10 @@ obs_DC <- read.table(
   sep = ";"
 )
 
+cov_DC_names <- names(cov_DC) %>%
+  match(., names(obs_DC)) %>%
+  names(obs_DC)[.]
+
 # 3: Extract folds and mask
 
 dir_folds <- dir_dat %>%
@@ -202,11 +206,152 @@ mask_LU_DC <- terra::extract(
 obs_DC %<>%
   mutate(
     fold = folds_DC,
-    mask_LU = mask_LU_DC
+    mask_LU = mask_LU_DC,
+    UTMX = x,
+    UTMY = y
   ) %>%
   filter(
     !is.na(mask_LU)
   )
+
+# Calculate weights
+source("f_get_dens.R")
+mean_dens_DC <- nrow(obs_DC) / (43107 * 10^6)
+sigma_DC <- sqrt(43107 / (nrow(obs_DC) * pi)) * 1000
+dens_DC <- get_dens(obs_DC, sigma_DC)
+w_DC <- mean_dens_DC / dens_DC
+w_DC[w_DC > 1] <- 1
+
+obs_DC$w <- w_DC
+
+# Three folds (placeholder)
+trdat_DC <- obs_DC %>% 
+  mutate(
+    fold = ceiling(fold / 3)
+  ) %>%
+  filter(fold < 4)
+
+trdat_indices_DC <- which(obs_DC$PROFILNR %in% trdat_DC$PROFILNR)
+
+holdout_DC <- obs_DC %>% filter(fold == 10)
+holdout_indices_DC <- which(obs_DC$PROFILNR %in% holdout_DC$PROFILNR)
+
+# List of folds
+
+folds_DC <- lapply(
+  unique(trdat_DC$fold),
+  function(fold_i) {
+    out <- trdat_DC %>%
+      mutate(
+        rnum = row_number(),
+      ) %>%
+      filter(!(fold %in% fold_i)) %>%
+      dplyr::select(., rnum) %>%
+      unlist() %>%
+      unname()
+  }
+)
+
+# Set up model
+source("f_optimize_xgboost.R")
+source("f_weighted_summaries.R")
+
+bounds_DC <- list(
+  eta = c(0.1, 1),
+  max_depth = c(1L, 60L),
+  min_child_weight_sqrt = c(1, sqrt(64)),
+  gamma_sqrt = c(0, sqrt(40)),
+  colsample_bytree = c(0.1, 1),
+  subsample = c(0.1, 1),
+  colsample_bylevel = c(0.1, 1),
+  ogcs_index = c(1L, 7L),
+  total_imp = c(0.5, 1)
+)
+
+tgrid <- expand.grid(
+  nrounds = 10,
+  eta = 0.3,
+  max_depth = 6,
+  min_child_weight = 1,
+  gamma = 0,
+  colsample_bytree = 0.75,
+  subsample = 0.75
+)
+
+model_DC <- optimize_xgboost(
+    target = "DRAENKL",  # character vector (length 1), target variable.
+    cov_names = cov_DC_names,  # Character vector, covariate names,
+    data = trdat_DC, # data frame, input data
+    bounds_bayes = bounds_DC, # named list with bounds for bayesian opt.
+    bounds_pred = c(0.5, 5.5), # numeric, length 2, bounds for predicted values
+    cores = 19, # number cores for parallelization
+    trgrid = tgrid, # data frame with tuning parameters to be tested in basic model
+    folds = folds_DC, # list with indices, folds for cross validation
+    sumfun = WeightedSummary_DC, # summary function for accuracy assessment
+    metric = "MAEw", # character, length 1, name of evaluation metric
+    max_metric = FALSE, # logical, should the evaluation metric be maximized
+    weights = trdat_DC$w, # numeric, weights for model training and evaluation
+    trees_per_round = 3, # numeric, length 1, number of trees that xgboost should train in each round
+    obj_xgb = "reg:pseudohubererror", # character, length 1, objective function for xgboost
+    colsample_bylevel_basic = 0.75, # numeric, colsample_bylevel for basic model
+    cov_keep = NULL, # Character vector, covariates that should always be present
+    final_round_mult = 1,  # Multiplier for the number of rounds in the final model
+    seed = 321  # Random seed for model training
+)
+
+# Test basic DC model
+
+ogcs_names <- cov_DC_names %>%
+  grep('ogc_pi', ., value = TRUE)
+ogcs_names_list <- list(ogcs_names)
+n_ogcs_v <- numeric()
+m <- 1
+n_ogcs <- length(ogcs_names_list[[m]])
+n_ogcs_v[m] <- n_ogcs
+while (n_ogcs > 2) {
+  m <- m + 1
+  ogcs_names_list[[m]] <- ogcs_names_list[[m - 1]][c(TRUE, FALSE)]
+  n_ogcs <- length(ogcs_names_list[[m]])
+  n_ogcs_v[m] <- n_ogcs
+}
+ogcs_names_list[[length(ogcs_names_list) + 1]] <- character()
+n_ogcs_v %<>% c(., 0)
+# Identify covariates that are not OGCs and make formula
+formula_basic <- cov_DC_names %>%
+  grep('ogc_pi', ., value = TRUE, invert = TRUE) %>%
+  paste0(collapse = " + ") %>%
+  paste0("DRAENKL", " ~ ", .) %>%
+  as.formula()
+# Basic model
+showConnections()
+cl <- makePSOCKcluster(19)
+registerDoParallel(cl)
+set.seed(321)
+basic_model <- caret::train(
+  form = formula_basic,
+  data = trdat_DC,
+  method = "xgbTree",
+  na.action = na.pass,
+  tuneGrid = tgrid,
+  trControl = trainControl(
+    index = folds_DC,
+    savePredictions = "final",
+    predictionBounds = c(0.5, 5.5),
+    summaryFunction = WeightedSummary_DC,
+    allowParallel = TRUE
+  ),
+  metric = "MAEw",
+  maximize = FALSE,
+  weights = trdat_DC$w,
+  num_parallel_tree = 3,
+  objective = "reg:pseudohubererror",
+  colsample_bylevel = 0.75,
+  nthread = 1
+)
+stopCluster(cl)
+foreach::registerDoSEQ()
+rm(cl)
+showConnections()
 
 # Part 2: Artificially drained areas
 
