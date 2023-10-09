@@ -3,13 +3,14 @@
 # TO DO:
 
 # First: Predict soil drainage classes:
-# Import soil drainage classes (get correct coordinates first)
-# Extract covariates
-# Include texture predictions as covariates
+# Import soil drainage classes (get correct coordinates first) [ok]
+# Extract covariates [ok]
+# Include texture predictions as covariates [ok]
 # Rearrange tiles for texture predictions to fit covariate structure
-# Make summary function with weighted MAE for accuracy
-# Calculate weights
-# Train xgboost regression model,
+# Make summary function with weighted MAE for accuracy [ok]
+# Calculate weights [ok]
+# Train xgboost regression model [ok, poor accuracy]
+# Train xgboost classification model [ok]
 # Analyse results
 # Make map for test area
 # Make national map
@@ -47,6 +48,7 @@ library(rpart)
 library(doParallel)
 library(spatstat) # weights
 library(RODBC)
+library(stringr) 
 
 dir_code <- getwd()
 root <- dirname(dir_code)
@@ -54,6 +56,10 @@ dir_dat <- paste0(root, "/digijord_data/")
 
 testn <- 13
 mycrs <- "EPSG:25832"
+
+fractions_alt <- c("clay", "silt", "fine_sand", "coarse_sand", "SOC", "CaCO3")
+
+fractions <- fractions_alt
 
 fraction_names_underscore <- c(
   "Clay", "Silt", "Fine_sand", "Coarse_sand", "SOC", "CaCO3"
@@ -278,80 +284,216 @@ tgrid <- expand.grid(
   subsample = 0.75
 )
 
-model_DC <- optimize_xgboost(
-    target = "DRAENKL",  # character vector (length 1), target variable.
-    cov_names = cov_DC_names,  # Character vector, covariate names,
-    data = trdat_DC, # data frame, input data
-    bounds_bayes = bounds_DC, # named list with bounds for bayesian opt.
-    bounds_pred = c(0.5, 5.5), # numeric, length 2, bounds for predicted values
-    cores = 19, # number cores for parallelization
-    trgrid = tgrid, # data frame with tuning parameters to be tested in basic model
-    folds = folds_DC, # list with indices, folds for cross validation
-    sumfun = WeightedSummary_DC, # summary function for accuracy assessment
-    metric = "MAEw", # character, length 1, name of evaluation metric
-    max_metric = FALSE, # logical, should the evaluation metric be maximized
-    weights = trdat_DC$w, # numeric, weights for model training and evaluation
-    trees_per_round = 3, # numeric, length 1, number of trees that xgboost should train in each round
-    obj_xgb = "reg:pseudohubererror", # character, length 1, objective function for xgboost
-    colsample_bylevel_basic = 0.75, # numeric, colsample_bylevel for basic model
-    cov_keep = NULL, # Character vector, covariates that should always be present
-    final_round_mult = 1,  # Multiplier for the number of rounds in the final model
-    seed = 321  # Random seed for model training
+# model_DC <- optimize_xgboost(
+#     target = "DRAENKL",  # character vector (length 1), target variable.
+#     cov_names = cov_DC_names,  # Character vector, covariate names,
+#     data = trdat_DC, # data frame, input data
+#     bounds_bayes = bounds_DC, # named list with bounds for bayesian opt.
+#     bounds_pred = c(0.5, 5.5), # numeric, length 2, bounds for predicted values
+#     cores = 19, # number cores for parallelization
+#     trgrid = tgrid, # data frame with tuning parameters to be tested in basic model
+#     folds = folds_DC, # list with indices, folds for cross validation
+#     sumfun = WeightedSummary_DCnum, # summary function for accuracy assessment
+#     metric = "MAEw", # character, length 1, name of evaluation metric
+#     max_metric = FALSE, # logical, should the evaluation metric be maximized
+#     weights = trdat_DC$w, # numeric, weights for model training and evaluation
+#     trees_per_round = 10, # numeric, length 1, number of trees that xgboost should train in each round
+#     obj_xgb = "reg:pseudohubererror", # character, length 1, objective function for xgboost
+#     colsample_bylevel_basic = 0.75, # numeric, colsample_bylevel for basic model
+#     cov_keep = NULL, # Character vector, covariates that should always be present
+#     final_round_mult = 10,  # Multiplier for the number of rounds in the final model
+#     seed = 321  # Random seed for model training
+# )
+
+# Drainage classes as factor
+
+trdat_DC %<>% mutate(
+  DCfac = factor(DRAENKL, labels = paste0("DC", 1:5))
 )
 
-# Test basic DC model
+source("f_optimize_xgboost.R")
+source("f_weighted_summaries.R")
 
-ogcs_names <- cov_DC_names %>%
-  grep('ogc_pi', ., value = TRUE)
-ogcs_names_list <- list(ogcs_names)
-n_ogcs_v <- numeric()
-m <- 1
-n_ogcs <- length(ogcs_names_list[[m]])
-n_ogcs_v[m] <- n_ogcs
-while (n_ogcs > 2) {
-  m <- m + 1
-  ogcs_names_list[[m]] <- ogcs_names_list[[m - 1]][c(TRUE, FALSE)]
-  n_ogcs <- length(ogcs_names_list[[m]])
-  n_ogcs_v[m] <- n_ogcs
-}
-ogcs_names_list[[length(ogcs_names_list) + 1]] <- character()
-n_ogcs_v %<>% c(., 0)
-# Identify covariates that are not OGCs and make formula
-formula_basic <- cov_DC_names %>%
-  grep('ogc_pi', ., value = TRUE, invert = TRUE) %>%
-  paste0(collapse = " + ") %>%
-  paste0("DRAENKL", " ~ ", .) %>%
-  as.formula()
-# Basic model
-showConnections()
-cl <- makePSOCKcluster(19)
-registerDoParallel(cl)
-set.seed(321)
-basic_model <- caret::train(
-  form = formula_basic,
-  data = trdat_DC,
-  method = "xgbTree",
-  na.action = na.pass,
-  tuneGrid = tgrid,
-  trControl = trainControl(
-    index = folds_DC,
-    savePredictions = "final",
-    predictionBounds = c(0.5, 5.5),
-    summaryFunction = WeightedSummary_DC,
-    allowParallel = TRUE
-  ),
-  metric = "MAEw",
-  maximize = FALSE,
-  weights = trdat_DC$w,
-  num_parallel_tree = 3,
-  objective = "reg:pseudohubererror",
-  colsample_bylevel = 0.75,
-  nthread = 1
-)
-stopCluster(cl)
 foreach::registerDoSEQ()
-rm(cl)
 showConnections()
+
+model_DCfac <- optimize_xgboost(
+  target = "DCfac",  # character vector (length 1), target variable.
+  cov_names = cov_DC_names,  # Character vector, covariate names,
+  data = trdat_DC, # data frame, input data
+  bounds_bayes = bounds_DC, # named list with bounds for bayesian opt.
+  bounds_pred = c(FALSE, FALSE), # numeric, length 2, bounds for predicted values
+  cores = 19, # number cores for parallelization
+  trgrid = tgrid, # data frame with tuning parameters to be tested in basic model
+  folds = folds_DC, # list with indices, folds for cross validation
+  sumfun = WeightedSummary_DCfac, # summary function for accuracy assessment
+  metric = "OAw", # character, length 1, name of evaluation metric
+  max_metric = TRUE, # logical, should the evaluation metric be maximized
+  weights = trdat_DC$w, # numeric, weights for model training and evaluation
+  trees_per_round = 10, # numeric, length 1, number of trees that xgboost should train in each round
+  obj_xgb = "multi:softprob", # character, length 1, objective function for xgboost
+  colsample_bylevel_basic = 0.75, # numeric, colsample_bylevel for basic model
+  cov_keep = NULL, # Character vector, covariates that should always be present
+  final_round_mult = 10,  # Multiplier for the number of rounds in the final model
+  seed = 321,  # Random seed for model training,
+  classprob = TRUE
+)
+
+model_DCfac$model %>% varImp()
+
+# Add more iterations for bayes optimization?
+
+# Load covariates for test area
+
+dir_cov_10km <- dir_dat %>%
+  paste0(., "/testarea_10km/covariates/")
+
+predfolder <- dir_results %>%
+  paste0(., "/predictions_testarea/")
+
+
+
+breaks <- c(0, 30, 60, 100, 200)
+
+uppers <- breaks %>% rev() %>% .[-1] %>% rev()
+lowers <- breaks %>% .[-1]
+
+max_char <- breaks %>%
+  as.character() %>%
+  nchar() %>%
+  max()
+
+breaks_chr <- breaks %>%
+  str_pad(
+    .,
+    max_char,
+    pad = "0"
+  )
+
+depth_int_chr <- paste0(breaks_chr[1:4], "_", breaks_chr[2:5], "_cm")
+
+cov_10km <- dir_cov_10km %>%
+  list.files(full.names = TRUE) %>%
+  rast() %>%
+  subset(cov_selected)
+
+# Load texture maps for test area
+
+maps_10_km <- list()
+
+for (i in 1:length(fractions)) {
+  maps_10_km[[i]] <- c(1:4) %>%
+    paste0(
+      predfolder, "/", fractions[i],
+      "_depth", .,
+      ".tif"
+    ) %>%
+    rast()
+  # names(maps_10_km[[i]]) <- paste0(
+  #   fraction_names[i], ", ", uppers, " - ", lowers, " cm"
+  # )
+}
+
+# Standardize mineral sum to 100
+
+maps_10_km_mineral_fin <- lapply(
+  1:4, function(i) {
+    mineral_raw <- c(
+      maps_10_km[[1]][[i]],
+      maps_10_km[[2]][[i]],
+      maps_10_km[[3]][[i]],
+      maps_10_km[[4]][[i]]
+    )
+    
+    mineral_sum_r <- mineral_raw %>% sum() 
+    
+    mineral_final <- mineral_raw*100 / mineral_sum_r
+    
+    mineral_final %<>% round(., digits = 1)
+    
+    return(mineral_final)
+  }
+)
+
+maps_10_km_mineral_fin_frac <- lapply(
+  1:4, function(x) {
+    out <- c(
+      maps_10_km_mineral_fin[[1]][[x]],
+      maps_10_km_mineral_fin[[2]][[x]],
+      maps_10_km_mineral_fin[[3]][[x]],
+      maps_10_km_mineral_fin[[4]][[x]]
+    )
+  }
+)
+
+for (i in 1:length(maps_10_km_mineral_fin_frac)) {
+  maps_10_km[[i]] <- maps_10_km_mineral_fin_frac[[i]]
+}
+
+texture_10km <- rast(maps_10_km)
+
+names(texture_10km) <- sapply(
+  fraction_names_underscore,
+  function(x) paste0(x, "_", depth_int_chr)
+  ) %>% as.vector()
+
+cov_10km_DC <- c(cov_10km, texture_10km) %>%
+  terra::subset(., rownames(varImp(model_DCfac$model)$importance))
+
+# Make predictions for the test area
+
+source("f_predict_passna.R")
+
+pred_DC <- predict(
+  cov_10km_DC,
+  model_DCfac$model,
+  fun = predict_passna,
+  na.rm = FALSE,
+  const = data.frame(
+    dummy = NA
+  ),
+  n_const = 0,
+  n_digits = 0,
+  # ,
+  # filename = outname,
+  # overwrite = TRUE
+)
+
+pred_DC_prob <- predict(
+  cov_10km_DC,
+  model_DCfac$model,
+  fun = predict_passna_prob,
+  na.rm = FALSE,
+  const = data.frame(
+    dummy = NA
+  ),
+  n_const = 0,
+  n_digits = 2
+  # ,
+  # filename = outname,
+  # overwrite = TRUE
+)
+
+pred_DC_mean <- app(
+  pred_DC_prob,
+  function(x) {
+    out <- stats::weighted.mean(1:5, x, na.rm = TRUE)
+    return(out)
+  }
+)
+
+pred_DC_median <- app(
+  pred_DC_prob,
+  function(x) {
+    out <- weighted.median(1:5, x, na.rm = TRUE, type = 4)
+    return(out)
+  }
+)
+
+plot(pred_DC, col = rev(cividis(100)))
+plot(pred_DC_mean, col = rev(cividis(100)))
+plot(pred_DC_median, col = rev(cividis(100)))
+plot(pred_DC_prob, col = viridis(100))
 
 # Part 2: Artificially drained areas
 

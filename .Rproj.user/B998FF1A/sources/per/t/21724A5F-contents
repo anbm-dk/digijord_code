@@ -1,23 +1,24 @@
 # Function to optimize xgboost
 
 optimize_xgboost <- function(
+    data = NULL, # data frame, input data
     target = NULL,  # character vector (length 1), target variable.
     cov_names = NULL,  # Character vector, covariate names,
-    data = NULL, # data frame, input data
+    cov_keep = NULL, # Character vector, covariates that should always be present
     bounds_bayes = NULL, # named list with bounds for bayesian opt.
-    bounds_pred = NULL, # numeric, length 2, bounds for predicted values
-    cores = 19, # number cores for parallelization
+    bounds_pred = rep(FALSE, 2), # numeric, length 2, bounds for predicted values
     trgrid = NULL, # data frame with tuning parameters to be tested in basic model
     folds = NULL, # list with indices, folds for cross validation
+    weights = NULL, # numeric, weights for model training and evaluation
     sumfun = NULL, # summary function for accuracy assessment
     metric = NULL, # character, length 1, name of evaluation metric
     max_metric = NULL, # logical, should the evaluation metric be maximized
-    weights = NULL, # numeric, weights for model training and evaluation
-    trees_per_round = NULL, # numeric, length 1, number of trees that xgboost should train in each round
+    classprob = FALSE, # should class probabilities be calculated
     obj_xgb = NULL, # character, length 1, objective function for xgboost
+    trees_per_round = NULL, # numeric, length 1, number of trees that xgboost should train in each round
     colsample_bylevel_basic = 0.75, # numeric, colsample_bylevel for basic model
-    cov_keep = NULL, # Character vector, covariates that should always be present
     final_round_mult = NULL,  # Multiplier for the number of rounds in the final model
+    cores = 19, # number cores for parallelization
     seed = NULL  # Random seed for model training
 ) {
   require(ParBayesianOptimization)
@@ -64,7 +65,8 @@ optimize_xgboost <- function(
       savePredictions = "final",
       predictionBounds = bounds_pred,
       summaryFunction = sumfun,
-      allowParallel = TRUE
+      allowParallel = TRUE,
+      classProbs = classprob
     ),
     metric = metric,
     maximize = max_metric,
@@ -139,7 +141,8 @@ optimize_xgboost <- function(
         savePredictions = "final",
         predictionBounds = bounds_pred,
         summaryFunction = sumfun,
-        allowParallel = FALSE
+        allowParallel = FALSE,
+        classProbs = classprob
       ),
       metric = metric,
       maximize = max_metric,
@@ -219,7 +222,6 @@ optimize_xgboost <- function(
   stopCluster(cl)
   foreach::registerDoSEQ()
   rm(cl)
-  print(scoreresults)
   showConnections()
   bestscores <- scoreresults$scoreSummary %>%
     filter(Score == max(Score, na.rm = TRUE))
@@ -273,7 +275,8 @@ optimize_xgboost <- function(
       savePredictions = "final",
       predictionBounds = bounds_pred,
       summaryFunction = sumfun,
-      allowParallel = TRUE
+      allowParallel = TRUE,
+      classProbs = classprob
     ),
     metric = metric,
     maximize = max_metric,

@@ -126,9 +126,9 @@ WeightedSummary_sqrt <- function(
   return(out)
 }
 
-# Weighted summary for drainage classes
+# Weighted summary for drainage classes as numeric vector
 
-WeightedSummary_DC <- function(
+WeightedSummary_DCnum <- function(
     data,
     lev = NULL,
     model = NULL,
@@ -157,6 +157,65 @@ WeightedSummary_DC <- function(
   out <- numeric()
   out[1] <- get_MAEw(data[, 1:2], data$weights)
   out[2] <- get_OAw(data[, 1:2], data$weights)
+  names(out) <- c("MAEw", "OAw")
+  return(out)
+}
+
+# Weighted summary for drainage classes as factor
+
+WeightedSummary_DCfac <- function(
+    data,
+    lev = NULL,
+    model = NULL,
+    ...) {
+  #Check data
+  if (!all(levels(data[, "pred"]) == levels(data[, "obs"])))
+    stop("levels of observed and predicted data do not match")
+  
+  require(stats)
+  
+  has_class_probs <- all(lev %in% colnames(data))
+  
+  if(has_class_probs) {
+    data$pred_num <- apply(
+      data[, colnames(data) %in% lev],
+      1,
+      function(x2) {
+        out2 <- stats::weighted.mean(
+          x = c(1:length(lev)),
+          w = x2,
+          na.rm = TRUE
+          )
+        return(out2)
+      }
+    )
+  } else {
+    data$pred_num <- as.numeric(pred)
+  }
+  get_MAEw <- function(d, w) {
+    require(stats)
+    if (nrow(d) == 0) {
+      out <- NA
+    } else {
+      d$obs_num <- as.numeric(d$obs)
+      ae <- abs(d$obs_num - d$pred_num)
+      out <- stats::weighted.mean(x = ae, w = w, na.rm = TRUE)
+    }
+    return(out)
+  }
+  get_OAw <- function(d, w) {
+    require(stats)
+    if (nrow(d) == 0) {
+      out <- NA
+    } else {
+      d_equal <- d$obs == d$pred
+      out <- stats::weighted.mean(x = d_equal, w = w, na.rm = TRUE)
+    }
+    return(out)
+  }
+  out <- numeric()
+  out[1] <- get_MAEw(data, data$weights)
+  out[2] <- get_OAw(data, data$weights)
   names(out) <- c("MAEw", "OAw")
   return(out)
 }
