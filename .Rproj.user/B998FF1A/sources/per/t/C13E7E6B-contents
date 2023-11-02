@@ -1,0 +1,192 @@
+# 02: Fuzzy boundaries for categorical covariates
+
+# Process these layers:
+# wetlands_10m.tif - 1:20,000   - smallest units about 15 m across [ok]
+# geology_         - 1:25,000   - smallest units about 25 m across [ok]
+# landscape_       - 1:100,000  - smallest units about 100 m across
+# georeg_          - 1:100,000  - the uncertainty seems to reach 500 m in some cases
+# lu_              - 1:100,000  - uncertainties are mostly around 50 m
+# cwl_10m_  # Already processed in ArcGIS (original resolution 20 m)
+
+# 1: Start up
+
+library(terra)
+library(magrittr)
+library(tools)
+
+dir_code <- getwd()
+root <- dirname(dir_code)
+dir_dat <- paste0(root, "/digijord_data/")
+
+mycrs <- "EPSG:25832"
+
+dir_cov <- dir_dat %>%
+  paste0(., "/covariates/")
+
+cov_files <- dir_cov %>%
+  list.files(
+    pattern = ".tif",
+    full.names = TRUE
+  )
+
+tmpfolder <- paste0(dir_dat, "/Temp/")
+
+terraOptions(tempdir = tmpfolder)
+
+dem_ind <- grepl(
+  "dhm",
+  cov_files
+)
+
+dem <- cov_files[dem_ind] %>% rast()
+
+crs(dem) <- mycrs
+
+# Process wetlands layer [ok]
+
+wetland_ind <- grepl(
+  "wetlands_10m.tif",
+  cov_files
+)
+
+wetlands_crisp <- cov_files[wetland_ind] %>% rast()
+# drylands_crisp <- 1 - wetlands_crisp
+# 
+# wl_twolayers_crisp <- c(wetlands_crisp, drylands_crisp)
+
+my_focal_weights <- focalMat(
+  wetlands_crisp,
+  c(10, 20),
+  type = c('Gauss')
+)
+# 
+# wl_twolayers_fuzzy <- focal(
+#   wl_twolayers_crisp,
+#   w = my_focal_weights,
+#   na.policy = "omit",
+#   na.rm = TRUE
+# )
+# 
+# wl_twolayers_fuzzy_sum <- sum(wl_twolayers_fuzzy)
+# wl_fuzzy_norm <- wl_twolayers_fuzzy[[1]] / wl_twolayers_fuzzy_sum
+# wl_fuzzy_norm_round <- round(wl_fuzzy_norm, digits = 2)
+# names(wl_fuzzy_norm_round) <- "wetlands_10m_fuzzy"
+# 
+# writeRaster(
+#   wl_fuzzy_norm_round,
+#   filename = paste0(tmpfolder, "/wetlands_10m_fuzzy.tif"),
+#   datatype = "FLT4S",
+#   overwrite = TRUE,
+#   gdal = "TILED=YES"
+#   )
+
+# Process geological map [ok]
+
+# geology_ind <- grepl(
+#   "geology",
+#   cov_files
+# )
+# 
+# geology_crisp <- cov_files[geology_ind] %>% rast()
+# 
+# geology_sum <- sum(geology_crisp)
+# geology_res <- 1 - geology_sum
+# names(geology_res) <- "geology_res"
+# geology_crisp_full <- c(geology_crisp, geology_res)
+# 
+# geology_fuzzy <- focal(
+#   geology_crisp_full,
+#   w = my_focal_weights,
+#   na.policy = "omit",
+#   na.rm = TRUE
+# )
+# 
+# geology_fuzzy_sum <- sum(geology_fuzzy)
+# geology_fuzzy_norm <- geology_fuzzy / geology_fuzzy_sum
+# geology_fuzzy_norm_round <- round(geology_fuzzy_norm, digits = 2)
+# geology_names <- names(geology_fuzzy_norm_round)
+# geology_names_fuzzy <- paste0("fuzzy_", geology_names)
+# geology_files_fuzzy <- paste0(tmpfolder, geology_names_fuzzy, ".tif")
+# names(geology_fuzzy_norm_round) <- geology_names_fuzzy
+# 
+# for (i in 1:nlyr(geology_fuzzy_norm_round)) {
+#   writeRaster(
+#     geology_fuzzy_norm_round[[i]],
+#     filename = geology_files_fuzzy[[i]],
+#     datatype = "FLT4S",
+#     overwrite = TRUE,
+#     gdal = "TILED=YES"
+#   )
+# }
+
+# Function for remaining layers
+
+fuzzify_indicators <- function(
+  x = NULL,
+  aggregation_factor = 1,
+  residual_layer = TRUE,
+  local_filter = NULL,
+  final_mask = NULL,
+  n_decimals = 3,
+  outfolder = NULL
+) {
+  x_sum <- sum(x)
+  
+  if (residual_layer) {
+    x_res <- 1 - x_sum
+    names(x_res) <- "x_res"
+    x_crisp_full <- c(x, x_res)
+  } else {
+    x_crisp_full <- x
+  }
+  
+  if (aggregation_factor > 1) {
+    x_crisp_full <- terra::aggregate(
+      x_crisp_full,
+      fact = aggregation_factor,
+      fun = "sum"
+    )
+  }
+
+  x_fuzzy <- focal(
+    x_crisp_full,
+    w = local_filter,
+    na.policy = "omit",
+    na.rm = TRUE
+  )
+  
+  if (aggregation_factor > 1) {
+    x_fuzzy <- disagg(
+      x_fuzzy,
+      fact = aggregation_factor,
+      method ="bilinear"
+    )
+    
+    x_fuzzy <- mask(
+      x_fuzzy,
+      mask = final_mask
+    )
+  }
+
+  x_fuzzy_sum <- sum(x_fuzzy)
+  x_fuzzy_norm <- x_fuzzy / x_fuzzy_sum
+  x_fuzzy_norm_round <- round(x_fuzzy_norm, digits = n_decimals)
+  x_names <- names(x_fuzzy_norm_round)
+  x_names_fuzzy <- paste0("fuzzy_", x_names)
+  geology_files_fuzzy <- paste0(outfolder, x_names_fuzzy, ".tif")
+  names(x_fuzzy_norm_round) <- x_names_fuzzy
+
+  for (i in 1:nlyr(x_fuzzy_norm_round)) {
+    writeRaster(
+      x_fuzzy_norm_round[[i]],
+      filename = x_files_fuzzy[[i]],
+      datatype = "FLT4S",
+      overwrite = TRUE,
+      gdal = "TILED=YES"
+    )
+  }
+  
+  invisible(NULL)
+}
+
+# END
