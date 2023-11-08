@@ -156,10 +156,11 @@ fuzzify_indicators <- function(
   )
   
   if (aggregation_factor > 1) {
-    x_fuzzy <- disagg(
-      x_fuzzy,
-      fact = aggregation_factor,
-      method ="bilinear"
+    x_fuzzy <- terra::resample(
+      x = x_fuzzy,
+      y = x,
+      # fact = aggregation_factor,
+      method = "cubicspline"
     )
     
     x_fuzzy <- mask(
@@ -173,7 +174,7 @@ fuzzify_indicators <- function(
   x_fuzzy_norm_round <- round(x_fuzzy_norm, digits = n_decimals)
   x_names <- names(x_fuzzy_norm_round)
   x_names_fuzzy <- paste0("fuzzy_", x_names)
-  geology_files_fuzzy <- paste0(outfolder, x_names_fuzzy, ".tif")
+  x_files_fuzzy <- paste0(outfolder, x_names_fuzzy, ".tif")
   names(x_fuzzy_norm_round) <- x_names_fuzzy
 
   for (i in 1:nlyr(x_fuzzy_norm_round)) {
@@ -188,5 +189,22 @@ fuzzify_indicators <- function(
   
   invisible(NULL)
 }
+
+# Process landscape elements
+
+landscape_ind <- grepl(
+  "landscape",
+  cov_files
+)
+
+landscape_crisp <- cov_files[landscape_ind] %>% rast()
+
+fuzzify_indicators(
+  landscape_crisp,
+  aggregation_factor = 5,
+  local_filter = my_focal_weights,
+  final_mask = dem,
+  outfolder = tmpfolder
+)
 
 # END
