@@ -3,7 +3,7 @@
 # Process these layers:
 # wetlands_10m.tif - 1:20,000   - smallest units about 15 m across [ok]
 # geology_         - 1:25,000   - smallest units about 25 m across [ok]
-# landscape_       - 1:100,000  - smallest units about 100 m across
+# landscape_       - 1:100,000  - smallest units about 100 m across [ok]
 # georeg_          - 1:100,000  - the uncertainty seems to reach 500 m in some cases
 # lu_              - 1:100,000  - uncertainties are mostly around 50 m
 # cwl_10m_  # Already processed in ArcGIS (original resolution 20 m)
@@ -193,20 +193,54 @@ fuzzify_indicators <- function(
   invisible(NULL)
 }
 
-# Process landscape elements
+# Process landscape elements [ok]
 
-landscape_ind <- grepl(
-  "landscape",
+# landscape_ind <- grepl(
+#   "landscape",
+#   cov_files
+# )
+# 
+# landscape_crisp <- cov_files[landscape_ind] %>% rast()
+# 
+# fuzzify_indicators(
+#   landscape_crisp,
+#   aggregation_factor = 5,
+#   local_filter = my_focal_weights,
+#   n_digits = 2,
+#   outfolder = tmpfolder
+# )
+
+# Process georegions
+
+georeg_ind <- grepl(
+  "georeg_",
   cov_files
 )
 
-landscape_crisp <- cov_files[landscape_ind] %>% rast()
+georeg_crisp <- cov_files[georeg_ind] %>% rast()
 
 fuzzify_indicators(
-  landscape_crisp,
+  georeg_crisp,
   aggregation_factor = 5,
   local_filter = my_focal_weights,
-  final_mask = dem,
+  n_digits = 2,
+  outfolder = tmpfolder
+)
+
+# Process LU
+
+lu_ind <- grepl(
+  "lu_",
+  cov_files
+)
+
+lu_crisp <- cov_files[lu_ind] %>% rast()
+
+fuzzify_indicators(
+  lu_crisp,
+  aggregation_factor = 5,
+  local_filter = my_focal_weights,
+  n_digits = 2,
   outfolder = tmpfolder
 )
 
