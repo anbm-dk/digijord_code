@@ -126,8 +126,7 @@ fuzzify_indicators <- function(
   aggregation_factor = 1,
   residual_layer = TRUE,
   local_filter = NULL,
-  final_mask = NULL,
-  n_decimals = 3,
+  n_digits = 3,
   outfolder = NULL
 ) {
   x_sum <- sum(x)
@@ -146,32 +145,36 @@ fuzzify_indicators <- function(
       fact = aggregation_factor,
       fun = "sum"
     )
-  }
-
-  x_fuzzy <- focal(
-    x_crisp_full,
-    w = local_filter,
-    na.policy = "omit",
-    na.rm = TRUE
-  )
-  
-  if (aggregation_factor > 1) {
+    
+    x_fuzzy <- focal(
+      x_crisp_full,
+      w = local_filter,
+      na.policy = "all",
+      na.rm = TRUE
+    )
+    
     x_fuzzy <- terra::resample(
       x = x_fuzzy,
       y = x,
-      # fact = aggregation_factor,
       method = "cubicspline"
     )
     
     x_fuzzy <- mask(
       x_fuzzy,
-      mask = final_mask
+      mask = x[[1]]
+    )
+  } else {
+    x_fuzzy <- focal(
+      x_crisp_full,
+      w = local_filter,
+      na.policy = "omit",
+      na.rm = TRUE
     )
   }
 
   x_fuzzy_sum <- sum(x_fuzzy)
   x_fuzzy_norm <- x_fuzzy / x_fuzzy_sum
-  x_fuzzy_norm_round <- round(x_fuzzy_norm, digits = n_decimals)
+  x_fuzzy_norm_round <- signif(x_fuzzy_norm, digits = n_digits)
   x_names <- names(x_fuzzy_norm_round)
   x_names_fuzzy <- paste0("fuzzy_", x_names)
   x_files_fuzzy <- paste0(outfolder, x_names_fuzzy, ".tif")
