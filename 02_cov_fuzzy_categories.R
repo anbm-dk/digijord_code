@@ -5,7 +5,9 @@
 # geology_         - 1:25,000   - smallest units about 25 m across [ok]
 # landscape_       - 1:100,000  - smallest units about 100 m across [ok]
 # georeg_          - 1:100,000  - the uncertainty seems to reach 500 m in some cases
-# lu_              - 1:100,000  - uncertainties are mostly around 50 m
+# lu_              - 10 m - (Corine LU has a scale of 1:00,000, but the basemap has 10 m resolution)
+# Use a sigma of less than 1 for lu?
+# imk             - 10 m, use half sigma for fuzzification
 # cwl_10m_  # Already processed in ArcGIS (original resolution 20 m)
 
 # 1: Start up
@@ -212,36 +214,103 @@ fuzzify_indicators <- function(
 
 # Process georegions
 
-georeg_ind <- grepl(
-  "georeg_",
-  cov_files
-)
+# georeg_ind <- grepl(
+#   "georeg_",
+#   cov_files
+# )
+# 
+# georeg_crisp <- cov_files[georeg_ind] %>% rast()
+# 
+# fuzzify_indicators(
+#   georeg_crisp,
+#   aggregation_factor = 5,
+#   local_filter = my_focal_weights,
+#   n_digits = 2,
+#   outfolder = tmpfolder
+# )
 
-georeg_crisp <- cov_files[georeg_ind] %>% rast()
+# Sigma experiment
 
-fuzzify_indicators(
-  georeg_crisp,
-  aggregation_factor = 5,
-  local_filter = my_focal_weights,
-  n_digits = 2,
-  outfolder = tmpfolder
-)
+r1 <- matrix(
+  sample(c(0,1), 400, replace = TRUE), nrow = 20
+) %>%
+  rast()
 
-# Process LU
+plot(r1)
 
-lu_ind <- grepl(
-  "lu_",
-  cov_files
-)
+r2 <- focal(r1, w = my_focal_weights, na.rm = TRUE)
 
-lu_crisp <- cov_files[lu_ind] %>% rast()
+plot(r2)
 
-fuzzify_indicators(
-  lu_crisp,
-  aggregation_factor = 5,
-  local_filter = my_focal_weights,
-  n_digits = 2,
-  outfolder = tmpfolder
-)
+# halfsigma <- focalMat(r1, d = c(0.56, 2), type = 'Gauss')
+
+halfsigma <- focalMat(r1, d = c(0.5, 1), type = 'Gauss')
+
+halfsigma
+
+r3 <- focal(r1, w = halfsigma, na.rm = TRUE)
+
+library(viridis)
+
+plot(r1, col = cividis(100))
+plot(r3, col = cividis(100))
+
+hist(r3, breaks = 100)
+
+plot(r3 - r1)
+
+r3 - r1
+
+# Process LU [ok]
+
+# lu_ind <- grepl(
+#   "lu_",
+#   cov_files
+# )
+# 
+# lu_crisp <- cov_files[lu_ind] %>% rast()
+# 
+# fuzzify_indicators(
+#   lu_crisp,
+#   local_filter = halfsigma,
+#   n_digits = 2,
+#   outfolder = tmpfolder
+# )
+
+# Process imk [ok]
+
+# imk_files <- grep(
+#   "imk_",
+#   cov_files,
+#   value = TRUE
+# )
+# 
+# for (i in 1:length(imk_files)) {
+#   r <- rast(imk_files[i])
+#   
+#   newname <- names(r) %>% paste0("fuzzy_", .)
+#   
+#   r_fuzzy <- x_fuzzy <- focal(
+#     r,
+#     w = halfsigma,
+#     na.policy = "omit",
+#     na.rm = TRUE
+#   )
+#   
+#   r_fuzzy_round <- round(
+#     r_fuzzy,
+#     digits = 2
+#   )
+#   
+#   names(r_fuzzy_round) <- newname
+#   
+#   writeRaster(
+#     r_fuzzy_round,
+#     filename = paste0(tmpfolder, "/", newname, ".tif"),
+#     datatype = "FLT4S",
+#     overwrite = TRUE,
+#     gdal = "TILED=YES"
+#   )
+# }
 
 # END
