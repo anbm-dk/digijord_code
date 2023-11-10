@@ -1,7 +1,7 @@
 {
     "id": "1EBCEF96",
-    "path": "C:/Users/au542768/digijord/digijord_code/02_Cov_mask.R",
-    "project_path": "02_Cov_mask.R",
+    "path": "C:/Users/au542768/digijord/digijord_code/04_Cov_mask.R",
+    "project_path": "04_Cov_mask.R",
     "type": "r_source",
     "hash": "3945355373",
     "contents": "",
@@ -21,7 +21,7 @@
     "encoding": "UTF-8",
     "collab_server": "",
     "source_window": "",
-    "last_content_update": 1695372126464,
+    "last_content_update": 1695372126,
     "read_only": false,
     "read_only_alternatives": []
 }

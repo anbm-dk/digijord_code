@@ -4,11 +4,11 @@
 # wetlands_10m.tif - 1:20,000   - smallest units about 15 m across [ok]
 # geology_         - 1:25,000   - smallest units about 25 m across [ok]
 # landscape_       - 1:100,000  - smallest units about 100 m across [ok]
-# georeg_          - 1:100,000  - the uncertainty seems to reach 500 m in some cases
+# georeg_          - 1:100,000  - the uncertainty seems to reach 500 m in some cases [ok]
 # lu_              - 10 m - (Corine LU has a scale of 1:00,000, but the basemap has 10 m resolution)
-# Use a sigma of less than 1 for lu?
-# imk             - 10 m, use half sigma for fuzzification
-# cwl_10m_  # Already processed in ArcGIS (original resolution 20 m)
+# Use a sigma of less than 1 for lu.  [ok]
+# imk             - 10 m, use half sigma for fuzzification [ok]
+# cwl_10m_  # Already processed in ArcGIS (original resolution 20 m) [ok]
 
 # 1: Start up
 
@@ -312,5 +312,54 @@ r3 - r1
 #     gdal = "TILED=YES"
 #   )
 # }
+
+# Make bare soil count layer with a maximum value of 10
+# Fuzzify it with a half sigma
+
+s2_count <- dir_dat %>%
+  paste0(
+    ., "layers/s2_geomedian_count.tif"
+  ) %>% rast()
+
+names(s2_count) <- "s2_geomedian_count"
+
+s2_count_masked <- mask(
+  s2_count,
+  dem
+)
+
+s2_count_max10 <- ifel(
+  s2_count_masked > 10,
+  10,
+  s2_count_masked
+)
+
+names(s2_count_max10) <- "s2_count_max10"
+
+writeRaster(
+  s2_count_max10,
+  filename = paste0(tmpfolder, "/s2_count_max10.tif"),
+  datatype = "INT1U",
+  overwrite = TRUE,
+  gdal = "TILED=YES"
+)
+  
+halfsigma_round <- round(halfsigma, digits = 2)
+
+s2_count_max10_fuzzy <- focal(
+  s2_count_max10,
+  w = halfsigma_round,
+  na.policy = "omit"
+)
+
+names(s2_count_max10_fuzzy) <- "s2_count_max10_fuzzy"
+
+writeRaster(
+  s2_count_max10_fuzzy,
+  filename = paste0(tmpfolder, "/s2_count_max10_fuzzy.tif"),
+  datatype = "FLT4S",
+  overwrite = TRUE,
+  gdal = "TILED=YES"
+)
 
 # END

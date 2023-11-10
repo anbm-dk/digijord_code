@@ -1,7 +1,7 @@
 {
     "id": "CC041ADA",
-    "path": "C:/Users/au542768/digijord/digijord_code/02_covariate_processing.R",
-    "project_path": "02_covariate_processing.R",
+    "path": "C:/Users/au542768/digijord/digijord_code/03_covariate_processing.R",
+    "project_path": "03_covariate_processing.R",
     "type": "r_source",
     "hash": "4050989684",
     "contents": "",
@@ -20,7 +20,7 @@
     "encoding": "UTF-8",
     "collab_server": "",
     "source_window": "",
-    "last_content_update": 1689322533948,
+    "last_content_update": 1689322533,
     "read_only": false,
     "read_only_alternatives": []
 }

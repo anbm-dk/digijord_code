@@ -1,7 +1,7 @@
 {
     "id": "F47822BE",
-    "path": "C:/Users/au542768/digijord/digijord_code/05_extract_covariates.R",
-    "project_path": "05_extract_covariates.R",
+    "path": "C:/Users/au542768/digijord/digijord_code/07_extract_covariates.R",
+    "project_path": "07_extract_covariates.R",
     "type": "r_source",
     "hash": "3864230266",
     "contents": "",
@@ -21,7 +21,7 @@
     "encoding": "UTF-8",
     "collab_server": "",
     "source_window": "",
-    "last_content_update": 1694692074415,
+    "last_content_update": 1694692074,
     "read_only": false,
     "read_only_alternatives": []
 }

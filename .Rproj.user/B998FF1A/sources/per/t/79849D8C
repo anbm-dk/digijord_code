@@ -1,7 +1,7 @@
 {
     "id": "79849D8C",
-    "path": "C:/Users/au542768/digijord/digijord_code/06_folds.R",
-    "project_path": "06_folds.R",
+    "path": "C:/Users/au542768/digijord/digijord_code/08_folds.R",
+    "project_path": "08_folds.R",
     "type": "r_source",
     "hash": "1839581532",
     "contents": "",
@@ -21,7 +21,7 @@
     "encoding": "UTF-8",
     "collab_server": "",
     "source_window": "",
-    "last_content_update": 1695902492316,
+    "last_content_update": 1695902492,
     "read_only": false,
     "read_only_alternatives": []
 }
