@@ -433,98 +433,113 @@ crs(dem) <- mycrs
 
 # 6: Rename the layers for all covariates (2023-03-23)
 
+# First check in the names match
+
 cov_files <- dir_cov %>%
   list.files(
     pattern = ".tif",
     full.names = TRUE
   )
 
-dir_cov_renamed <- dir_dat %>%
-  paste0(., "/covariates_renamed/") %T>%
-  dir.create()
-
 cov_origin <- cov_files %>% rast()
 cov_origin_lyrnames <- names(cov_origin)
+
 cov_origin_filenames <- cov_files %>% basename() %>% tools::file_path_sans_ext()
+
+mismatches <- cbind(
+  cov_origin_filenames,
+  cov_origin_lyrnames
+  )[cov_origin_filenames != cov_origin_lyrnames]
+
+mismatches
 
 changethese <- cov_files[cov_origin_filenames != cov_origin_lyrnames]
 
-library(parallel)
+# Correct it if they do not match
 
-numCores <- detectCores()
-numCores
-
-showConnections()
-
-cl <- makeCluster(numCores)
-
-clusterEvalQ(
-  cl,
-  {
-    library(terra)
-    library(magrittr)
-    library(dplyr)
-    library(tools)
-  }
-)
-
-clusterExport(
-  cl,
-  c("mycrs",
-    "dir_cov_renamed",
-    "changethese",
-    "tmpfolder"
+if (length(changethese) > 0) {
+  
+  dir_cov_renamed <- dir_dat %>%
+    paste0(., "/covariates_renamed/") %T>%
+    dir.create()
+  
+  library(parallel)
+  
+  numCores <- detectCores()
+  numCores
+  
+  showConnections()
+  
+  cl <- makeCluster(numCores)
+  
+  clusterEvalQ(
+    cl,
+    {
+      library(terra)
+      library(magrittr)
+      library(dplyr)
+      library(tools)
+    }
   )
-)
-
-parSapplyLB(
-  cl,
-  changethese,
-  function(x) {
-    terraOptions(memfrac = 0.02, tempdir = tmpfolder)
-    
-    r <- x %>% rast()
-    
-    dtyp <- datatype(r)
-    
-    newname_x <- sources(r) %>%
-      basename() %>%
-      file_path_sans_ext() %>%
-      gsub("\\.", "_", .) %>%
-      gsub("-", "_", .) %>%
-      tolower()
-    
-    crs(r) <- mycrs
-    names(r) <- newname_x
-    
-    outname_x <- dir_cov_renamed %>%
-      paste0(., "/", newname_x, ".tif")
-    
-    writeRaster(
-      r,
-      datatype = dtyp,
-      filename = outname_x,
-      overwrite = TRUE,
-      gdal = "TILED=YES"
+  
+  clusterExport(
+    cl,
+    c("mycrs",
+      "dir_cov_renamed",
+      "changethese",
+      "tmpfolder"
     )
-    
-    return(NA)
-  }
-)
-
-stopCluster(cl)
-foreach::registerDoSEQ()
-rm(cl)
-
-dir_cov_renamed %>%
-  list.files(full.names = TRUE) %>%
-  rast() %>%
-  names()
+  )
+  
+  parSapplyLB(
+    cl,
+    changethese,
+    function(x) {
+      terraOptions(memfrac = 0.02, tempdir = tmpfolder)
+      
+      r <- x %>% rast()
+      
+      dtyp <- datatype(r)
+      
+      newname_x <- sources(r) %>%
+        basename() %>%
+        file_path_sans_ext() %>%
+        gsub("\\.", "_", .) %>%
+        gsub("-", "_", .) %>%
+        tolower()
+      
+      crs(r) <- mycrs
+      names(r) <- newname_x
+      
+      outname_x <- dir_cov_renamed %>%
+        paste0(., "/", newname_x, ".tif")
+      
+      writeRaster(
+        r,
+        datatype = dtyp,
+        filename = outname_x,
+        overwrite = TRUE,
+        gdal = "TILED=YES"
+      )
+      
+      return(NA)
+    }
+  )
+  
+  stopCluster(cl)
+  foreach::registerDoSEQ()
+  rm(cl)
+  
+  dir_cov_renamed %>%
+    list.files(full.names = TRUE) %>%
+    rast() %>%
+    names()
+}
 
 # 7: Identify covariates missing in the overview table
 
 cov_cats <- dir_code %>%
-  paste0(., "/cov_categories_20230323.csv") %>%
+  paste0(., "/cov_categories_20231110.csv") %>%
   read.table(
     sep = ";",
     header = TRUE,
@@ -541,7 +556,7 @@ cov_names <- cov_files %>%
   basename() %>%
   file_path_sans_ext()
 
-setdiff(cov_names, cov_cats$name)
+data.frame(new = setdiff(cov_names, cov_cats$name))
 
 # 8: Crop all covariates for the test area
 

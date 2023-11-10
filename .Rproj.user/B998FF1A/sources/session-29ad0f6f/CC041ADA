@@ -3,7 +3,7 @@
     "path": "C:/Users/au542768/digijord/digijord_code/03_covariate_processing.R",
     "project_path": "03_covariate_processing.R",
     "type": "r_source",
-    "hash": "4050989684",
+    "hash": "2477751705",
     "contents": "",
     "dirty": false,
     "created": 1673338388415.0,
@@ -12,15 +12,15 @@
     "properties": {
         "source_window_id": "",
         "Source": "Source",
-        "cursorPosition": "504,0",
-        "scrollLine": "0"
+        "cursorPosition": "561,0",
+        "scrollLine": "547"
     },
     "folds": "",
-    "lastKnownWriteTime": 1689322533,
+    "lastKnownWriteTime": 1699628158,
     "encoding": "UTF-8",
     "collab_server": "",
     "source_window": "",
-    "last_content_update": 1689322533,
+    "last_content_update": 1699628158734,
     "read_only": false,
     "read_only_alternatives": []
 }
