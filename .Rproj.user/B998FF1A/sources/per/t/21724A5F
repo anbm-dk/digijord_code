@@ -3,7 +3,7 @@
     "path": "C:/Users/au542768/digijord/digijord_code/f_optimize_xgboost.R",
     "project_path": "f_optimize_xgboost.R",
     "type": "r_source",
-    "hash": "2109898459",
+    "hash": "2229291337",
     "contents": "",
     "dirty": false,
     "created": 1696415244649.0,
@@ -13,15 +13,15 @@
         "tempName": "Untitled1",
         "source_window_id": "",
         "Source": "Source",
-        "cursorPosition": "195,17",
-        "scrollLine": "178"
+        "cursorPosition": "133,24",
+        "scrollLine": "107"
     },
     "folds": "",
-    "lastKnownWriteTime": 1700126404,
+    "lastKnownWriteTime": 1700127139,
     "encoding": "UTF-8",
     "collab_server": "",
     "source_window": "",
-    "last_content_update": 1700126404756,
+    "last_content_update": 1700127139563,
     "read_only": false,
     "read_only_alternatives": []
 }

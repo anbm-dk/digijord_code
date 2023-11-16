@@ -18,6 +18,7 @@ optimize_xgboost <- function(
     trees_per_round = NULL, # numeric, length 1, number of trees that xgboost should train in each round
     colsample_bylevel_basic = 0.75, # numeric, colsample_bylevel for basic model
     final_round_mult = 1,  # Multiplier for the number of rounds in the final model
+    maxd = 10^3, # Maximum depth for optimized models
     cores = 19, # number cores for parallelization
     seed = NULL  # Random seed for model training
 ) {
@@ -93,7 +94,7 @@ optimize_xgboost <- function(
   # Scoring function for Bayesian optimization
   scoringFunction <- function(
     eta,  # OK
-    max_depth,  # OK
+    # max_depth,  # OK
     min_child_weight_sqrt,  # OK
     gamma_sqrt,  # OK
     colsample_bytree,  # OK
@@ -130,7 +131,7 @@ optimize_xgboost <- function(
       tuneGrid = expand.grid(
         nrounds = trgrid$nrounds,
         eta = eta,  # !
-        max_depth = max_depth,  # !
+        max_depth = maxd,  # !
         min_child_weight = my_min_child_weight, # !
         gamma = my_gamma, # !
         colsample_bytree = colsample_bytree, # !
@@ -197,6 +198,7 @@ optimize_xgboost <- function(
       "folds",
       "sumfun",
       "metric",
+      "maxd",
       "obj_xgb",
       "ogcs_names_list",
       "trgrid",
@@ -265,7 +267,7 @@ optimize_xgboost <- function(
     tuneGrid = expand.grid(
       nrounds = trgrid$nrounds*final_round_mult,
       eta = eta_test_final, # NB
-      max_depth = best_pars$max_depth,
+      max_depth = maxd,
       min_child_weight = best_pars$min_child_weight_sqrt^2,
       gamma = best_pars$gamma_sqrt^2,
       colsample_bytree = best_pars$colsample_bytree,

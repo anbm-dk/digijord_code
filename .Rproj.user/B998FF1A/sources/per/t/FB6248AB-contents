@@ -441,7 +441,7 @@ tgrid <- expand.grid(
 )
 
 eta_test <- seq(0.1, 1, 0.1)
-max_depth_test <- seq(1, 30, 3)
+# max_depth_test <- seq(1, 30, 3)
 min_child_weight_test <- c(1, 2, 4, 8, 16, 32, 64)
 gamma_test <- seq(0, 0.6, 0.1)
 colsample_bytree_test <- seq(0.1, 1, 0.1)
