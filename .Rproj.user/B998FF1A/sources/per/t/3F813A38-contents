@@ -264,7 +264,7 @@ source("f_weighted_summaries.R")
 
 bounds_DC <- list(
   eta = c(0.1, 1),
-  max_depth = c(1L, 60L),
+  # max_depth = c(1L, 60L),
   min_child_weight_sqrt = c(1, sqrt(64)),
   gamma_sqrt = c(0, sqrt(40)),
   colsample_bytree = c(0.1, 1),

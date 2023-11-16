@@ -17,7 +17,7 @@ optimize_xgboost <- function(
     obj_xgb = NULL, # character, length 1, objective function for xgboost
     trees_per_round = NULL, # numeric, length 1, number of trees that xgboost should train in each round
     colsample_bylevel_basic = 0.75, # numeric, colsample_bylevel for basic model
-    final_round_mult = NULL,  # Multiplier for the number of rounds in the final model
+    final_round_mult = 1,  # Multiplier for the number of rounds in the final model
     cores = 19, # number cores for parallelization
     seed = NULL  # Random seed for model training
 ) {
