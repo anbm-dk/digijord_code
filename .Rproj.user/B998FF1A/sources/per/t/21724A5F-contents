@@ -213,7 +213,7 @@ optimize_xgboost <- function(
   scoreresults <- bayesOpt(
     FUN = scoringFunction,
     bounds = bounds_bayes,
-    initPoints = cores,
+    initPoints = cores*2,
     iters.n = cores*10,
     iters.k = cores,
     acq = "ucb",
