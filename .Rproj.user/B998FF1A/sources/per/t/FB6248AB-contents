@@ -157,7 +157,7 @@ forest_folds <- dir_folds %>%
 dir_cov <- dir_dat %>% paste0(., "/covariates")
 
 cov_cats <- dir_code %>%
-  paste0(., "/cov_categories_20230712.csv") %>%
+  paste0(., "/cov_categories_20231110.csv") %>%
   read.table(
     sep = ";",
     header = TRUE
