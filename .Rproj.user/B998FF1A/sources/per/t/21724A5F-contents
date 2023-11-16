@@ -193,6 +193,7 @@ optimize_xgboost <- function(
       "target",
       "bounds_pred",
       "cov_ranked",
+      "cov_keep",
       "folds",
       "sumfun",
       "metric",
