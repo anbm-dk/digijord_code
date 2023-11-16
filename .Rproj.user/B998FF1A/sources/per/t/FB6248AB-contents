@@ -730,6 +730,7 @@ if (train_models) {
       colsample_bylevel_basic = 0.75, # numeric, colsample_bylevel for basic model
       cov_keep = cov_keep_i, # Character vector, covariates that should always be present
       final_round_mult = 10,  # Multiplier for the number of rounds in the final model
+      maxd = 10^3, # Maximum depth for optimized models
       seed = 321,  # Random seed for model training,
       classprob = FALSE
     )
@@ -746,7 +747,7 @@ if (train_models) {
       models_bestscores[[i]]
     )
     
-    models[[i]] <- model_i$model_final
+    models[[i]] <- model_i$model
     
     print(models[[i]])
     
