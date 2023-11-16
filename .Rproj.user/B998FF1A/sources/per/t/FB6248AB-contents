@@ -700,7 +700,7 @@ if (train_models) {
 
     # Add depth boundaries and SOM removal as covariates
     cov_keep_i <- c("upper", "lower")
-    if ( !(targ %in% c("SOC", "CaCO3")) ) {
+    if ( !(frac %in% c("SOC", "CaCO3")) ) {
       cov_keep_i %<>% c(., "SOM_removed")
     } 
     
@@ -713,7 +713,7 @@ if (train_models) {
     showConnections()
     
     model_i <- optimize_xgboost(
-      target = "frac",  # character vector (length 1), target variable.
+      target = frac,  # character vector (length 1), target variable.
       cov_names = cov_c_i,  # Character vector, covariate names,
       data = trdat, # data frame, input data
       bounds_bayes = bounds, # named list with bounds for bayesian opt.
