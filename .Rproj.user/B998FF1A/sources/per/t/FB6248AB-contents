@@ -474,8 +474,8 @@ xgb_opt_stepwise <- FALSE
 # Remember to include full dataset in the final model
 n <- 1000
 
-# use_all_points <- TRUE
-use_all_points <- FALSE
+use_all_points <- TRUE
+# use_all_points <- FALSE
 
 # 9: Train models
 
