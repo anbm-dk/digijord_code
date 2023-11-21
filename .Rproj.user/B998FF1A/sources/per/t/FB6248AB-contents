@@ -1793,9 +1793,13 @@ map_spec <- expand_grid(
   interval = 1:4
 )
 
-showConnections()
-
 numCores <- 19
+
+try(stopCluster(cl))
+try(foreach::registerDoSEQ())
+try(rm(cl))
+
+showConnections()
 
 cl <- makeCluster(numCores)
 
@@ -1819,11 +1823,12 @@ clusterExport(
     "map_spec",
     "predfolder",
     "dir_cov_10km",
-    "models",
+    # "models",
     "cov_selected",
     "predict_passna",
     "dir_dat",
-    "fractions"
+    "fractions",
+    "dir_results"
   )
 )
 
@@ -1832,6 +1837,15 @@ parSapplyLB(
   1:nrow(map_spec),
   function(x) {
     tmpfolder <- paste0(dir_dat, "/Temp/")
+    
+    model_file <- fractions[map_spec$fraction_i[x]] %>%
+      paste0(dir_results, "/model_", ., ".rds")
+    
+    # while (file.access(model_file, mode = 4) == -1) {
+    #   Sys.sleep(1)
+    # }
+    
+    model_x <- model_file %>% readRDS()
 
     terraOptions(memfrac = 0.02, tempdir = tmpfolder)
 
@@ -1849,7 +1863,7 @@ parSapplyLB(
 
     predict(
       cov_10km,
-      models[[map_spec$fraction_i[x]]],
+      model_x,
       fun = predict_passna,
       na.rm = FALSE,
       const = data.frame(
