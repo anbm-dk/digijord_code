@@ -31,7 +31,8 @@ dem_ind <- grepl(
 
 dem <- cov_files[dem_ind] %>% rast()
 bare_mask <- "s2_geomedian_b2" %>%
-  paste0(dir_cov, ., ".tif")
+  paste0(dir_cov, ., ".tif") %>%
+  rast()
 
 cov_cats <- dir_code %>%
   paste0(., "/cov_categories_20231110.csv") %>%
@@ -194,11 +195,11 @@ fill_gaps_gauss <- function(
 for (j in 1:length(names_in)) {
   # Mask all layers (especially s1), to the same extent.
   # Mainly to reduce the effect from edge cells.
-  r <- paste0(dir_cov, names_in[[j]], ".tif") %>%
-    rast() %>%
-    mask(., mask = bare_mask)
+  r <- paste0(dir_cov, names_in[[j]], ".tif") %>% rast()
   
-  r2 <- fill_gaps_gauss(r, 10)
+  r_masked <- mask(r, mask = bare_mask, datatype = datatype(r))
+  
+  r2 <- fill_gaps_gauss(r_masked, 10)
   
   r3 <- mask(
     r2,
