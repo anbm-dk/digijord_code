@@ -44,7 +44,9 @@ bare_count <- paste0(dir_cov, "s2_count_max10.tif") %>% rast()
 bare_mask <- ifel(
   bare_count == 10,
   1,
-  NA
+  NA,
+  filename = paste0(tmpfolder, "/bare_mask.tif"),
+  datatype = "INT2U"
 )
 
 cov_cats <- dir_code %>%
@@ -102,17 +104,19 @@ fill_gaps_gauss <- function(
   # Function for weighted aggregation (using product x*x_count)
   # Divide by four to compensate for the number of cells
   agg_weight <- function(x) {
-    out2 <- list()
-    out2$count <- terra::aggregate(
-      x[[1]] / 4,  # NB
-      fun = "sum",
-      na.rm = TRUE
-      )
-    out2$prod <- terra::aggregate(
-      x[[2]] / 4, # NB
+    outcount <- terra::aggregate(
+      x[[1]],  
       fun = "sum",
       na.rm = TRUE
     )
+    outprod <- terra::aggregate(
+      x[[2]],
+      fun = "sum",
+      na.rm = TRUE
+    )
+    out2 <- list()
+    out2$count <- outcount / 4 # NB
+    out2$prod <- outprod / 4 # NB
     return(out2)
   }
   # Function for projecting counts and products
@@ -148,7 +152,7 @@ fill_gaps_gauss <- function(
   for (i in 2:nsteps) {
     smoothed_down <- smooth_weight(
       x = aggregated_list[[i - 1]],
-      myfilter1
+      filt = myfilter1
     )
     aggregated_list[[i]] <- agg_weight(smoothed_down)
   }
@@ -166,7 +170,10 @@ fill_gaps_gauss <- function(
       y = splitted
     )
     # Weighted smoothing
-    smooth_up_list[[i]] <- smooth_weight(merged, myfilter2)
+    smooth_up_list[[i]] <- smooth_weight(
+      x = merged,
+      filt = myfilter2
+      )
   }
   final_lyr <- smooth_up_list[[1]][[2]] / smooth_up_list[[1]][[1]]
   out <- list()
@@ -184,7 +191,7 @@ f <- system.file("ex/elev.tif", package = "terra")
 r <- rast(f)
 plot(r)
 
-filled <- fill_gaps_gauss(r, nsteps = 6, include_list = TRUE)
+filled <- fill_gaps_gauss(r, nsteps = 7, include_list = TRUE)
 
 plot(filled$final)
 
@@ -213,7 +220,5 @@ for (j in 1:length(names_in)) {
   
   tmpFiles(remove = TRUE)
 }
-
-
 
 # END
