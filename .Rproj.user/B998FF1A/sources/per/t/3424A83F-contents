@@ -52,7 +52,7 @@ bare_mask <- ifel(
 # Removing edge cells
 bare_mask2 <- focal(
   bare_mask,
-  w = 3,
+  w = 5,
   fun = "max",
   na.policy = "omit",
   filename = paste0(tmpfolder, "/bare_mask2.tif"),
