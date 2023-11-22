@@ -33,9 +33,19 @@ dem_ind <- grepl(
 )
 
 dem <- cov_files[dem_ind] %>% rast()
-bare_mask <- "s2_geomedian_b2" %>%
-  paste0(dir_cov, ., ".tif") %>%
-  rast()
+
+# bare_mask <- "s2_geomedian_b2" %>%
+#   paste0(dir_cov, ., ".tif") %>%
+#   rast()
+
+bare_count <- paste0(dir_cov, "s2_count_max10.tif") %>% rast()
+
+# Use only cells with at least 10 bare soil observations
+bare_mask <- ifel(
+  bare_count == 10,
+  1,
+  NA
+)
 
 cov_cats <- dir_code %>%
   paste0(., "/cov_categories_20231110.csv") %>%
@@ -90,15 +100,16 @@ fill_gaps_gauss <- function(
     return(out2)
   }
   # Function for weighted aggregation (using product x*x_count)
+  # Divide by four to compensate for the number of cells
   agg_weight <- function(x) {
     out2 <- list()
     out2$count <- terra::aggregate(
-      x[[1]],
+      x[[1]] / 4,  # NB
       fun = "sum",
       na.rm = TRUE
       )
     out2$prod <- terra::aggregate(
-      x[[2]],
+      x[[2]] / 4, # NB
       fun = "sum",
       na.rm = TRUE
     )
@@ -108,12 +119,12 @@ fill_gaps_gauss <- function(
   project_weight <- function(x, targ) {
     out2 <- list()
     out2$count <- terra::project(
-      x = x[[1]] / 4,  # NB
+      x = x[[1]],
       y = targ,
       method = "near"
     )
     out2$prod <- terra::project(
-      x = x[[2]] / 4,  # NB
+      x = x[[2]],
       y = targ,
       method = "near"
     )
@@ -131,16 +142,6 @@ fill_gaps_gauss <- function(
       x = x[[2]],
       y = y[[2]]
     )
-    # out2$count <- terra::ifel(
-    #   emptycells,
-    #   yes = y[[1]],
-    #   no = x[[1]]
-    # )
-    # out2$prod <- terra::ifel(
-    #   emptycells,
-    #   yes = y[[2]],
-    #   no = x[[2]]
-    # )
     return(out2)
   }
   # Stepwise aggregation
