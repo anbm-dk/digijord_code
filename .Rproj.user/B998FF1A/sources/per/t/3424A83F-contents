@@ -67,13 +67,13 @@ fill_gaps_gauss <- function(
   smooth_up_list <- list()
   aggregated_list <- list()
   aggregated_list[[1]] <- list()
-  aggregated_list[[1]][[1]] <- !is.na(inrast)
-  aggregated_list[[1]][[2]] <- inrast*aggregated_list[[1]][[1]]
+  aggregated_list[[1]][[1]] <- inrast*0 + 1
+  aggregated_list[[1]][[2]] <- inrast
   
   # Function for weighted smoothing (using product x*x_count)
   smooth_weight <- function(x, filt) {
     out2 <- list()
-    out2$count <- smooth_count <- focal(
+    out2$count <- focal(
       x[[1]],
       w = filt,
       fun = "sum",
@@ -121,18 +121,26 @@ fill_gaps_gauss <- function(
   }
   # Function for merging counts and products
   merge_weight <- function(x, y) {
-    emptycells <- is.na(x[[2]])
+    # emptycells <- is.na(x[[2]])
     out2 <- list()
-    out2$count <- terra::ifel(
-      emptycells,
-      yes = y[[1]],
-      no = x[[1]]
+    out2$count <- terra::merge(
+      x = x[[1]],
+      y = y[[1]]
     )
-    out2$prod <- terra::ifel(
-      emptycells,
-      yes = y[[2]],
-      no = x[[2]]
+    out2$prod <- terra::merge(
+      x = x[[2]],
+      y = y[[2]]
     )
+    # out2$count <- terra::ifel(
+    #   emptycells,
+    #   yes = y[[1]],
+    #   no = x[[1]]
+    # )
+    # out2$prod <- terra::ifel(
+    #   emptycells,
+    #   yes = y[[2]],
+    #   no = x[[2]]
+    # )
     return(out2)
   }
   # Stepwise aggregation
