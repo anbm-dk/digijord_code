@@ -57,7 +57,8 @@ names_in <- cov_cats %>%
 
 fill_gaps_gauss <- function(
     inrast,
-    nsteps
+    nsteps,
+    include_list = FALSE
 ) {
   r1 <- rast(ncols = 180, nrows = 180, xmin = 0)
   myfilter1 <- focalMat(r1, c(1, 2), "Gauss")
@@ -66,75 +67,69 @@ fill_gaps_gauss <- function(
   smooth_up_list <- list()
   aggregated_list <- list()
   aggregated_list[[1]] <- list()
-  aggregated_list[[1]][[1]] <- inrast
-  aggregated_list[[1]][[2]] <- !is.na(inrast)
+  aggregated_list[[1]][[1]] <- !is.na(inrast)
+  aggregated_list[[1]][[2]] <- inrast*aggregated_list[[1]][[1]]
   
-  # Function for weighted aggregation
-  agg_weight <- function(x, x_count) {
-    prod_w <- x*x_count
-    prod_agg <- terra::aggregate(
-      prod_w,
-      fun = "sum",
-      na.rm = TRUE
-      )
-    count_agg <- terra::aggregate(
-      x_count,
-      fun = "sum",
-      na.rm = TRUE
-      )
+  # Function for weighted smoothing (using product x*x_count)
+  smooth_weight <- function(x, filt) {
     out2 <- list()
-    out2$mean <- prod_agg / count_agg
-    out2$count <- count_agg
-    return(out2)
-  }
-  # Function for weighted smoothing
-  smooth_weight <- function(x, x_count, filt) {
-    prod_w <- x*x_count
-    smooth_prod <- focal(
-      prod_w,
+    out2$count <- smooth_count <- focal(
+      x[[1]],
       w = filt,
       fun = "sum",
       na.policy = "all",
       na.rm = TRUE
     )
-    smooth_count <- focal(
-      x_count,
+    out2$prod <- focal(
+      x[[2]],
       w = filt,
       fun = "sum",
       na.policy = "all",
       na.rm = TRUE
     )
-    out2 <- list()
-    out2$mean <- smooth_prod / smooth_count
-    out2$count <- smooth_count
     return(out2)
   }
-  # Function for projecting maps and weights
-  project_weight <- function(x, x_count, targ, dtyp) {
+  # Function for weighted aggregation (using product x*x_count)
+  agg_weight <- function(x) {
     out2 <- list()
-    out2$x <- terra::project(
-      x = x,
+    out2$count <- terra::aggregate(
+      x[[1]],
+      fun = "sum",
+      na.rm = TRUE
+      )
+    out2$prod <- terra::aggregate(
+      x[[2]],
+      fun = "sum",
+      na.rm = TRUE
+    )
+    return(out2)
+  }
+  # Function for projecting counts and products
+  project_weight <- function(x, targ) {
+    out2 <- list()
+    out2$count <- terra::project(
+      x = x[[1]] / 4,  # NB
       y = targ,
-      method = "near",
-      datatype = dtyp
+      method = "near"
     )
-    out2$x_count <- terra::project(
-      x = x_count / 4,  # NB
+    out2$prod <- terra::project(
+      x = x[[2]] / 4,  # NB
       y = targ,
       method = "near"
     )
     return(out2)
   }
-  # Function for merging maps and weights
-  merge_weight <- function(x, y, dtyp) {
+  # Function for merging counts and products
+  merge_weight <- function(x, y) {
+    emptycells <- is.na(x[[2]])
     out2 <- list()
-    out2$x <- terra::merge(
-      x = x[[1]],
-      y = y[[1]],
-      wopt = list(datatype = dtyp)
+    out2$count <- terra::ifel(
+      emptycells,
+      yes = y[[1]],
+      no = x[[1]]
     )
-    out2$x_count <- terra::ifel(
-      is.na(x[[1]]),
+    out2$prod <- terra::ifel(
+      emptycells,
       yes = y[[2]],
       no = x[[2]]
     )
@@ -143,39 +138,28 @@ fill_gaps_gauss <- function(
   # Stepwise aggregation
   for (i in 2:nsteps) {
     smoothed_down <- smooth_weight(
-      x = aggregated_list[[i - 1]][[1]],
-      x_count = aggregated_list[[i - 1]][[2]],
+      x = aggregated_list[[i - 1]],
       myfilter1
     )
-    aggregated_list[[i]] <- agg_weight(
-      x = smoothed_down[[1]],
-      x_count = smoothed_down[[2]]
-    )
+    aggregated_list[[i]] <- agg_weight(smoothed_down)
   }
   smooth_up_list[[nsteps]] <- aggregated_list[[nsteps]]
   # Stepwise disaggregation
   for (i in (nsteps - 1):1) {
     # Disaggregate by 2
     splitted <- project_weight(
-      x = smooth_up_list[[i + 1]][[1]],
-      x_count = smooth_up_list[[i + 1]][[2]],
-      targ = aggregated_list[[i]][[1]],
-      dtyp = datatype(inrast)
+      x = smooth_up_list[[i + 1]],
+      targ = aggregated_list[[i]][[1]]
     )
     # Merge means and counts
     merged <- merge_weight(
       x = aggregated_list[[i]],
-      y = splitted,
-      dtyp = datatype(inrast)
+      y = splitted
     )
     # Weighted smoothing
-    smooth_up_list[[i]] <- smooth_weight(
-      x = merged[[1]],
-      x_count = merged[[2]],
-      filt = myfilter2
-    )
+    smooth_up_list[[i]] <- smooth_weight(merged, myfilter2)
   }
-  final_lyr <- smooth_up_list[[1]][[1]]
+  final_lyr <- smooth_up_list[[1]][[2]] / smooth_up_list[[1]][[1]]
   out <- list()
   out$final <- terra::merge(
     inrast,
@@ -184,17 +168,14 @@ fill_gaps_gauss <- function(
   )
   out$aggregated_list <- aggregated_list
   out$smooth_up_list <- smooth_up_list
-  out$splitted <- splitted
-  out$merged <- merged
   return(out)
 }
-
 
 f <- system.file("ex/elev.tif", package = "terra")
 r <- rast(f)
 plot(r)
 
-filled <- fill_gaps_gauss(r, 4)
+filled <- fill_gaps_gauss(r, nsteps = 6, include_list = TRUE)
 
 plot(filled$final)
 
@@ -209,12 +190,11 @@ for (j in 1:length(names_in)) {
   
   r2 <- fill_gaps_gauss(
     r_masked,
-    10,
-    smooth_down = FALSE
+    10
     )
   
   r3 <- mask(
-    r2,
+    r2$final,
     dem,
     filename = paste0(tmpfolder, "filled_", names(r), ".tif"),
     names = paste0("filled_", names(r)),
