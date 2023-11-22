@@ -49,6 +49,18 @@ bare_mask <- ifel(
   datatype = "INT2U"
 )
 
+# Removing edge cells
+bare_mask2 <- focal(
+  bare_mask,
+  w = 3,
+  fun = "max",
+  na.policy = "omit",
+  filename = paste0(tmpfolder, "/bare_mask2.tif"),
+  datatype = "INT2U"
+)
+
+bare_mask <- bare_mask2
+
 cov_cats <- dir_code %>%
   paste0(., "/cov_categories_20231110.csv") %>%
   read.table(
