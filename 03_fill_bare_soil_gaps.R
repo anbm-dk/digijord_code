@@ -11,7 +11,10 @@ root <- dirname(dir_code)
 dir_dat <- paste0(root, "/digijord_data/")
 
 tmpfolder <- paste0(dir_dat, "/Temp/")
-terraOptions(tempdir = tmpfolder)
+terraOptions(
+  tempdir = tmpfolder,
+  memfrac = 0.3
+  )
 
 mycrs <- "EPSG:25832"
 
@@ -56,137 +59,128 @@ fill_gaps_gauss <- function(
     inrast,
     nsteps
 ) {
-  r1 <- rast(ncols = 180, nrows = 180, xmin=0)
-  myfilter1 <- focalMat(r1, c(0.5, 1), "Gauss")
-  myfilter2 <- focalMat(r1, c(0.5, 1), "Gauss")
-  # myfilter2 <- focalMat(r1, c(1, 2), "Gauss")
+  r1 <- rast(ncols = 180, nrows = 180, xmin = 0)
+  myfilter1 <- focalMat(r1, c(1, 2), "Gauss")
+  myfilter2 <- focalMat(r1, c(1, 2), "Gauss")
   
-  smoothed_down_list <- list()
-  aggregated_list <- list()
-  
-  split_list <- list()
-  merged_list <- list()
   smooth_up_list <- list()
+  aggregated_list[[1]] <- list()
+  aggregated_list[[1]][[1]] <- inrast
+  aggregated_list[[1]][[2]] <- !is.na(inrast)
   
-  aggregated_list[[1]] <- inrast
-  
-  smoothed <- focal(
-    aggregated_list[[1]],
-    w = myfilter1,
-    fun = "sum",
-    na.policy = "all",
-    na.rm = TRUE,
-    wopt = list(datatype = datatype(inrast))
-  )
-  
-  summed <- focal(
-    !is.na(aggregated_list[[1]]),
-    w = myfilter1,
-    fun = "sum",
-    na.policy = "all",
-    na.rm = TRUE
-  )
-  
-  smoothed_down_list[[1]] <- smoothed / summed
-  
-  for (i in 2:nsteps) {
-    aggregated_list[[i]] <- aggregate(
-      smoothed_down_list[[i - 1]],
-      wopt = list(datatype = datatype(inrast))
-      ) 
-    
-    smoothed <- focal(
-      aggregated_list[[i]],
-      w = myfilter1,
+  # Function for weighted aggregation
+  agg_weight <- function(x, x_count) {
+    prod_w <- x*x_count
+    x_agg <- terra::aggregate(
+      prod_w,
       fun = "sum",
-      na.policy = "all",
-      na.rm = TRUE,
-      wopt = list(datatype = datatype(inrast))
-    )
-    
-    summed <- focal(
-      !is.na(aggregated_list[[i]]),
-      w = myfilter1,
+      na.rm = TRUE
+      )
+    count_agg <- terra::aggregate(
+      x_count,
+      fun = "sum",
+      na.rm = TRUE
+      )
+    out2 <- list()
+    out2$mean <- x_agg / count_agg
+    out2$count <- count_agg
+    return(out2)
+  }
+  # Function for weighted smoothing
+  smooth_weight <- function(x, x_count, filt) {
+    prod_w <- x*x_count
+    smooth_prod <- focal(
+      prod_w,
+      w = filt,
       fun = "sum",
       na.policy = "all",
       na.rm = TRUE
     )
-    
-    smoothed_down_list[[i]] <- smoothed / summed
+    smooth_count <- focal(
+      x_count,
+      w = filt,
+      fun = "sum",
+      na.policy = "all",
+      na.rm = TRUE
+    )
+    out2 <- list()
+    out2$mean <- smooth_prod / smooth_count
+    out2$count <- smooth_count
+    return(out2)
   }
   
-  split_list[[nsteps - 1]] <- project(
-    smoothed_down_list[[nsteps]],
-    aggregated_list[[nsteps - 1]],
-    method = "near",
-    datatype = datatype(inrast)
-  )
-  
-  merged_list[[nsteps - 1]] <- terra::merge(
-    x = smoothed_down_list[[nsteps - 1]],
-    y = split_list[[nsteps - 1]],
-    wopt = list(datatype = datatype(inrast))
-  )
-  
-  smoothed <- focal(
-    merged_list[[nsteps - 1]],
-    w = myfilter2,
-    fun = "sum",
-    na.policy = "all",
-    na.rm = TRUE,
-    wopt = list(datatype = datatype(inrast))
-  )
-  
-  summed <- focal(
-    !is.na(merged_list[[nsteps - 1]]),
-    w = myfilter2,
-    fun = "sum",
-    na.policy = "all",
-    na.rm = TRUE
-  )
-  
-  smooth_up_list[[nsteps - 1]] <- smoothed / summed
-  
-  for (i in (nsteps - 2):1) {
-    split_list[[i]] <- project(
-      smooth_up_list[[i + 1]],
-      aggregated_list[[i]],
+  # Function for projecting maps and weights
+  project_weight <- function(x, x_count, targ, dtyp) {
+    out2 <- list()
+    out2$x <- project(
+      x,
+      targ,
       method = "near",
-      datatype = datatype(inrast)
+      datatype = dtyp
     )
-    
-    merged_list[[i]] <- terra::merge(
-      x = smoothed_down_list[[i]],
-      y = split_list[[i]],
-      wopt = list(datatype = datatype(inrast))
+    out2$x_count <- project(
+      x_count / 4,  # NB
+      targ,
+      method = "near"
     )
-    
-    smoothed <- focal(
-      merged_list[[i]],
-      w = myfilter2,
-      fun = "sum",
-      na.policy = "all",
-      na.rm = TRUE,
-      wopt = list(datatype = datatype(inrast))
-    )
-    
-    summed <- focal(
-      !is.na(merged_list[[i]]),
-      w = myfilter2,
-      fun = "sum",
-      na.policy = "all",
-      na.rm = TRUE
-    )
-    
-    smooth_up_list[[i]] <- smoothed / summed
+    return(out2)
   }
-  
-  out <- merge(
+  # Function for merging maps and weights
+  merge_weight <- function(x, y, dtyp) {
+    out2 <- list()
+    out2$x <- terra::merge(
+      x = x[[1]],
+      y = y[[1]],
+      wopt = list(datatype = dtyp)
+    )
+    out2$x_count <- terra::merge(
+      x = x[[2]],
+      y = y[[2]]
+    )
+    return(out2)
+  }
+  # Stepwise aggregation
+  for (i in 2:nsteps) {
+    smoothed_down <- smooth_weight(
+      x = aggregated_list[[i - 1]][[1]],
+      x_count = aggregated_list[[i - 1]][[2]],
+      myfilter1
+    )
+    
+    aggregated_list[[i]] <- agg_weight(
+      x = smoothed_down[[1]],
+      x_count = smoothed_down[[2]]
+    )
+  }
+  smooth_up_list[[nsteps]] <- aggregated_list[[nsteps]]
+  # Stepwise disaggregation
+  for (i in (nsteps - 1):1) {
+    # Disaggregate by 2
+    splitted <- project_weight(
+      x = smooth_up_list[[i + 1]][[1]],
+      x_count = smooth_up_list[[i + 1]][[2]],
+      targ = aggregated_list[[i]][[1]],
+      dtyp = datatype(inrast)
+    )
+    # Merge means and counts
+    merged <- merge_weight(
+      x = aggregated_list[[i]],
+      y = splitted,
+      dtyp = datatype(inrast)
+    )
+    # Weighted smoothing
+    smooth_up_list[[i]] <- smooth_weight(
+      x = merged[[1]],
+      x_count = merged[[2]],
+      filt = myfilter2
+    )
+  }
+  final_lyr <- smooth_up_list[[1]][[1]]
+  out <- terra::merge(
     inrast,
-    smooth_up_list[[1]],
+    final_lyr,
     wopt = list(datatype = datatype(inrast))
   )
-  
   return(out)
 }
 
@@ -199,14 +193,19 @@ for (j in 1:length(names_in)) {
   
   r_masked <- mask(r, mask = bare_mask, datatype = datatype(r))
   
-  r2 <- fill_gaps_gauss(r_masked, 10)
+  r2 <- fill_gaps_gauss(
+    r_masked,
+    10,
+    smooth_down = FALSE
+    )
   
   r3 <- mask(
     r2,
     dem,
     filename = paste0(tmpfolder, "filled_", names(r), ".tif"),
     names = paste0("filled_", names(r)),
-    datatype = datatype(r)
+    datatype = datatype(r),
+    gdal = "TILED=YES"
   )
   
   tmpFiles(remove = TRUE)
