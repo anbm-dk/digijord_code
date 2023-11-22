@@ -64,6 +64,7 @@ fill_gaps_gauss <- function(
   myfilter2 <- focalMat(r1, c(1, 2), "Gauss")
   
   smooth_up_list <- list()
+  aggregated_list <- list()
   aggregated_list[[1]] <- list()
   aggregated_list[[1]][[1]] <- inrast
   aggregated_list[[1]][[2]] <- !is.na(inrast)
@@ -71,7 +72,7 @@ fill_gaps_gauss <- function(
   # Function for weighted aggregation
   agg_weight <- function(x, x_count) {
     prod_w <- x*x_count
-    x_agg <- terra::aggregate(
+    prod_agg <- terra::aggregate(
       prod_w,
       fun = "sum",
       na.rm = TRUE
@@ -82,7 +83,7 @@ fill_gaps_gauss <- function(
       na.rm = TRUE
       )
     out2 <- list()
-    out2$mean <- x_agg / count_agg
+    out2$mean <- prod_agg / count_agg
     out2$count <- count_agg
     return(out2)
   }
@@ -108,19 +109,18 @@ fill_gaps_gauss <- function(
     out2$count <- smooth_count
     return(out2)
   }
-  
   # Function for projecting maps and weights
   project_weight <- function(x, x_count, targ, dtyp) {
     out2 <- list()
-    out2$x <- project(
-      x,
-      targ,
+    out2$x <- terra::project(
+      x = x,
+      y = targ,
       method = "near",
       datatype = dtyp
     )
-    out2$x_count <- project(
-      x_count / 4,  # NB
-      targ,
+    out2$x_count <- terra::project(
+      x = x_count / 4,  # NB
+      y = targ,
       method = "near"
     )
     return(out2)
@@ -133,9 +133,10 @@ fill_gaps_gauss <- function(
       y = y[[1]],
       wopt = list(datatype = dtyp)
     )
-    out2$x_count <- terra::merge(
-      x = x[[2]],
-      y = y[[2]]
+    out2$x_count <- terra::ifel(
+      is.na(x[[1]]),
+      yes = y[[2]],
+      no = x[[2]]
     )
     return(out2)
   }
@@ -146,7 +147,6 @@ fill_gaps_gauss <- function(
       x_count = aggregated_list[[i - 1]][[2]],
       myfilter1
     )
-    
     aggregated_list[[i]] <- agg_weight(
       x = smoothed_down[[1]],
       x_count = smoothed_down[[2]]
@@ -176,13 +176,27 @@ fill_gaps_gauss <- function(
     )
   }
   final_lyr <- smooth_up_list[[1]][[1]]
-  out <- terra::merge(
+  out <- list()
+  out$final <- terra::merge(
     inrast,
     final_lyr,
     wopt = list(datatype = datatype(inrast))
   )
+  out$aggregated_list <- aggregated_list
+  out$smooth_up_list <- smooth_up_list
+  out$splitted <- splitted
+  out$merged <- merged
   return(out)
 }
+
+
+f <- system.file("ex/elev.tif", package = "terra")
+r <- rast(f)
+plot(r)
+
+filled <- fill_gaps_gauss(r, 4)
+
+plot(filled$final)
 
 # Fill gaps
 
