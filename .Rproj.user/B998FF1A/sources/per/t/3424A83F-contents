@@ -106,105 +106,53 @@ fill_gaps_gauss <- function(
   
   smooth_up_list <- list()
   aggregated_list <- list()
-  aggregated_list[[1]] <- list()
-  aggregated_list[[1]][[1]] <- inrast*0 + 1
-  aggregated_list[[1]][[2]] <- inrast
-  
-  # Function for weighted smoothing (using product x*x_count)
-  smooth_weight <- function(x, filt) {
-    out2 <- list()
-    out2$count <- focal(
-      x[[1]],
-      w = filt,
-      fun = "sum",
-      na.policy = "all",
-      na.rm = TRUE
-    )
-    out2$prod <- focal(
-      x[[2]],
-      w = filt,
-      fun = "sum",
-      na.policy = "all",
-      na.rm = TRUE
-    )
-    return(out2)
-  }
-  # Function for weighted aggregation (using product x*x_count)
-  # Divide by four to compensate for the number of cells
-  agg_weight <- function(x) {
-    outcount <- terra::aggregate(
-      x[[1]],  
-      fun = "sum",
-      na.rm = TRUE
-    )
-    outprod <- terra::aggregate(
-      x[[2]],
-      fun = "sum",
-      na.rm = TRUE
-    )
-    out2 <- list()
-    out2$count <- outcount / 4 # NB
-    out2$prod <- outprod / 4 # NB
-    return(out2)
-  }
-  # Function for projecting counts and products
-  project_weight <- function(x, targ) {
-    out2 <- list()
-    out2$count <- terra::project(
-      x = x[[1]],
-      y = targ,
-      method = "near"
-    )
-    out2$prod <- terra::project(
-      x = x[[2]],
-      y = targ,
-      method = "near"
-    )
-    return(out2)
-  }
-  # Function for merging counts and products
-  merge_weight <- function(x, y) {
-    # emptycells <- is.na(x[[2]])
-    out2 <- list()
-    out2$count <- terra::merge(
-      x = x[[1]],
-      y = y[[1]]
-    )
-    out2$prod <- terra::merge(
-      x = x[[2]],
-      y = y[[2]]
-    )
-    return(out2)
-  }
-  # Stepwise aggregation
+  aggregated_list[[1]] <- c(
+    inrast*0 + 1,
+    inrast
+  )
+  names(aggregated_list[[1]]) <- c("count", "mean")
+  # Stepwise smoothing and aggregation
   for (i in 2:nsteps) {
-    smoothed_down <- smooth_weight(
-      x = aggregated_list[[i - 1]],
-      filt = myfilter1
+    smoothed_down <- terra::focal(
+      aggregated_list[[i - 1]],
+      w = myfilter1,
+      fun = "sum",
+      na.policy = "all",
+      na.rm = TRUE
     )
-    aggregated_list[[i]] <- agg_weight(smoothed_down)
+    aggregated_list[[i]] <- terra::aggregate(
+      smoothed_down,  
+      fun = "mean",
+      na.rm = TRUE
+    )
   }
+  # Stepwise disaggregation, merging and smoothing
   smooth_up_list[[nsteps]] <- aggregated_list[[nsteps]]
-  # Stepwise disaggregation
   for (i in (nsteps - 1):1) {
     # Disaggregate by 2
-    splitted <- project_weight(
+    splitted <- terra::project(
       x = smooth_up_list[[i + 1]],
-      targ = aggregated_list[[i]][[1]]
+      y = aggregated_list[[i]],
+      method = "near"
     )
-    # Merge means and counts
-    merged <- merge_weight(
+    # Merge with aggregated layers
+    merged <- terra::merge(
       x = aggregated_list[[i]],
       y = splitted
     )
-    # Weighted smoothing
-    smooth_up_list[[i]] <- smooth_weight(
-      x = merged,
-      filt = myfilter2
-      )
+    # Smoothing
+    smooth_up_list[[i]] <- terra::focal(
+      merged,
+      w = myfilter2,
+      fun = "sum",
+      na.policy = "all",
+      na.rm = TRUE
+    )
   }
+  # Divide mean values by the number of cells, to get a weighted mean
   final_lyr <- smooth_up_list[[1]][[2]] / smooth_up_list[[1]][[1]]
   out <- list()
+  # Merge with input layer
   out$final <- terra::merge(
     inrast,
     final_lyr,
