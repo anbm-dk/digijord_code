@@ -34,10 +34,6 @@ dem_ind <- grepl(
 
 dem <- cov_files[dem_ind] %>% rast()
 
-# bare_mask <- "s2_geomedian_b2" %>%
-#   paste0(dir_cov, ., ".tif") %>%
-#   rast()
-
 bare_count <- paste0(dir_cov, "s2_count_max10.tif") %>% rast()
 
 # Use only cells with at least 10 bare soil observations
@@ -68,7 +64,7 @@ bare_min10_masked <- terra::mask(
 # Removing edge cells
 bare_mask <- focal(
   bare_min10_masked,
-  w = 3,
+  w = 5,
   fun = "max",
   na.policy = "omit",
   filename = paste0(tmpfolder, "/bare_mask.tif"),
