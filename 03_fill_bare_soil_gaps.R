@@ -97,8 +97,11 @@ fill_gaps_gauss <- function(
     include_list = FALSE
 ) {
   r1 <- rast(ncols = 180, nrows = 180, xmin = 0)
-  myfilter1 <- focalMat(r1, c(1, 2), "Gauss")
-  myfilter2 <- focalMat(r1, c(1, 2), "Gauss")
+  myfilter1 <- round(
+    focalMat(r1, c(1, 2), "Gauss"),
+    3
+  )
+  myfilter2 <- myfilter1
   
   smooth_up_list <- list()
   aggregated_list <- list()
