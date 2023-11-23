@@ -41,25 +41,41 @@ dem <- cov_files[dem_ind] %>% rast()
 bare_count <- paste0(dir_cov, "s2_count_max10.tif") %>% rast()
 
 # Use only cells with at least 10 bare soil observations
-bare_mask <- ifel(
-  bare_count == 10,
-  1,
-  NA,
+reclasser <- c(10, 1) %>% matrix(nrow = 1)
+
+bare_min10 <- terra::classify(
+  x = bare_count,
+  rcl = reclasser,
+  others = NA
+)
+
+# Mask by land use and remove field edges
+
+mask_LU <- paste0(dir_dat, "/layers/Mask_LU.tif") %>% rast()
+field_edges <- paste0(dir_dat, "/layers/field_edges.tif") %>% rast()
+
+mask_LU_field_edge <- terra::mask(
+  x = mask_LU,
+  mask = field_edges,
+  inverse = TRUE
+)
+
+bare_min10_masked <- terra::mask(
+  x = bare_min10,
+  mask = mask_LU_field_edge
+)
+
+# Removing edge cells
+bare_mask <- focal(
+  bare_min10_masked,
+  w = 3,
+  fun = "max",
+  na.policy = "omit",
   filename = paste0(tmpfolder, "/bare_mask.tif"),
   datatype = "INT2U"
 )
 
-# Removing edge cells
-bare_mask2 <- focal(
-  bare_mask,
-  w = 5,
-  fun = "max",
-  na.policy = "omit",
-  filename = paste0(tmpfolder, "/bare_mask2.tif"),
-  datatype = "INT2U"
-)
-
-bare_mask <- bare_mask2
+# Load covariate info
 
 cov_cats <- dir_code %>%
   paste0(., "/cov_categories_20231110.csv") %>%
@@ -218,7 +234,7 @@ for (j in 1:length(names_in)) {
   
   r2 <- fill_gaps_gauss(
     r_masked,
-    10
+    11
     )
   
   r3 <- mask(

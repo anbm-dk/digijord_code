@@ -3,7 +3,7 @@
     "path": "C:/Users/au542768/digijord/digijord_code/03_fill_bare_soil_gaps.R",
     "project_path": "03_fill_bare_soil_gaps.R",
     "type": "r_source",
-    "hash": "2212324282",
+    "hash": "4244789765",
     "contents": "",
     "dirty": false,
     "created": 1700560889294.0,
@@ -13,15 +13,15 @@
         "tempName": "Untitled1",
         "source_window_id": "",
         "Source": "Source",
-        "cursorPosition": "54,7",
-        "scrollLine": "36"
+        "cursorPosition": "1,0",
+        "scrollLine": "0"
     },
     "folds": "",
-    "lastKnownWriteTime": 1700663917,
+    "lastKnownWriteTime": 1700727435,
     "encoding": "UTF-8",
     "collab_server": "",
     "source_window": "",
-    "last_content_update": 1700663917010,
+    "last_content_update": 1700727435029,
     "read_only": false,
     "read_only_alternatives": []
 }
