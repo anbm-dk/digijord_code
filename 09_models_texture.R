@@ -27,15 +27,17 @@ train_models <- TRUE
 # Pdp with depth
 # Profile examples
 
-# Test 1 - 8: Cubist
-# Test 8: New covariates (chelsa, river valley bottoms, hillyness)
-# Test 9: xgboost
-# Test 10: Predicted row and column (poor accuracy)
-# Test 11: Fever data, excluding water, sealed areas and urban areas
-# Test 12: Depth boundaries as covariates, stepwise xgb optimization
-# Test 13: Bayesian optimization
-# Test 14: Fix mistake in covariate selection, new optimization function
+# Test 1 - 8: Cubist.
+# Test 8: New covariates (chelsa, river valley bottoms, hillyness).
+# Test 9: xgboost.
+# Test 10: Predicted row and column (poor accuracy).
+# Test 11: Fever data, excluding water, sealed areas and urban areas.
+# Test 12: Depth boundaries as covariates, stepwise xgb optimization.
+# Test 13: Bayesian optimization.
+# Test 14: Fix mistake in covariate selection, new optimization function.
 # Categorical covariates now have fuzzy boundaries.
+# Filled gaps in bare soil composite.
+# Using colsample_bynode instead of colsample_bylevel.
 testn <- 14
 mycrs <- "EPSG:25832"
 
@@ -440,13 +442,6 @@ tgrid <- expand.grid(
   subsample = 0.75
 )
 
-eta_test <- seq(0.1, 1, 0.1)
-# max_depth_test <- seq(1, 30, 3)
-min_child_weight_test <- c(1, 2, 4, 8, 16, 32, 64)
-gamma_test <- seq(0, 0.6, 0.1)
-colsample_bytree_test <- seq(0.1, 1, 0.1)
-subsample_test <- seq(0.1, 1, 0.1)
-
 objectives <- c(rep("reg:squarederror", 4), rep("reg:tweedie", 2))
 
 trees_per_round <- 10
@@ -458,12 +453,11 @@ source("f_optimize_xgboost.R")
 
 bounds <- list(
   eta = c(0.1, 1),
-  # max_depth = c(1L, 60L),  # Just set max_depth a very large value
-  min_child_weight_sqrt = c(1, sqrt(64)),
-  gamma_sqrt = c(0, sqrt(40)),
+  min_child_weight_sqrt = c(1, sqrt(100)),
+  gamma_sqrt = c(0, sqrt(100)),
   colsample_bytree = c(0.1, 1),
   subsample = c(0.1, 1),
-  colsample_bylevel = c(0.1, 1),
+  colsample_bynode = c(0.1, 1),
   ogcs_index = c(1L, 7L),
   total_imp = c(0.5, 1)
 )
@@ -472,7 +466,7 @@ xgb_opt_stepwise <- FALSE
 
 # Small random sample for testing
 # Remember to include full dataset in the final model
-n <- 1000
+n <- 2000
 
 use_all_points <- TRUE
 # use_all_points <- FALSE
@@ -532,6 +526,7 @@ if (train_models) {
       }
     }
     
+    # Filter valid observations
     trdat <- obs %>%
       filter(
         is.finite(.data[[frac]]),
@@ -541,6 +536,42 @@ if (train_models) {
         (upper < 200) | (upper == 200 & lower == 200),
         !is.na(dhm2015_terraen_10m)
       )
+    
+    # Three folds (placeholder)
+    trdat %<>% mutate(
+      fold = ceiling(fold / 3)
+    )
+    
+    trdat %<>% filter(fold < 4)
+    
+    if (!use_all_points) {
+      set.seed(1)
+      trdat %<>% sample_n(n)
+    }
+    
+    trdat_indices <- which(obs$ID_new %in% trdat$ID_new)
+    
+    models_indices[, i] <- obs$ID_new %in% trdat$ID_new
+    
+    holdout_i <- obs[-trdat_indices, ]
+    holdout_indices <- which(obs$ID_new %in% holdout_i$ID_new)
+    
+    # List of folds
+    folds_i <- lapply(
+      unique(trdat$fold),
+      function(x) {
+        out <- trdat %>%
+          mutate(
+            is_j = fold != x,
+            rnum = row_number(),
+            ind_j = is_j * rnum
+          ) %>%
+          filter(ind_j != 0) %>%
+          dplyr::select(., ind_j) %>%
+          unlist() %>%
+          unname()
+      }
+    )
     
     # Weighting by depth intervals
     print("Calculating weights")
@@ -661,42 +692,7 @@ if (train_models) {
     
     models_weights[trdat_w_indices, i] <- w_depth
     
-    # Three folds (placeholder)
-    trdat %<>% mutate(
-      fold = ceiling(fold / 3)
-    )
     
-    trdat %<>% filter(fold < 4)
-    
-    if (!use_all_points) {
-      set.seed(1)
-      trdat %<>% sample_n(n)
-    }
-    
-    trdat_indices <- which(obs$ID_new %in% trdat$ID_new)
-    
-    models_indices[, i] <- obs$ID_new %in% trdat$ID_new
-    
-    holdout_i <- obs[-trdat_indices, ]
-    holdout_indices <- which(obs$ID_new %in% holdout_i$ID_new)
-    
-    # List of folds
-    
-    folds_i <- lapply(
-      unique(trdat$fold),
-      function(x) {
-        out <- trdat %>%
-          mutate(
-            is_j = fold != x,
-            rnum = row_number(),
-            ind_j = is_j * rnum
-          ) %>%
-          filter(ind_j != 0) %>%
-          dplyr::select(., ind_j) %>%
-          unlist() %>%
-          unname()
-      }
-    )
 
     # Add depth boundaries and SOM removal as covariates
     cov_keep_i <- c("upper", "lower")
@@ -727,9 +723,9 @@ if (train_models) {
       weights = trdat$w, # numeric, weights for model training and evaluation
       trees_per_round = 10, # numeric, length 1, number of trees that xgboost should train in each round
       obj_xgb = objectives[i], # character, length 1, objective function for xgboost
-      colsample_bylevel_basic = 0.75, # numeric, colsample_bylevel for basic model
+      colsample_bynode_basic = 0.75, # numeric, colsample_bynode for basic model
       cov_keep = cov_keep_i, # Character vector, covariates that should always be present
-      final_round_mult = 10,  # Multiplier for the number of rounds in the final model
+      final_round_mult = 1,  # Multiplier for the number of rounds in the final model
       maxd = 10^3, # Maximum depth for optimized models
       seed = 321,  # Random seed for model training,
       classprob = FALSE

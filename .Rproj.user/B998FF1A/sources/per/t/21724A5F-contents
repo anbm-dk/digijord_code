@@ -16,7 +16,7 @@ optimize_xgboost <- function(
     classprob = FALSE, # should class probabilities be calculated
     obj_xgb = NULL, # character, length 1, objective function for xgboost
     trees_per_round = NULL, # numeric, length 1, number of trees that xgboost should train in each round
-    colsample_bylevel_basic = 0.75, # numeric, colsample_bylevel for basic model
+    colsample_bynode_basic = 0.75, # numeric, colsample_bynode for basic model
     final_round_mult = 1,  # Multiplier for the number of rounds in the final model
     maxd = 10^3, # Maximum depth for optimized models
     cores = 19, # number cores for parallelization
@@ -74,7 +74,7 @@ optimize_xgboost <- function(
     weights = weights,
     num_parallel_tree = trees_per_round,
     objective = obj_xgb,
-    colsample_bylevel = colsample_bylevel_basic,
+    colsample_bynode = colsample_bynode_basic,
     nthread = 1
   )
   stopCluster(cl)
@@ -99,7 +99,7 @@ optimize_xgboost <- function(
     gamma_sqrt,  # OK
     colsample_bytree,  # OK
     subsample,  # OK
-    colsample_bylevel,
+    colsample_bynode,
     ogcs_index,  # OK
     total_imp  # OK
   ) {
@@ -150,8 +150,10 @@ optimize_xgboost <- function(
       weights = weights,
       num_parallel_tree = trees_per_round,
       objective = obj_xgb,
-      colsample_bylevel = colsample_bylevel,
+      colsample_bynode = colsample_bynode,
       nthread = 1
+      # ,
+      # grow_policy = "lossguide"
     )
     if (max_metric) {
       out_score <- model_out$results %>%
@@ -249,12 +251,16 @@ optimize_xgboost <- function(
     paste0(collapse = " + ") %>%
     paste0(target, " ~ ", .) %>%
     as.formula()
-  # Lower eta
-  eta_test_final <- best_pars$eta %>%
-    log() %>%
-    seq(., . + log(0.01), length.out = 9) %>%
-    exp() %>%
-    round(3)
+  if (final_round_mult > 1) {
+    # Lower eta
+    eta_test_final <- best_pars$eta %>%
+      log() %>%
+      seq(., . + log(0.01), length.out = 9) %>%
+      exp() %>%
+      round(3)
+  } else {
+    eta_test_final <- best_pars$eta
+  }
   showConnections()
   cl <- makePSOCKcluster(cores)
   registerDoParallel(cl)
@@ -286,8 +292,10 @@ optimize_xgboost <- function(
     weights = weights,
     num_parallel_tree = trees_per_round,
     objective = obj_xgb,
-    colsample_bylevel = best_pars$colsample_bylevel,
+    colsample_bynode = best_pars$colsample_bynode,
     nthread = 1
+    # ,
+    # grow_policy = "lossguide"
   )
   stopCluster(cl)
   foreach::registerDoSEQ()
