@@ -75,6 +75,7 @@ optimize_xgboost <- function(
     num_parallel_tree = trees_per_round,
     objective = obj_xgb,
     colsample_bynode = colsample_bynode_basic,
+    tree_method = "approx",
     nthread = 1
   )
   stopCluster(cl)
@@ -151,7 +152,8 @@ optimize_xgboost <- function(
       num_parallel_tree = trees_per_round,
       objective = obj_xgb,
       colsample_bynode = colsample_bynode,
-      nthread = 1
+      nthread = 1,
+      tree_method = "approx"
       # ,
       # grow_policy = "lossguide"
     )
@@ -293,7 +295,8 @@ optimize_xgboost <- function(
     num_parallel_tree = trees_per_round,
     objective = obj_xgb,
     colsample_bynode = best_pars$colsample_bynode,
-    nthread = 1
+    nthread = 1,
+    tree_method = "approx"
     # ,
     # grow_policy = "lossguide"
   )

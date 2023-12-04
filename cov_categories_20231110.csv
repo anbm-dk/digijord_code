@@ -261,7 +261,7 @@ in_stack;name;category;scorpan;coverage;producer;postproc;rounded;note;reference
 1;s1_baresoil_composite_vv_5_days;bare_soil;S;bare;DHI;Anders Bjørn Møller;FALSE;;Sentinel-1;0;Radar bare soil composite, five day window, vv backscatter;dB
 1;s1_baresoil_composite_vv_6_days;bare_soil;S;bare;DHI;Anders Bjørn Møller;FALSE;;Sentinel-1;0;Radar bare soil composite, six day window, vv backscatter;dB
 1;s1_baresoil_composite_vv_8_days;bare_soil;S;bare;DHI;Anders Bjørn Møller;FALSE;;Sentinel-1;0;Radar bare soil composite, eight day window, vv backscatter;dB
-1;s2_count_max10;bare_soil;O;DK;Anders Bjørn Møller;Anders Bjørn Møller;FALSE;;Sentinel-2;1;Number of images with bare soil capped at n = 10;NA
+1;s2_count_max10;bare_soil;O;DK;Anders Bjørn Møller;Anders Bjørn Møller;FALSE;;Sentinel-2;0;Number of images with bare soil capped at n = 10;NA
 1;s2_count_max10_fuzzy;bare_soil;O;DK;Anders Bjørn Møller;Anders Bjørn Møller;TRUE;Fuzzified with gaussian filter with sigma = 5 m;Sentinel-2;1;Number of images with bare soil  capped at n = 10 - fuzzy boundaries;NA
 1;s2_geomedian_20180408_20180515_b11;sentinel_composite;O;DK;DHI;Anders Bjørn Møller;FALSE;;Sentinel-2;1;;
 1;s2_geomedian_20180408_20180515_b12;sentinel_composite;O;DK;DHI;Anders Bjørn Møller;FALSE;;Sentinel-2;1;;

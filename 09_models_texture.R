@@ -537,42 +537,6 @@ if (train_models) {
         !is.na(dhm2015_terraen_10m)
       )
     
-    # Three folds (placeholder)
-    trdat %<>% mutate(
-      fold = ceiling(fold / 3)
-    )
-    
-    trdat %<>% filter(fold < 4)
-    
-    if (!use_all_points) {
-      set.seed(1)
-      trdat %<>% sample_n(n)
-    }
-    
-    trdat_indices <- which(obs$ID_new %in% trdat$ID_new)
-    
-    models_indices[, i] <- obs$ID_new %in% trdat$ID_new
-    
-    holdout_i <- obs[-trdat_indices, ]
-    holdout_indices <- which(obs$ID_new %in% holdout_i$ID_new)
-    
-    # List of folds
-    folds_i <- lapply(
-      unique(trdat$fold),
-      function(x) {
-        out <- trdat %>%
-          mutate(
-            is_j = fold != x,
-            rnum = row_number(),
-            ind_j = is_j * rnum
-          ) %>%
-          filter(ind_j != 0) %>%
-          dplyr::select(., ind_j) %>%
-          unlist() %>%
-          unname()
-      }
-    )
-    
     # Weighting by depth intervals
     print("Calculating weights")
     
@@ -692,6 +656,41 @@ if (train_models) {
     
     models_weights[trdat_w_indices, i] <- w_depth
     
+    # Three folds + 10 per cent holdout dataset
+    trdat %<>% mutate(
+      fold = ceiling(fold / 3)
+    )
+    
+    trdat %<>% filter(fold < 4)
+    
+    if (!use_all_points) {
+      set.seed(1)
+      trdat %<>% sample_n(n)
+    }
+    
+    trdat_indices <- which(obs$ID_new %in% trdat$ID_new)
+    
+    models_indices[, i] <- obs$ID_new %in% trdat$ID_new
+    
+    holdout_i <- obs[-trdat_indices, ]
+    holdout_indices <- which(obs$ID_new %in% holdout_i$ID_new)
+    
+    # List of folds
+    folds_i <- lapply(
+      unique(trdat$fold),
+      function(x) {
+        out <- trdat %>%
+          mutate(
+            is_j = fold != x,
+            rnum = row_number(),
+            ind_j = is_j * rnum
+          ) %>%
+          filter(ind_j != 0) %>%
+          dplyr::select(., ind_j) %>%
+          unlist() %>%
+          unname()
+      }
+    )
     
 
     # Add depth boundaries and SOM removal as covariates
@@ -1570,59 +1569,69 @@ JB_forplot <- c("JB1", "JB2", "JB3", "JB4", "JB5", "JB6", "JB7", "JB8", "JB11",
 JB_acc_d <- lapply(
   c(FALSE, TRUE),
   function(x2) {
-    out2 <- apply(
-      depth_weights_JB,
-      2,
+    out2 <- lapply(
+      1:ncol(depth_weights_JB),
       function(x) {
         ddat <- JB_df %>%
           mutate(
-            w_d = x
+            w_d = depth_weights_JB[, x]
           ) %>% filter(
             imputed == FALSE,
             (fold == 10) == x2,
-            w_d > 0,
+            w_d > 0
           ) %>% 
           select(c(predicted, observed, w_d, acc)) %>%
           na.omit()
         
-        sens_spec <- ddat %>%
-          confusion(
-            x = .[, 1],
-            y = .[, 2],
-            weights = .[, 3]
-          ) %>% summary() %>%
-          .@.Data %>%
-          t() %>%
-          as.data.frame() %>%
-          select(c(Sensitivity, Specificity)) %>%
-          mutate(
-            Sensitivity = case_when(
-              !is.finite(Sensitivity) ~ 0,
-              .default = Sensitivity
+        if(nrow(ddat) > 0) {
+          sens_spec <- ddat %>%
+            confusion(
+              x = .[, 1],
+              y = .[, 2],
+              weights = .[, 3]
+            ) %>%
+            summary() %>%
+            .@.Data %>%
+            t() %>%
+            as.data.frame() %>%
+            select(c(Sensitivity, Specificity)) %>%
+            mutate(
+              Sensitivity = case_when(
+                !is.finite(Sensitivity) ~ 0,
+                .default = Sensitivity
+              )
             )
-          )
-        
-        out <- sens_spec %>% apply(., 1, mean)
-        out$BA <- sens_spec %>%
-          select(Sensitivity) %>%
-          unlist() %>%
-          mean()
-        out$OA <- weighted.mean(ddat$acc, ddat$w_d)
-        out %<>% as.data.frame()
+          
+          out <- sens_spec %>% apply(., 1, mean)
+          out$BA <- sens_spec %>%
+            select(Sensitivity) %>%
+            unlist() %>%
+            mean()
+          out$OA <- weighted.mean(ddat$acc, ddat$w_d)
+          out$Depth <- w_depths[x]
+          out %<>% as.data.frame()
+        } else {
+          out <- NULL
+        }
         return(out)
       }
     ) %>%
       bind_rows() %>%
       mutate(
-        Dataset = x2 + 1,
-        Depth = w_depths
+        Dataset = x2 + 1
+        # ,
+        # Depth = w_depths
       )
   }
 ) %>%
-  bind_rows() %>%
-  mutate(
+  bind_rows()
+
+if(length(unique(JB_acc_d$Dataset)) > 1) {
+  JB_acc_d %<>% mutate(
     Dataset = factor(Dataset, labels = c("CV", "Holdout"))
   )
+}
+  
 
 JB_forplot <- c("JB1", "JB2", "JB3", "JB4", "JB5", "JB6", "JB7", "JB8", "JB11",
                 "JB12", "BA", "OA")
@@ -1775,6 +1784,20 @@ predfolder <- dir_results %>%
   paste0(., "/predictions_testarea/") %T>%
   dir.create()
 
+predfolders_all <- expand.grid(
+  SOM_removal = c("SOM_remov", "SOM_norem"),
+  d_interval = c(1:4),
+  t_norm = c("raw", "sum")
+) %>%
+  apply(
+    ., 1, 
+    function(x) {
+      out <- paste0(predfolder, x[1], "/depth_", x[2], "/", x[3])
+      dir.create(out, recursive = TRUE)
+      return(out)
+    }
+  )
+
 source("f_predict_passna.R")
 
 # Make the maps
@@ -1786,7 +1809,8 @@ lowers <- breaks %>% .[-1]
 
 map_spec <- expand_grid(
   fraction_i = 1:6,
-  interval = 1:4
+  interval = 1:4,
+  SOM_removal = c("SOM_remov", "SOM_norem")
 )
 
 numCores <- 19
@@ -1837,10 +1861,6 @@ parSapplyLB(
     model_file <- fractions[map_spec$fraction_i[x]] %>%
       paste0(dir_results, "/model_", ., ".rds")
     
-    # while (file.access(model_file, mode = 4) == -1) {
-    #   Sys.sleep(1)
-    # }
-    
     model_x <- model_file %>% readRDS()
 
     terraOptions(memfrac = 0.02, tempdir = tmpfolder)
@@ -1849,13 +1869,31 @@ parSapplyLB(
       list.files(full.names = TRUE) %>%
       rast() %>%
       subset(cov_selected)
-
-    outname <- predfolder %>%
-      paste0(
-        ., "/", fractions[map_spec$fraction_i[x]],
-        "_depth", map_spec$interval[x],
-        ".tif"
-      )
+    
+    if (map_spec$fraction_i[x] %in% 1:4) {
+      outname <- predfolder %>%
+        paste0(
+          ., "/", map_spec$SOM_removal[x],
+          "/depth_", map_spec$interval[x],
+          "/raw/frc", 
+          map_spec$fraction_i[x], "_", fractions[map_spec$fraction_i[x]],
+          ".tif"
+        )
+    } else {
+      outname <- predfolder %>%
+        paste0(
+          ., "/", map_spec$SOM_removal[x],
+          "/depth_", map_spec$interval[x],
+          "/sum/frc", 
+          map_spec$fraction_i[x], "_", fractions[map_spec$fraction_i[x]],
+          ".tif"
+        )
+    }
+    
+    somrem <- 0
+    if (map_spec$SOM_removal[x] == "SOM_remov") {
+      somrem <- 1
+    }
 
     predict(
       cov_10km,
@@ -1863,7 +1901,7 @@ parSapplyLB(
       fun = predict_passna,
       na.rm = FALSE,
       const = data.frame(
-        SOM_removed = 1,
+        SOM_removed = somrem,
         # year = 2010,
         upper = uppers[map_spec$interval[x]],
         lower = lowers[map_spec$interval[x]]
@@ -1882,67 +1920,166 @@ stopCluster(cl)
 foreach::registerDoSEQ()
 rm(cl)
 
-maps_10_km <- list()
-
-for (i in 1:length(fractions)) {
-  maps_10_km[[i]] <- c(1:4) %>%
-    paste0(
-      predfolder, "/", fractions[i],
-      "_depth", .,
-      ".tif"
-    ) %>%
-    rast()
-  names(maps_10_km[[i]]) <- paste0(
-    fraction_names[i], ", ", uppers, " - ", lowers, " cm"
-  )
-}
-
 # Standardize mineral sum to 100
 
-maps_10_km_mineral_fin <- lapply(
-  1:4, function(i) {
-    mineral_raw <- c(
-      maps_10_km[[1]][[i]],
-      maps_10_km[[2]][[i]],
-      maps_10_km[[3]][[i]],
-      maps_10_km[[4]][[i]]
-    )
-    
-    mineral_sum_r <- mineral_raw %>% sum() 
-    
-    mineral_final <- mineral_raw*100 / mineral_sum_r
-    
-    mineral_final %<>% round(., digits = 1)
-    
-    return(mineral_final)
-  }
-)
+maps_raw_paths <- expand_grid(
+  interval = 1:4,
+  SOM_removal = c("SOM_remov", "SOM_norem")
+) %>%
+  arrange(SOM_removal)
 
-maps_10_km_mineral_fin_frac <- lapply(
-  1:4, function(x) {
-    out <- c(
-      maps_10_km_mineral_fin[[1]][[x]],
-      maps_10_km_mineral_fin[[2]][[x]],
-      maps_10_km_mineral_fin[[3]][[x]],
-      maps_10_km_mineral_fin[[4]][[x]]
-    )
+for (i in 1:nrow(maps_raw_paths)) {
+  mineral_raw <- paste0(
+    predfolder,
+    maps_raw_paths$SOM_removal[i],
+    "/depth_", maps_raw_paths$interval[i], "/raw/") %>%
+    list.files(full.names = TRUE) %>%
+    rast()
+  
+  mineral_sum_r <- mineral_raw %>% sum() 
+  
+  mineral_final <- mineral_raw*100 / mineral_sum_r
+  
+  mineral_final %<>% round(., digits = 1)
+  
+  for (j in 1:4) {
+    outname <- paste0(
+        predfolder,
+        maps_raw_paths$SOM_removal[i],
+        "/depth_", maps_raw_paths$interval[i],
+        "/sum/frc", 
+        j, "_", fractions[j],
+        ".tif"
+      )
+    writeRaster(
+      mineral_final[[j]],
+      filename = outname,
+      overwrite = TRUE
+      )
   }
-)
-
-for (i in 1:length(maps_10_km_mineral_fin_frac)) {
-  maps_10_km[[i]] <- maps_10_km_mineral_fin_frac[[i]]
 }
+
+# Calculate soil class
+
+source("f_classify_soil_JB.R")
+
+maps_10km_jb <- lapply(
+  1:nrow(maps_raw_paths),
+  function(x) {
+    maps_loaded <- paste0(
+      predfolder,
+      maps_raw_paths$SOM_removal[x],
+      "/depth_", maps_raw_paths$interval[x], "/sum/") %>%
+      list.files(full.names = TRUE) %>%
+      rast()
+    
+    maps_forclass <- c(
+      maps_loaded[[1]],
+      maps_loaded[[2]],
+      maps_loaded[[3]],
+      maps_loaded[[5]] / 0.568,
+      maps_loaded[[6]]
+    )
+    
+    names(maps_forclass) <- c("clay", "silt", "sand_f", "SOM", "CaCO3")
+    
+    out <- lapp(maps_forclass, classify_soil_JB)
+    return(out)
+  }
+) %>%
+  rast()
+
+levels(maps_10km_jb) <- rep(
+  list(
+    data.frame(
+      id = 1:12,
+      Class = paste0("JB", 1:12)
+    )
+  ),
+  nlyr(maps_10km_jb)
+)
+
+maps_10km_jb_list <- list()
+maps_10km_jb_list$SOM_remov <- subset(maps_10km_jb, c(5:8))
+maps_10km_jb_list$SOM_norem <- subset(maps_10km_jb, c(1:4))
+
+
+jb_lyrnames <- paste0("JB class, ", uppers, " - ", lowers, " cm")
+names(maps_10km_jb_list$SOM_norem) <- jb_lyrnames
+names(maps_10km_jb_list$SOM_remov) <- jb_lyrnames
+
+# Load maps into a list
+
+maps_10_km <- lapply(
+  c("SOM_remov", "SOM_norem"),
+  function(x) {
+    out <- list()
+    for (i in 1:length(fractions)) {
+      
+      out[[i]] <- c(1:4) %>%
+        paste0(
+          predfolder, "/", x,
+          "/depth_", .,
+          "/sum/frc", i, "_", fractions[i],
+          ".tif"
+        ) %>%
+        rast()
+      names(out[[i]]) <- paste0(
+        fraction_names[i], ", ", uppers, " - ", lowers, " cm"
+      )
+    }
+    return(out)
+  }
+)
+
+names(maps_10_km) <- c("SOM_remov", "SOM_norem")
 
 # Figures for 10 km maps
 
 library(viridisLite)
 library(tidyterra)
 
+# Plot texture fractions with and without SOM removal
+
+somrem_names <- c("SOM_remov", "SOM_norem")
+
 try(dev.off())
-lapply(1:6, function(x) {
+
+for (i in 1:length(somrem_names)) {
+  lapply(1:4, function(x) {
+    fname <- paste0(
+      dir_results, "/",
+      fractions[x],
+      "_", somrem_names[i],
+      "_10km_test",
+      testn, ".tiff"
+      )
+    
+    myplot <- autoplot(maps_10_km[[i]][[x]]) +
+      scale_fill_gradientn(colours = viridis(100), na.value = NA)
+    
+    tiff(
+      fname,
+      width = 16,
+      height = 14,
+      units = "cm",
+      res = 300
+    )
+    
+    print(myplot)
+    
+    try(dev.off())
+    try(dev.off())
+  })
+}
+
+# Plot SOC and CaCO3 only once
+
+try(dev.off())
+lapply(5:6, function(x) {
   fname <- paste0(dir_results, "/", fractions[x], "_10km_test", testn, ".tiff")
 
-  myplot <- autoplot(maps_10_km[[x]]) +
+  myplot <- autoplot(maps_10_km[[1]][[x]]) +
     scale_fill_gradientn(colours = viridis(100), na.value = NA)
 
   tiff(
@@ -1959,40 +2096,7 @@ lapply(1:6, function(x) {
   try(dev.off())
 })
 
-# Map and plot soil class (JBNR)
-
-source("f_classify_soil_JB.R")
-
-maps_10km_jb <- lapply(
-  1:length(uppers),
-  function(x) {
-    maps_10_km_s2 <- c(
-      maps_10_km[[1]][[x]],
-      maps_10_km[[2]][[x]],
-      maps_10_km[[3]][[x]],
-      maps_10_km[[5]][[x]] / 0.568,
-      maps_10_km[[6]][[x]]
-    )
-
-    names(maps_10_km_s2) <- c("clay", "silt", "sand_f", "SOM", "CaCO3")
-
-    out <- lapp(maps_10_km_s2, classify_soil_JB)
-    return(out)
-  }
-) %>%
-  rast()
-
-levels(maps_10km_jb) <- rep(
-  list(
-    data.frame(
-      id = 1:12,
-      Class = paste0("JB", 1:12)
-    )
-  ),
-  nlyr(maps_10km_jb)
-)
-
-names(maps_10km_jb) <- paste0("JB class, ", uppers, " - ", lowers, " cm")
+# Plot soil class (JBNR)
 
 myrgb <- col2rgb(mycolors)
 tsp <- as.TSP(dist(t(myrgb)))
@@ -2008,19 +2112,110 @@ classes_in_maps <- values(maps_10km_jb) %>%
 
 cols_in_maps <- ordered_cols[classes_in_maps]
 
-plot_jb <- autoplot(maps_10km_jb) +
-  scale_fill_discrete(type = cols_in_maps)
+plot_jb <- lapply(
+  maps_10km_jb_list,
+  function(x) {
+    out <- autoplot(x) +
+      scale_fill_discrete(type = cols_in_maps)
+    return(out)
+  }
+)
+
+for (i in 1:2) {
+  tiff(
+    paste0(dir_results, "/JB_", somrem_names[i],"_test_", testn, ".tiff"),
+    width = 16,
+    height = 14,
+    units = "cm",
+    res = 300
+  )
+  
+  print(plot_jb[[i]])
+  
+  try(dev.off())
+}
+
+# Plot effects of SOM removal
+
+clay_SOM_rem <- c(maps_10_km[[1]][[1]][[1]], maps_10_km[[2]][[1]][[1]])
+
+names(clay_SOM_rem) <- c("SOM removed", "No SOM removal")
 
 tiff(
-  paste0(dir_results, "/JB_test_", testn, ".tiff"),
+  paste0(dir_results, "/clay_SOM_rem_test_", testn, ".tiff"),
   width = 16,
-  height = 14,
+  height = 10,
   units = "cm",
   res = 300
 )
 
-print(plot_jb)
+autoplot(clay_SOM_rem) +
+  scale_fill_gradientn(colours = viridis(100), na.value = NA) +
+  ggtitle("Clay (%), 0 - 30 cm depth") +
+  theme(plot.title = element_text(hjust = 0.5))
 
 try(dev.off())
+
+clay_difference <- maps_10_km[[1]][[1]][[1]] - maps_10_km[[2]][[1]][[1]]
+names(clay_difference) <- "Clay (%) difference"
+
+tiff(
+  paste0(dir_results, "/clay_difference_test_", testn, ".tiff"),
+  width = 16,
+  height = 10,
+  units = "cm",
+  res = 300
+)
+
+autoplot(clay_difference) +
+  scale_fill_gradientn(colours = viridis(100), na.value = NA) +
+  ggtitle("Effect of SOM removal, clay (%) difference") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+try(dev.off())
+
+JB_SOM_rem <- c(maps_10km_jb_list[[1]][[1]], maps_10km_jb_list[[2]][[1]])
+names(JB_SOM_rem) <- c("SOM removed", "No SOM removal")
+
+tiff(
+  paste0(dir_results, "/JB_SOM_rem_test_", testn, ".tiff"),
+  width = 16,
+  height = 10,
+  units = "cm",
+  res = 300
+)
+
+autoplot(JB_SOM_rem) +
+  scale_fill_discrete(type = cols_in_maps) +
+  ggtitle("JB, 0 - 30 cm depth") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+try(dev.off())
+
+set.seed(1)
+
+tiff(
+  paste0(dir_results, "/SOM_rem_map_cor_test_", testn, ".tiff"),
+  width = 16,
+  height = 10,
+  units = "cm",
+  res = 300
+)
+
+c(maps_10_km[[1]][[5]][[1]], clay_difference) %>%
+  spatSample(100000) %>% 
+  rename(
+    soc = 1,
+    clay_dif = 2
+  ) %>%
+  ggplot(aes(x = soc, y = clay_dif)) +
+  geom_point(alpha = 0.01, shape = 21, col = "black", bg = "black") +
+  geom_smooth() +
+  scale_x_log10() +
+  xlab("SOC (%)") +
+  ylab("Clay (%) difference")
+  
+try(dev.off())
+
 
 # END
