@@ -724,7 +724,7 @@ if (train_models) {
       obj_xgb = objectives[i], # character, length 1, objective function for xgboost
       colsample_bynode_basic = 0.75, # numeric, colsample_bynode for basic model
       cov_keep = cov_keep_i, # Character vector, covariates that should always be present
-      final_round_mult = 1,  # Multiplier for the number of rounds in the final model
+      final_round_mult = 5,  # Multiplier for the number of rounds in the final model
       maxd = 10^3, # Maximum depth for optimized models
       seed = 321,  # Random seed for model training,
       classprob = FALSE
