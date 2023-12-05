@@ -13,7 +13,7 @@ dir_code <- getwd()
 root <- dirname(dir_code)
 dir_dat <- paste0(root, "/digijord_data/")
 
-testn <- 13
+testn <- 14
 mycrs <- "EPSG:25832"
 
 dir_results <- dir_dat %>%
@@ -38,7 +38,7 @@ cov_files <- dir_cov %>% list.files()
 cov_names <- cov_files %>% tools::file_path_sans_ext()
 
 cov_cats <- dir_code %>%
-  paste0(., "/cov_categories_20230712.csv") %>%
+  paste0(., "/cov_categories_20231110.csv") %>%
   read.table(
     sep = ";",
     header = TRUE
