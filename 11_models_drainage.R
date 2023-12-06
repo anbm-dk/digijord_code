@@ -54,7 +54,7 @@ dir_code <- getwd()
 root <- dirname(dir_code)
 dir_dat <- paste0(root, "/digijord_data/")
 
-testn <- 13
+testn <- 14
 mycrs <- "EPSG:25832"
 
 fractions_alt <- c("clay", "silt", "fine_sand", "coarse_sand", "SOC", "CaCO3")
@@ -168,7 +168,7 @@ dir_extr <- dir_dat %>%
   paste0(., "/extracts/")
 
 # obs_DC %>%
-#   values() %>% 
+#   values() %>%
 #   write.table(
 #     file = paste0(dir_extr, "obs_DC_extr.csv"),
 #     row.names = FALSE,
@@ -210,6 +210,7 @@ mask_LU_DC <- terra::extract(
 ) %>% unlist() %>% unname()
 
 obs_DC %<>%
+  values() %>%
   mutate(
     fold = folds_DC,
     mask_LU = mask_LU_DC,
@@ -264,12 +265,11 @@ source("f_weighted_summaries.R")
 
 bounds_DC <- list(
   eta = c(0.1, 1),
-  # max_depth = c(1L, 60L),
-  min_child_weight_sqrt = c(1, sqrt(64)),
-  gamma_sqrt = c(0, sqrt(40)),
+  min_child_weight_sqrt = c(1, sqrt(100)),
+  gamma_sqrt = c(0, sqrt(100)),
   colsample_bytree = c(0.1, 1),
   subsample = c(0.1, 1),
-  colsample_bylevel = c(0.1, 1),
+  colsample_bynode = c(0.1, 1),
   ogcs_index = c(1L, 7L),
   total_imp = c(0.5, 1)
 )
@@ -284,35 +284,11 @@ tgrid <- expand.grid(
   subsample = 0.75
 )
 
-# model_DC <- optimize_xgboost(
-#     target = "DRAENKL",  # character vector (length 1), target variable.
-#     cov_names = cov_DC_names,  # Character vector, covariate names,
-#     data = trdat_DC, # data frame, input data
-#     bounds_bayes = bounds_DC, # named list with bounds for bayesian opt.
-#     bounds_pred = c(0.5, 5.5), # numeric, length 2, bounds for predicted values
-#     cores = 19, # number cores for parallelization
-#     trgrid = tgrid, # data frame with tuning parameters to be tested in basic model
-#     folds = folds_DC, # list with indices, folds for cross validation
-#     sumfun = WeightedSummary_DCnum, # summary function for accuracy assessment
-#     metric = "MAEw", # character, length 1, name of evaluation metric
-#     max_metric = FALSE, # logical, should the evaluation metric be maximized
-#     weights = trdat_DC$w, # numeric, weights for model training and evaluation
-#     trees_per_round = 10, # numeric, length 1, number of trees that xgboost should train in each round
-#     obj_xgb = "reg:pseudohubererror", # character, length 1, objective function for xgboost
-#     colsample_bylevel_basic = 0.75, # numeric, colsample_bylevel for basic model
-#     cov_keep = NULL, # Character vector, covariates that should always be present
-#     final_round_mult = 10,  # Multiplier for the number of rounds in the final model
-#     seed = 321  # Random seed for model training
-# )
-
 # Drainage classes as factor
 
 trdat_DC %<>% mutate(
   DCfac = factor(DRAENKL, labels = paste0("DC", 1:5))
 )
-
-source("f_optimize_xgboost.R")
-source("f_weighted_summaries.R")
 
 foreach::registerDoSEQ()
 showConnections()
@@ -332,7 +308,7 @@ model_DCfac <- optimize_xgboost(
   weights = trdat_DC$w, # numeric, weights for model training and evaluation
   trees_per_round = 10, # numeric, length 1, number of trees that xgboost should train in each round
   obj_xgb = "multi:softprob", # character, length 1, objective function for xgboost
-  colsample_bylevel_basic = 0.75, # numeric, colsample_bylevel for basic model
+  colsample_bynode_basic = 0.75, # numeric, colsample_bylevel for basic model
   cov_keep = NULL, # Character vector, covariates that should always be present
   final_round_mult = 10,  # Multiplier for the number of rounds in the final model
   seed = 321,  # Random seed for model training,
@@ -350,8 +326,6 @@ dir_cov_10km <- dir_dat %>%
 
 predfolder <- dir_results %>%
   paste0(., "/predictions_testarea/")
-
-
 
 breaks <- c(0, 30, 60, 100, 200)
 
@@ -381,64 +355,24 @@ cov_10km <- dir_cov_10km %>%
 
 maps_10_km <- list()
 
-for (i in 1:length(fractions)) {
-  maps_10_km[[i]] <- c(1:4) %>%
-    paste0(
-      predfolder, "/", fractions[i],
-      "_depth", .,
-      ".tif"
-    ) %>%
+for (i in 1:length(uppers)) {
+  maps_10_km[[i]] <- paste0(
+      predfolder, "/SOM_remov/depth_", i, "/sum/") %>%
+    list.files(full.names = TRUE) %>%
     rast()
-  # names(maps_10_km[[i]]) <- paste0(
-  #   fraction_names[i], ", ", uppers, " - ", lowers, " cm"
-  # )
-}
-
-# Standardize mineral sum to 100
-
-maps_10_km_mineral_fin <- lapply(
-  1:4, function(i) {
-    mineral_raw <- c(
-      maps_10_km[[1]][[i]],
-      maps_10_km[[2]][[i]],
-      maps_10_km[[3]][[i]],
-      maps_10_km[[4]][[i]]
-    )
-    
-    mineral_sum_r <- mineral_raw %>% sum() 
-    
-    mineral_final <- mineral_raw*100 / mineral_sum_r
-    
-    mineral_final %<>% round(., digits = 1)
-    
-    return(mineral_final)
-  }
-)
-
-maps_10_km_mineral_fin_frac <- lapply(
-  1:4, function(x) {
-    out <- c(
-      maps_10_km_mineral_fin[[1]][[x]],
-      maps_10_km_mineral_fin[[2]][[x]],
-      maps_10_km_mineral_fin[[3]][[x]],
-      maps_10_km_mineral_fin[[4]][[x]]
-    )
-  }
-)
-
-for (i in 1:length(maps_10_km_mineral_fin_frac)) {
-  maps_10_km[[i]] <- maps_10_km_mineral_fin_frac[[i]]
+  names(maps_10_km[[i]]) <- paste0(
+    fraction_names_underscore, "_", breaks_chr[i], "_", breaks_chr[i + 1], "_cm"
+  )
 }
 
 texture_10km <- rast(maps_10_km)
 
-names(texture_10km) <- sapply(
-  fraction_names_underscore,
-  function(x) paste0(x, "_", depth_int_chr)
-  ) %>% as.vector()
+cov_DCmodel_names <- rownames(varImp(model_DCfac$model)$importance)
 
-cov_10km_DC <- c(cov_10km, texture_10km) %>%
-  terra::subset(., rownames(varImp(model_DCfac$model)$importance))
+cov_10km_DC <- c(cov_10km, texture_10km)
+
+cov_10km_DC <- cov_10km_DC %>%
+  terra::subset(., cov_DCmodel_names)
 
 # Make predictions for the test area
 

@@ -626,15 +626,9 @@ for (j in 1:(length(breaks) - 1)) {
 #     row.names = FALSE
 #     )
 
-# Without tiles:
 # Maps for all of Denmark
-# 2023-03-09: Took 24 hours for less than 25%. Not feasible.
-
-# March 16, 2023: 60 tiles, 121 predictors, clay: 32 hours, cubist
-# March 22, 2023: 591 tiles, 121 predictors, clay: 3 h 48 min, cubist
-
-# Post processing:
-# Sum texture to 100
-# round values
+# 2023-03-09: Without tiles: Took 24 hours for less than 25%. Not feasible.
+# 2023-03-16: 60 tiles, 121 predictors, clay: 32 hours, cubist
+# 2023-03-22: 591 tiles, 121 predictors, clay: 3 h 48 min, cubist
 
 # END
