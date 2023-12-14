@@ -1,27 +1,27 @@
 {
-    "id": "3F813A38",
-    "path": "C:/Users/au542768/digijord/digijord_code/11_models_DC.R",
-    "project_path": "11_models_DC.R",
+    "id": "AB6EC8A8",
+    "path": "C:/Users/au542768/digijord/digijord_code/12_Vindum_check.R",
+    "project_path": "12_Vindum_check.R",
     "type": "r_source",
-    "hash": "170774073",
+    "hash": "841514512",
     "contents": "",
     "dirty": false,
-    "created": 1695989032020.0,
+    "created": 1702307249920.0,
     "source_on_save": false,
-    "relative_order": 12,
+    "relative_order": 18,
     "properties": {
         "tempName": "Untitled1",
         "source_window_id": "",
         "Source": "Source",
-        "cursorPosition": "540,0",
-        "scrollLine": "508"
+        "cursorPosition": "124,0",
+        "scrollLine": "108"
     },
     "folds": "",
-    "lastKnownWriteTime": 1702302461,
+    "lastKnownWriteTime": 1702370835,
     "encoding": "UTF-8",
     "collab_server": "",
     "source_window": "",
-    "last_content_update": 1702302461823,
+    "last_content_update": 1702370835552,
     "read_only": false,
     "read_only_alternatives": []
 }
