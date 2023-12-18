@@ -118,31 +118,37 @@ pcs_rotation %>%
     row.names = FALSE
   )
 
-# Load covariates for the test area
+test_pca_10km <- TRUE
+test_pca_10km <- FALSE
 
-dir_cov_10km <- dir_dat %>%
-  paste0(., "/testarea_10km/covariates/")
+if (test_pca_10km) {
+  # Load covariates for the test area
+  
+  dir_cov_10km <- dir_dat %>%
+    paste0(., "/testarea_10km/covariates/")
+  
+  cov_10km <- dir_cov_10km %>%
+    list.files(full.names = TRUE) %>%
+    rast() %>%
+    subset(covnames_dropogc)
+  
+  spatSample(cov_10km, 100000) %>%
+    apply(., 2, function(x) sum(is.na(x))) %>%
+    .[. != 0]
+  
+  # Set NAs to zero for terodep10m and the sine and cosine of the aspect
+  
+  cov_10km$terodep10m %<>% terra::subst(., NA, 0)
+  cov_10km$cos_aspect_radians %<>% terra::subst(., NA, 0)
+  cov_10km$sin_aspect_radians  %<>% terra::subst(., NA, 0)
+  
+  # Predict PCs for the test area
+  
+  pcs_10km  <- terra::predict(cov_10km, pcs, na.rm = TRUE)
+  
+  plot(pcs_10km)
+}
 
-cov_10km <- dir_cov_10km %>%
-  list.files(full.names = TRUE) %>%
-  rast() %>%
-  subset(covnames_dropogc)
-
-spatSample(cov_10km, 100000) %>%
-  apply(., 2, function(x) sum(is.na(x))) %>%
-  .[. != 0]
-
-# Set NAs to zero for terodep10m and the sine and cosine of the aspect
-
-cov_10km$terodep10m %<>% terra::subst(., NA, 0)
-cov_10km$cos_aspect_radians %<>% terra::subst(., NA, 0)
-cov_10km$sin_aspect_radians  %<>% terra::subst(., NA, 0)
-
-# Predict PCs for the test area
-
-pcs_10km  <- terra::predict(cov_10km, pcs, na.rm = TRUE)
-
-plot(pcs_10km)
 
 # Predict pcs for the entire country
 
