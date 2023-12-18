@@ -496,6 +496,8 @@ for (j in 1:(length(breaks) - 1)) {
       library(terra)
       library(magrittr)
       library(dplyr)
+      library(caret)
+      library(xgboost)
       library(tools)
     }
   )

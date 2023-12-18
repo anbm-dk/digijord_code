@@ -1,27 +1,27 @@
 {
-    "id": "185D5392",
-    "path": "C:/Users/au542768/digijord/digijord_code/10_texture_maps.R",
-    "project_path": "10_texture_maps.R",
+    "id": "B6183FDF",
+    "path": "C:/Users/au542768/digijord/digijord_code/05b_cov_pca.R",
+    "project_path": "05b_cov_pca.R",
     "type": "r_source",
-    "hash": "2961075688",
+    "hash": "2220473169",
     "contents": "",
     "dirty": false,
-    "created": 1681738942955.0,
+    "created": 1702627895462.0,
     "source_on_save": false,
-    "relative_order": 12,
+    "relative_order": 6,
     "properties": {
         "tempName": "Untitled1",
         "source_window_id": "",
         "Source": "Source",
-        "cursorPosition": "260,16",
-        "scrollLine": "246"
+        "cursorPosition": "301,0",
+        "scrollLine": "272"
     },
     "folds": "",
-    "lastKnownWriteTime": 1702896523,
+    "lastKnownWriteTime": 1702896646,
     "encoding": "UTF-8",
     "collab_server": "",
     "source_window": "",
-    "last_content_update": 1702896523166,
+    "last_content_update": 1702896646027,
     "read_only": false,
     "read_only_alternatives": []
 }
