@@ -62,10 +62,12 @@ set.seed(1)
 #   as.df = FALSE
 # )
 
-saveRDS(
-  cov_pts,
-  paste0(dir_dat, "cov_pts_pca.rds")
-)
+# saveRDS(
+#   cov_pts,
+#   paste0(dir_dat, "cov_pts_pca.rds")
+# )
+
+cov_pts <- readRDS(paste0(dir_dat, "cov_pts_pca.rds"))
 
 # Drop OGCs (and existing principal components)
 
@@ -112,7 +114,8 @@ pcs_rotation %>%
 pcs_rotation %>%
   write.table(
     file = paste0(dir_dat, "pcs_rotation.csv"),
-    sep = ";"
+    sep = ";",
+    row.names = FALSE
   )
 
 # Load covariates for the test area
@@ -173,8 +176,6 @@ predict_pcs <- function(mod, dat, n_digits = NULL, ...) {
 
 # Tiles for model prediction
 
-n_digits <- 3
-
 numCores <- detectCores()
 numCores
 
@@ -187,10 +188,6 @@ subdir_tiles <- dir_tiles %>%
 
 dir_pcs <- dir_dat %>%
   paste0(., "/pcs/") %T>%
-  dir.create()
-
-dir_pcs_tiles <- dir_pcs %>%
-  paste0(., "/tiles/") %T>%
   dir.create()
 
 showConnections()
@@ -251,19 +248,12 @@ parSapplyLB(
     
     tilename_x <- basename(subdir_tiles[x])
     
-    outname_x <- dir_pcs_tiles %>%
-      paste0(
-        ., "pcs_",
-        tilename_x, ".tif"
-      )
-    
     pcs_tilex <- predict(
       cov_x2,
       pcs,
       fun = predict_pcs,
       na.rm = TRUE,
       n_digits = n_digits,
-      filename = outname_x,
       overwrite = TRUE
     )
     
@@ -274,6 +264,8 @@ parSapplyLB(
       )
     }
     
+    write.table(1, file = paste0(dir_pcs,"/", tilename_x, "_done.csv"))
+    
     return(NULL)
   }
 )
@@ -283,10 +275,8 @@ foreach::registerDoSEQ()
 rm(cl)
 
 for(k in 1:num_pcs) {
-  
-  outtiles_pc_k <- dir_pcs_tiles %>%
-    list.files(full.names = TRUE) %>%
-    sprc(ids = k)
+  outtiles_pc_k <- subdir_tiles %>%
+    paste0(., "/PC", k, ".tif")
   
   merge(
     outtiles_pc_k,
