@@ -260,7 +260,8 @@ parSapplyLB(
     for (k in 1:nlyr(pcs_tilex)) {
       writeRaster(
         pcs_tilex[[k]],
-        filename = paste0(subdir_tiles[x], "/PC", k, ".tif")
+        filename = paste0(subdir_tiles[x], "/PC", k, ".tif"),
+        overwrite = TRUE
       )
     }
     
