@@ -300,6 +300,39 @@ crs(dem) <- mycrs
 #   overwrite = TRUE
 # )
 
+# 3.6: Fill holes in terodep (2023-12-19)
+# 
+# terodep_files <- cov_files %>%
+#   grep('terodep', ., value = TRUE)
+# 
+# dir_cov_renamed <- dir_dat %>%
+#   paste0(., "/covariates_renamed/") %T>%
+#   dir.create()
+# 
+# for (i in 1:length(terodep_files)) {
+#   r <- terodep_files[i] %>% rast()
+#   dtyp <- datatype(r)
+#   newname_x <- sources(r) %>%
+#     basename() %>%
+#     file_path_sans_ext() %>%
+#     gsub("\\.", "_", .) %>%
+#     gsub("-", "_", .) %>%
+#     tolower()
+#   crs(r) <- mycrs
+#   names(r) <- newname_x
+#   outname_x <- dir_cov_renamed %>%
+#     paste0(., "/", newname_x, ".tif")
+#   ifel(
+#     test = is.na(r),
+#     yes = dem*0,
+#     no = r,
+#     datatype = dtyp,
+#     filename = outname_x,
+#     overwrite = TRUE,
+#     gdal = "TILED=YES"
+#   )
+# }
+#   
 # 4: Update names in covariate table (2023-02-27)
 
 # cov_cats <- dir_code %>%

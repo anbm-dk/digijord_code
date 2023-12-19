@@ -51,6 +51,22 @@ cov_selected <- cov_cats %>%
 
 cov_use <- terra::subset(cov, cov_selected)
 
+# 2023-12-19: Find covariates with missing values for some islands
+
+# missing_islands <- dir_dat %>%
+#   paste0(., "/layers/missing_islands_20231219.shp") %>%
+#   vect()
+# 
+# terra::extract(cov_use, missing_islands) %>%
+#   apply(., 2, function(x) sum(is.na(x))) %>%
+#   .[. != 0]
+
+# Drop cost_dist
+# Fill holes in terodep
+ 
+# cost_dist terodep10m 
+# 110         54
+
 # Extract random points
 
 set.seed(1)
@@ -220,7 +236,6 @@ clusterExport(
     "dir_dat",
     "n_digits",
     "dir_pcs",
-    "dir_pcs_tiles",
     "predict_pcs"
   )
 )
@@ -283,7 +298,8 @@ rm(cl)
 
 for(k in 1:num_pcs) {
   outtiles_pc_k <- subdir_tiles %>%
-    paste0(., "/PC", k, ".tif")
+    paste0(., "/PC", k, ".tif") %>%
+    sprc()
   
   merge(
     outtiles_pc_k,
