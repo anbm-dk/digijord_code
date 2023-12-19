@@ -47,6 +47,14 @@ cov_names_all <- cov_files %>%
   basename() %>%
   tools::file_path_sans_ext(.)
 
+cov_selected <- cov_cats %>%
+  filter(anbm_use == 1) %>%
+  select(name) %>%
+  unlist() %>%
+  unname()
+
+cov_files_selected <- cov_files[cov_names_all %in% cov_selected]
+
 # Make names for tiles
 
 max_char <- length(tile_shapes) %>%
@@ -95,7 +103,7 @@ clusterExport(
     "dir_tiles",
     "dir_code",
     "tile_numbers",
-    "cov_files",
+    "cov_files_selected",
     "dir_mask_tiles"
   )
 )
@@ -111,12 +119,6 @@ parSapplyLB(
     dir_tile_j <- dir_tiles %>%
       paste0(., "/tile_", tile_numbers[j], "/") %T>%
       dir.create()
-
-    # tile_shapes <- dir_tiles %>%
-    #   base::paste0(., "/tiles.shp") %>%
-    #   terra::vect()
-    
-    # my_ext <- tile_shapes[j]
     
     my_ext <- paste0(
       dir_mask_tiles, "/Mask_LU_tile_", tile_numbers[j], ".tif"
@@ -126,7 +128,7 @@ parSapplyLB(
     source(paste0(dir_code, "/f_cropstack.R"))
 
     cropstack(
-      x = cov_files,
+      x = cov_files_selected,
       y = my_ext,
       folder = dir_tile_j,
       mask = TRUE
