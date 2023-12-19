@@ -20,7 +20,7 @@ dir_cov <- dir_dat %>% paste0(., "/covariates")
 cov_cats <- dir_code %>%
   paste0(., "/cov_categories_20231110.csv") %>%
   read.table(
-    sep = ";",
+    sep = ",",
     header = TRUE
   )
 
@@ -66,6 +66,82 @@ cov_use <- terra::subset(cov, cov_selected)
  
 # cost_dist terodep10m 
 # 110         54
+
+# Extract points from tiles in parallel
+
+cells_per_pt <- 5000
+
+dir_tiles <- dir_dat %>%
+  paste0(., "/tiles_591/")
+
+subdir_tiles <- dir_tiles %>%
+  list.dirs() %>%
+  .[-1]
+
+library(parallel)
+
+numCores <- detectCores()
+numCores
+
+showConnections()
+
+cl <- makeCluster(numCores)
+
+clusterEvalQ(
+  cl,
+  {
+    library(terra)
+    library(magrittr)
+    library(dplyr)
+    library(tools)
+  }
+)
+
+clusterExport(
+  cl,
+  c(
+    "subdir_tiles",
+    "cov_selected",
+    "dir_dat",
+    "cells_per_pt"
+  )
+)
+
+pts_tiles <- parSapplyLB(
+  cl,
+  1:length(subdir_tiles),
+  function(j) {
+    set.seed(1)
+    
+    cov_x_files <- subdir_tiles[j] %>%
+      list.files(full.names = TRUE)
+    
+    cov_x_names <- cov_x_files %>%
+      basename() %>%
+      file_path_sans_ext()
+    
+    cov_x <- cov_x_files %>% rast()
+    
+    names(cov_x) <- cov_x_names
+    
+    cov_x2 <- subset(cov_x, cov_selected)
+    
+    cov_pts_x <- terra::spatSample(
+      x = cov_x2,
+      size = ncell(cov_x2) / cells_per_pt,
+      na.rm = FALSE,
+      as.points = TRUE,
+      exp = 1
+    )
+    
+    return(cov_pts_x)
+  }
+)
+
+stopCluster(cl)
+foreach::registerDoSEQ()
+rm(cl)
+
 
 # Extract random points
 
