@@ -34,6 +34,19 @@ cov_files <- dir_cov %>%
     full.names = TRUE
   )
 
+# Select relevant covariates
+
+cov_cats <- dir_code %>%
+  paste0(., "/cov_categories_20231110.csv") %>%
+  read.table(
+    sep = ",",
+    header = TRUE
+  )
+
+cov_names_all <- cov_files %>%
+  basename() %>%
+  tools::file_path_sans_ext(.)
+
 # Make names for tiles
 
 max_char <- length(tile_shapes) %>%

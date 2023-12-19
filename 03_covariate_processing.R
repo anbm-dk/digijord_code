@@ -332,7 +332,40 @@ crs(dem) <- mycrs
 #     gdal = "TILED=YES"
 #   )
 # }
-#   
+
+# 3.6: Fill holes in cos_aspect_radians and sin_aspect_radians (2023-12-19)
+
+aspect_files <- cov_files %>%
+  grep('aspect_radians', ., value = TRUE)
+
+dir_cov_renamed <- dir_dat %>%
+  paste0(., "/covariates_renamed/") %T>%
+  dir.create()
+
+for (i in 1:length(aspect_files)) {
+  r <- aspect_files[i] %>% rast()
+  dtyp <- datatype(r)
+  newname_x <- sources(r) %>%
+    basename() %>%
+    file_path_sans_ext() %>%
+    gsub("\\.", "_", .) %>%
+    gsub("-", "_", .) %>%
+    tolower()
+  crs(r) <- mycrs
+  names(r) <- newname_x
+  outname_x <- dir_cov_renamed %>%
+    paste0(., "/", newname_x, ".tif")
+  ifel(
+    test = is.na(r),
+    yes = dem*0,
+    no = r,
+    datatype = dtyp,
+    filename = outname_x,
+    overwrite = TRUE,
+    gdal = "TILED=YES"
+  )
+}
+
 # 4: Update names in covariate table (2023-02-27)
 
 # cov_cats <- dir_code %>%
@@ -574,9 +607,8 @@ if (length(changethese) > 0) {
 cov_cats <- dir_code %>%
   paste0(., "/cov_categories_20231110.csv") %>%
   read.table(
-    sep = ";",
-    header = TRUE,
-    encoding = "latin1"
+    sep = ",",
+    header = TRUE
   )
 
 cov_files <- dir_cov %>%
