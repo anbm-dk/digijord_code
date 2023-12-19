@@ -69,7 +69,7 @@ cov_use <- terra::subset(cov, cov_selected)
 
 # Extract points from tiles in parallel
 
-cells_per_pt <- 5000
+cells_per_pt <- 2000
 
 dir_tiles <- dir_dat %>%
   paste0(., "/tiles_591/")
@@ -101,7 +101,6 @@ clusterExport(
   cl,
   c(
     "subdir_tiles",
-    "cov_selected",
     "dir_dat",
     "cells_per_pt"
   )
@@ -124,28 +123,37 @@ pts_tiles <- parSapplyLB(
     
     names(cov_x) <- cov_x_names
     
-    cov_x2 <- subset(cov_x, cov_selected)
-    
     cov_pts_x <- terra::spatSample(
-      x = cov_x2,
-      size = ncell(cov_x2) / cells_per_pt,
+      x = cov_x,
+      size = ncell(cov_x) / cells_per_pt,
       na.rm = FALSE,
-      as.points = TRUE,
+      # as.points = TRUE,
+      xy = TRUE,
       exp = 1
     )
     
     return(cov_pts_x)
-  }
+  },
+  simplify = FALSE,
+  USE.NAMES = FALSE
 )
 
 stopCluster(cl)
 foreach::registerDoSEQ()
 rm(cl)
 
+cov_pts <- bind_rows(pts_tiles) %>%
+  na.omit() %>%
+  sample_n(
+    min(
+      10^5,
+      nrow(.)
+    )
+  )
 
 # Extract random points
 
-set.seed(1)
+# set.seed(1)
 
 # cov_pts <- terra::spatSample(
 #   x = cov_use,
@@ -154,12 +162,16 @@ set.seed(1)
 #   as.df = FALSE
 # )
 
-# saveRDS(
-#   cov_pts,
-#   paste0(dir_dat, "cov_pts_pca.rds")
-# )
+saveRDS(
+  cov_pts,
+  paste0(dir_dat, "cov_pts_pca.rds")
+)
 
-cov_pts <- readRDS(paste0(dir_dat, "cov_pts_pca.rds"))
+# cov_pts <- readRDS(paste0(dir_dat, "cov_pts_pca.rds"))
+
+cov_pts %<>%
+  select(-c(x, y)) %>%
+  as.matrix()
 
 # Drop OGCs (and existing principal components)
 
@@ -169,11 +181,6 @@ covnames_dropogc <- cov_pts %>%
   grep('PC', ., value = TRUE, invert = TRUE)
 
 cov_pts_dropogc <- cov_pts[, colnames(cov_pts) %in% covnames_dropogc]
-
-# Set any NAs to zero
-# (only relevant for terodep10m and the sine and cosine of the aspect)
-
-cov_pts_dropogc[is.na(cov_pts_dropogc)] <- 0
 
 # Calculate raw principal components
 
@@ -194,6 +201,9 @@ pcs <- prcomp(
   rank. = num_pcs
 )
 
+pcs %>%
+  saveRDS(file = paste0(dir_dat, "pcs_cov.rds"))
+
 # Write rotation to file
 
 pcs_rotation <- pcs$rotation %>%
@@ -211,7 +221,7 @@ pcs_rotation %>%
   )
 
 test_pca_10km <- TRUE
-test_pca_10km <- FALSE
+# test_pca_10km <- FALSE
 
 if (test_pca_10km) {
   # Load covariates for the test area
@@ -242,152 +252,146 @@ if (test_pca_10km) {
 }
 
 
-# Predict pcs for the entire country
-
-library(parallel)
-library(dplyr)
-library(foreach)
-library(stringr)
-
-dir_cov <- dir_dat %>% paste0(., "/covariates")
-cov_files <- dir_cov %>% list.files()
-cov_names <- cov_files %>% tools::file_path_sans_ext()
-n_digits <- 3
-
-# Function for predicting pcs
-
-predict_pcs <- function(mod, dat, n_digits = NULL, ...) {
-  rfun2 <- function(mod2, dat2, n_digits2, ...) {
-    out2 <- predict(
-      object = mod2,
-      newdata = dat2,
-      ...
-    )
-    if (!is.null(n_digits2)) {
-      out2 <- signif(out2, digits = n_digits2)
-    }
-    return(out2)
-  }
-  out <- rfun2(mod, dat, n_digits, ...)
-  return(out)
-}
-
-# Tiles for model prediction
-
-numCores <- detectCores()
-numCores
-
-dir_tiles <- dir_dat %>%
-  paste0(., "/tiles_591/")
-
-subdir_tiles <- dir_tiles %>%
-  list.dirs() %>%
-  .[-1]
-
-dir_pcs <- dir_dat %>%
-  paste0(., "/pcs/") %T>%
-  dir.create()
-
-showConnections()
-
-cl <- makeCluster(numCores)
-
-clusterEvalQ(
-  cl,
-  {
-    library(terra)
-    library(caret)
-    library(magrittr)
-    library(dplyr)
-    library(tools)
-    library(stats)
-  }
-)
-
-clusterExport(
-  cl,
-  c("pcs",
-    "subdir_tiles",
-    "cov_selected",
-    "dir_dat",
-    "n_digits",
-    "dir_pcs",
-    "predict_pcs"
-  )
-)
-
-parSapplyLB(
-  cl,
-  1:length(subdir_tiles),
-  function(x) {
-    tmpfolder <- paste0(dir_dat, "/Temp/")
-    
-    terraOptions(memfrac = 0.02, tempdir = tmpfolder)
-    
-    cov_x_files <- subdir_tiles[x] %>%
-      list.files(full.names = TRUE)
-    
-    cov_x_names <- cov_x_files %>%
-      basename() %>%
-      file_path_sans_ext()
-    
-    cov_x <- cov_x_files %>% rast()
-    
-    names(cov_x) <- cov_x_names
-    
-    cov_x2 <- subset(cov_x, rownames(pcs$rotation))
-    
-    # Set NAs to zero for terodep10m and the sine and cosine of the aspect
-    
-    cov_x2$terodep10m %<>% terra::subst(., NA, 0)
-    cov_x2$cos_aspect_radians %<>% terra::subst(., NA, 0)
-    cov_x2$sin_aspect_radians  %<>% terra::subst(., NA, 0)
-    
-    tilename_x <- basename(subdir_tiles[x])
-    
-    pcs_tilex <- predict(
-      cov_x2,
-      pcs,
-      fun = predict_pcs,
-      na.rm = TRUE,
-      n_digits = n_digits,
-      overwrite = TRUE
-    )
-    
-    for (k in 1:nlyr(pcs_tilex)) {
-      writeRaster(
-        pcs_tilex[[k]],
-        filename = paste0(subdir_tiles[x], "/PC", k, ".tif"),
-        overwrite = TRUE
-      )
-    }
-    
-    write.table(1, file = paste0(dir_pcs,"/", tilename_x, "_done.csv"))
-    
-    return(NULL)
-  }
-)
-
-stopCluster(cl)
-foreach::registerDoSEQ()
-rm(cl)
-
-for(k in 1:num_pcs) {
-  outtiles_pc_k <- subdir_tiles %>%
-    paste0(., "/PC", k, ".tif") %>%
-    sprc()
-  
-  merge(
-    outtiles_pc_k,
-    filename = paste0(
-      dir_pcs, "/PC", k, ".tif"),
-    overwrite = TRUE,
-    gdal = "TILED=YES",
-    names = paste0(
-      "PC", k
-    )
-  )
-}
+# # Predict pcs for the entire country
+# 
+# library(parallel)
+# library(dplyr)
+# library(foreach)
+# library(stringr)
+# 
+# dir_cov <- dir_dat %>% paste0(., "/covariates")
+# cov_files <- dir_cov %>% list.files()
+# cov_names <- cov_files %>% tools::file_path_sans_ext()
+# n_digits <- 3
+# 
+# # Function for predicting pcs
+# 
+# predict_pcs <- function(mod, dat, n_digits = NULL, ...) {
+#   rfun2 <- function(mod2, dat2, n_digits2, ...) {
+#     out2 <- predict(
+#       object = mod2,
+#       newdata = dat2,
+#       ...
+#     )
+#     if (!is.null(n_digits2)) {
+#       out2 <- signif(out2, digits = n_digits2)
+#     }
+#     return(out2)
+#   }
+#   out <- rfun2(mod, dat, n_digits, ...)
+#   return(out)
+# }
+# 
+# # Tiles for model prediction
+# 
+# numCores <- detectCores()
+# numCores
+# 
+# dir_tiles <- dir_dat %>%
+#   paste0(., "/tiles_591/")
+# 
+# subdir_tiles <- dir_tiles %>%
+#   list.dirs() %>%
+#   .[-1]
+# 
+# dir_pcs <- dir_dat %>%
+#   paste0(., "/pcs/") %T>%
+#   dir.create()
+# 
+# showConnections()
+# 
+# cl <- makeCluster(numCores)
+# 
+# clusterEvalQ(
+#   cl,
+#   {
+#     library(terra)
+#     library(caret)
+#     library(magrittr)
+#     library(dplyr)
+#     library(tools)
+#     library(stats)
+#   }
+# )
+# 
+# clusterExport(
+#   cl,
+#   c("pcs",
+#     "subdir_tiles",
+#     "cov_selected",
+#     "dir_dat",
+#     "n_digits",
+#     "dir_pcs",
+#     "predict_pcs"
+#   )
+# )
+# 
+# parSapplyLB(
+#   cl,
+#   1:length(subdir_tiles),
+#   function(x) {
+#     tmpfolder <- paste0(dir_dat, "/Temp/")
+#     
+#     terraOptions(memfrac = 0.02, tempdir = tmpfolder)
+#     
+#     cov_x_files <- subdir_tiles[x] %>%
+#       list.files(full.names = TRUE)
+#     
+#     cov_x_names <- cov_x_files %>%
+#       basename() %>%
+#       file_path_sans_ext()
+#     
+#     cov_x <- cov_x_files %>% rast()
+#     
+#     names(cov_x) <- cov_x_names
+#     
+#     cov_x2 <- subset(cov_x, rownames(pcs$rotation))
+#     
+#     tilename_x <- basename(subdir_tiles[x])
+#     
+#     pcs_tilex <- predict(
+#       cov_x2,
+#       pcs,
+#       fun = predict_pcs,
+#       na.rm = TRUE,
+#       n_digits = n_digits,
+#       overwrite = TRUE
+#     )
+#     
+#     for (k in 1:nlyr(pcs_tilex)) {
+#       writeRaster(
+#         pcs_tilex[[k]],
+#         filename = paste0(subdir_tiles[x], "/PC", k, ".tif"),
+#         overwrite = TRUE
+#       )
+#     }
+#     
+#     write.table(1, file = paste0(dir_pcs,"/", tilename_x, "_done.csv"))
+#     
+#     return(NULL)
+#   }
+# )
+# 
+# stopCluster(cl)
+# foreach::registerDoSEQ()
+# rm(cl)
+# 
+# for(k in 1:num_pcs) {
+#   outtiles_pc_k <- subdir_tiles %>%
+#     paste0(., "/PC", k, ".tif") %>%
+#     sprc()
+#   
+#   merge(
+#     outtiles_pc_k,
+#     filename = paste0(
+#       dir_pcs, "/PC", k, ".tif"),
+#     overwrite = TRUE,
+#     gdal = "TILED=YES",
+#     names = paste0(
+#       "PC", k
+#     )
+#   )
+# }
 
 # TO do:
 # Write a function to convert covariate importance from PCs to original covs
