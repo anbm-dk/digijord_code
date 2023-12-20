@@ -403,7 +403,11 @@ par()
 # 8: Set up models
 
 if (use_pca) {
-  cov_selected <- colnames(obs_pcs)
+  cov_selected <- c(
+    colnames(obs_pcs),
+    colnames(obs) %>%
+      grep('ogc_pi', ., value = TRUE)
+  )
 } else {
   cov_selected <- cov_cats %>%
     filter(anbm_use == 1) %>%
@@ -547,6 +551,12 @@ if (train_models) {
         (upper < 200) | (upper == 200 & lower == 200),
         !is.na(dhm2015_terraen_10m)
       )
+    
+    if (use_pca) {
+      trdat %<>% filter(
+        !is.na(PC1)
+      )
+    }
     
     # Weighting by depth intervals
     print("Calculating weights")
