@@ -21,6 +21,16 @@ dir_results <- dir_dat %>%
 
 # fractions <- c("clay", "silt", "fine_sand", "coarse_sand", "logSOC", "logCaCO3")
 
+use_pca <- TRUE
+
+pcs_cov <- readRDS(paste0(dir_dat, "pcs_cov.rds"))
+
+if (use_pca) {
+  obs_pcs <- predict(pcs_cov, obs)
+  
+  obs <- cbind(obs, obs_pcs)
+}
+
 fractions_alt <- c("clay", "silt", "fine_sand", "coarse_sand", "SOC", "CaCO3")
 
 fractions <- fractions_alt
@@ -156,9 +166,14 @@ for (k in 1:nrow(SOC_CaCO3_depth_grid)) {
       "dir_dat",
       "n_digits",
       "breaks_j",
-      "breaks_j_chr"
+      "breaks_j_chr",
+      "use_pca"
     )
   )
+  
+  if (use_pca) {
+    clusterExport(cl, c("pcs_cov"))
+  }
 
   parSapplyLB(
     cl,
@@ -178,8 +193,10 @@ for (k in 1:nrow(SOC_CaCO3_depth_grid)) {
       cov_x <- cov_x_files %>% rast()
 
       names(cov_x) <- cov_x_names
-
-      cov_x2 <- subset(cov_x, cov_selected)
+      
+      if (!use_pca) {
+        cov_x2 <- subset(cov_selected)
+      }
 
       tilename_x <- basename(subdir_tiles[x])
 
@@ -203,6 +220,7 @@ for (k in 1:nrow(SOC_CaCO3_depth_grid)) {
         ),
         n_const = 2,
         n_digits = 1,
+        pcs = pcs_cov,
         filename = outname_x,
         overwrite = TRUE
       )
@@ -283,9 +301,14 @@ for (j in 1:(length(breaks) - 1)) {
         "n_digits",
         "breaks_j",
         "breaks_j_chr",
-        "dir_mineral_raw_j"
+        "dir_mineral_raw_j",
+        "use_pca"
       )
     )
+    
+    if (use_pca) {
+      clusterExport(cl, c("pcs_cov"))
+    }
     
     parSapplyLB(
       cl,
@@ -306,7 +329,9 @@ for (j in 1:(length(breaks) - 1)) {
         
         names(cov_x) <- cov_x_names
         
-        cov_x2 <- subset(cov_x, cov_selected)
+        if (!use_pca) {
+          cov_x2 <- subset(cov_x, cov_selected)
+        }
         
         tilename_x <- basename(subdir_tiles[x])
         
@@ -330,6 +355,7 @@ for (j in 1:(length(breaks) - 1)) {
           ),
           n_const = 3,
           n_digits = 1,
+          pcs = pcs_cov,
           filename = outname_x,
           overwrite = TRUE
         )

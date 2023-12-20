@@ -161,7 +161,7 @@ dir_cov <- dir_dat %>% paste0(., "/covariates")
 cov_cats <- dir_code %>%
   paste0(., "/cov_categories_20231110.csv") %>%
   read.table(
-    sep = ";",
+    sep = ",",
     header = TRUE
   )
 
@@ -307,9 +307,9 @@ obs %<>%
 
 use_pca <- TRUE
 
+pcs_cov <- readRDS(paste0(dir_dat, "pcs_cov.rds"))
+
 if (use_pca) {
-  pcs_cov <- readRDS(paste0(dir_dat, "pcs_cov.rds"))
-  
   obs_pcs <- predict(pcs_cov, obs)
   
   obs <- cbind(obs, obs_pcs)
@@ -483,7 +483,7 @@ xgb_opt_stepwise <- FALSE
 n <- 2000
 
 use_all_points <- FALSE
-# use_all_points <- TRUE
+use_all_points <- TRUE
 
 
 # 9: Train models
@@ -878,6 +878,8 @@ if (train_models) {
 
 names(models) <- fractions
 
+
+
 # Model summary
 
 bestscores_df <- models_bestscores %>% bind_rows()
@@ -916,17 +918,85 @@ models_sum <- lapply(models, function(x) {
 
 models_sum
 
+# Varimp for PCA models
+
+varImp_pcs <- function(
+    model,
+    pcs
+) {
+  imp_pcs <- varImp(model)$importance %>%
+    as.data.frame() %>%
+    rownames_to_column(var = "covariate") %>%
+    filter(covariate %in% colnames(pcs$rotation)) %>%
+    arrange(covariate)
+  
+  imp_notpc <- varImp(model)$importance %>%
+    as.data.frame() %>%
+    rownames_to_column(var = "covariate") %>%
+    filter(!(covariate %in% colnames(pcs$rotation))) %>%
+    arrange(covariate)
+  
+  if (nrow(imp_pcs) > 0) {
+    imp_rotated <- pcs$rotation %>% apply(., 2, function(x) {
+      xabs <- abs(x)
+      out <- xabs / sum(xabs)
+      return(out)
+    }) %>%
+      t() %>%
+      as.data.frame() %>%
+      rownames_to_column(var = "covariate") %>%
+      arrange(covariate) %>%
+      filter(covariate %in% imp_pcs$covariate) %>%
+      select(-covariate) %>%
+      apply(., 2, function(x) {return(x*imp_pcs$Overall)}) %>%
+      apply(., 2, "sum") %>%
+      data.frame(
+        covariate = names(.),
+        Overall = unname(.),
+        row.names = NULL
+      ) %>% 
+      select(c(covariate, Overall)) %>%
+      arrange(-Overall)
+    
+    out <- bind_rows(
+      imp_notpc,
+      imp_rotated
+    ) %>%
+      arrange(-Overall) %>%
+      mutate(Overall = Overall*100/max(Overall))
+  } else {
+    out <- varImp(model)$importance %>%
+      as.data.frame() %>%
+      rownames_to_column(var = "covariate")
+  }
+
+  return(out)
+}
+
+varImp_pcs(
+  models[[5]],
+  pcs_cov
+)
+
 # Covariate importance
 
 imp_all <- models %>%
   seq_along() %>%
   lapply(
     function(x) {
-      out <- varImp(models[[x]])$importance %>%
-        as.data.frame() %>%
-        rownames_to_column(var = "covariate") %>%
-        mutate(fraction = names(models)[x])
-      return(out)
+      if (use_pca) {
+        out <- varImp_pcs(
+          models[[x]],
+          pcs_cov
+        ) %>%
+          mutate(fraction = names(models)[x])
+      } else {
+        out <- varImp(models[[x]])$importance %>%
+          as.data.frame() %>%
+          rownames_to_column(var = "covariate") %>%
+          mutate(fraction = names(models)[x])
+        return(out)
+      }
     }
   ) %>%
   bind_rows() %>%
@@ -988,7 +1058,7 @@ get_acc <- function(i2) {
       pred = models_predictions[, i2],
       weights = models_weights[, i2],
       indices = factor(!models_indices[, i2], labels = c("CV", "Holdout")),
-      bare = !is.na(s2_geomedian_b2),
+      bare = obs$s2_count_max10_fuzzy > 0,
       mean_d = (upper + lower)/2,
       depth = cut(mean_d, breaks, include.lowest = TRUE)
     ) %>%
@@ -1010,6 +1080,8 @@ get_acc <- function(i2) {
 acc_all <- foreach(i = 1:length(fractions), .combine = rbind) %do%
   get_acc(i)
 
+acc_all
+
 write.table(
   acc_all,
   paste0(dir_results, "/acc_all_test", testn, ".csv"),
@@ -1026,7 +1098,7 @@ get_acc_db <- function(i2) {
       pred = models_predictions[, i2],
       weights = models_weights[, i2],
       indices = factor(!models_indices[, i2], labels = c("CV", "Holdout")),
-      bare = !is.na(s2_geomedian_b2),
+      bare = obs$s2_count_max10_fuzzy > 0,
       mean_d = (upper + lower)/2,
       depth = cut(mean_d, breaks, include.lowest = TRUE),
       db = case_when(
@@ -1653,7 +1725,6 @@ if(length(unique(JB_acc_d$Dataset)) > 1) {
   )
 }
   
-
 JB_forplot <- c("JB1", "JB2", "JB3", "JB4", "JB5", "JB6", "JB7", "JB8", "JB11",
                 "JB12", "BA", "OA")
 
@@ -1698,18 +1769,31 @@ l <- list()
 
 ntop <- 20
 
-for (i in 1:length(models))
-{
-  l[[i]] <- varImp(models[[i]])$importance %>%
-    as_tibble(rownames = "covariate") %>%
-    drop_na() %>%
-    arrange(-Overall) %>%
-    slice_head(n = ntop) %>%
-    mutate(target = fractions[i]) %>%
-    rowid_to_column("rank")
-}
+# for (i in 1:length(models))
+# {
+#   l[[i]] <- varImp(models[[i]])$importance %>%
+#     as_tibble(rownames = "covariate") %>%
+#     drop_na() %>%
+#     arrange(-Overall) %>%
+#     slice_head(n = ntop) %>%
+#     mutate(target = fractions[i]) %>%
+#     rowid_to_column("rank")
+# }
+# 
+# l %<>% bind_rows()
 
-l %<>% bind_rows() %>%
+l <- imp_all %>%
+  select(-mean_imp) %>%
+  pivot_longer(
+    cols = -covariate,
+    names_to = "target",
+    values_to = "Overall"
+  ) %>%
+  filter(!(covariate %in% grep('ogc_pi', colnames(obs), value = TRUE))) %>%
+  group_by(target) %>%
+  mutate(Overall = Overall*100/max(Overall)) %>%
+  slice_head(n = ntop) %>%
+  arrange(-Overall) %>%
   mutate(
     target = factor(
       target,
@@ -1766,6 +1850,8 @@ catcolors <- l$category %>%
 names(catcolors) <- levels(l$category)
 colScale <- scale_fill_manual(name = "category", values = catcolors)
 
+
+
 # Plot covariate importance
 
 tiff(
@@ -1793,6 +1879,92 @@ l %>%
     expand = c(0, 0)
   ) +
   colScale
+
+try(dev.off())
+
+
+# Plot importance for OGCs
+
+ndir_plot <- 64
+
+imp_ogc <- imp_all %>%
+  select(-mean_imp) %>%
+  pivot_longer(
+    cols = -covariate,
+    names_to = "target",
+    values_to = "Overall"
+  ) %>%
+  filter(covariate %in% grep('ogc_pi', colnames(obs), value = TRUE)) %>%
+  group_by(target) %>%
+  mutate(Overall = Overall*100/max(Overall)) %>%
+  arrange(covariate) %>%
+  mutate(
+    dir = substr(
+      covariate,
+      nchar(covariate) - 2,
+      nchar(covariate)
+    ) %>%
+      as.numeric() %>%
+      "*" (ndir_plot) %>%
+      "/" (1000) %>%
+      "+" (1) %>%
+      round(digits = 0)
+  ) %>%
+  filter(is.finite(Overall))
+
+imp_ogc2 <- imp_ogc %>%
+  mutate(dir = dir + ndir_plot)
+
+imp_ogc %<>% bind_rows(., imp_ogc2)
+
+# imp_ogc %<>% mutate(dir = row_number())
+
+imp_ogc %<>% mutate(
+  target = factor(
+    target,
+    levels = fractions,
+    labels = fraction_names
+  )
+)
+
+brks <- seq(
+  from = min(imp_ogc$dir),
+  by = (max(imp_ogc$dir) + 1 - min(imp_ogc$dir))/4,
+  length.out = 4
+)
+
+tiff(
+  paste0(dir_results, "/importance_ogc_test", testn, ".tiff"),
+  width = 40,
+  height = 20,
+  units = "cm",
+  res = 300
+)
+
+ggplot(imp_ogc, aes(x = dir, y = Overall)) +
+  coord_polar(
+    start = - pi/2 - pi/(ndir_plot*2),
+    direction = -1) +
+  geom_col(width = 1, colour = 'black', fill = rgb(0,2/3,2/3,1/2)) +
+  facet_wrap(
+    ~ target,
+    ncol = 3
+  ) +
+  scale_x_continuous(
+    breaks = brks,
+    labels = c('E', 'N', 'W', 'S')
+  ) +
+  scale_y_continuous(limits = c(0, 100), expand = c(0, 0)) +
+  ylab('Covariate importance') +
+  theme_bw() +
+  theme(axis.text.x = element_text(
+    colour = 'black'),
+    axis.title.x = element_blank(),
+    axis.text.y = element_text(colour = 'black'),
+    panel.grid.major = element_line(color = 'grey'),
+    panel.grid.minor = element_blank(),
+    panel.border = element_rect(linewidth = 1)
+  )
 
 try(dev.off())
 
@@ -1868,9 +2040,15 @@ clusterExport(
     "predict_passna",
     "dir_dat",
     "fractions",
-    "dir_results"
+    "dir_results",
+    "pcs_cov",
+    "use_pca"
   )
 )
+
+if (use_pca) {
+  clusterExport(cl, c("pcs_cov"))
+}
 
 parSapplyLB(
   cl,
@@ -1887,9 +2065,12 @@ parSapplyLB(
 
     cov_10km <- dir_cov_10km %>%
       list.files(full.names = TRUE) %>%
-      rast() %>%
-      subset(cov_selected)
+      rast()
     
+    if (!use_pca) {
+      cov_10km %<>% subset(cov_selected)
+    }
+  
     if (map_spec$fraction_i[x] %in% 1:4) {
       outname <- predfolder %>%
         paste0(
@@ -1928,8 +2109,14 @@ parSapplyLB(
       ),
       n_const = 3,
       n_digits = 1,
+      pcs = pcs_cov,
       filename = outname,
       overwrite = TRUE
+    )
+    
+    write.table(
+      map_spec[,x],
+      paste0(predfolder, paste(map_spec[,x], collapse = "_"), ".txt")
     )
 
     return(NULL)
