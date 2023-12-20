@@ -77,6 +77,12 @@ source("f_cropstack.R")
 
 # Process for tile creation
 
+
+# Mask all covariates that are not OGCs
+
+cov_files_notogc <- cov_files_selected %>%
+  grep('ogc_pi', ., value = TRUE, invert = TRUE)
+
 library(parallel)
 
 numCores <- detectCores()
@@ -103,7 +109,7 @@ clusterExport(
     "dir_tiles",
     "dir_code",
     "tile_numbers",
-    "cov_files_selected",
+    "cov_files_notogc",
     "dir_mask_tiles"
   )
 )
@@ -128,10 +134,79 @@ parSapplyLB(
     source(paste0(dir_code, "/f_cropstack.R"))
 
     cropstack(
-      x = cov_files_selected,
+      x = cov_files_notogc,
       y = my_ext,
       folder = dir_tile_j,
       mask = TRUE
+    )
+  }
+)
+
+stopCluster(cl)
+foreach::registerDoSEQ()
+rm(cl)
+
+
+# Tiles for OGCs, no masking
+
+cov_files_ogc <- cov_files_selected %>%
+  grep('ogc_pi', ., value = TRUE)
+
+library(parallel)
+
+numCores <- detectCores()
+numCores
+
+showConnections()
+
+cl <- makeCluster(numCores)
+
+clusterEvalQ(
+  cl,
+  {
+    library(terra)
+    library(magrittr)
+    library(dplyr)
+    library(tools)
+  }
+)
+
+clusterExport(
+  cl,
+  c(
+    "dir_dat",
+    "dir_tiles",
+    "dir_code",
+    "tile_numbers",
+    "cov_files_ogc",
+    "dir_mask_tiles"
+  )
+)
+
+parSapplyLB(
+  cl,
+  1:length(tile_shapes),
+  function(j) {
+    tmpfolder <- paste0(dir_dat, "/Temp/")
+    
+    terraOptions(memfrac = 0.02, tempdir = tmpfolder)
+    
+    dir_tile_j <- dir_tiles %>%
+      paste0(., "/tile_", tile_numbers[j], "/") %T>%
+      dir.create()
+    
+    my_ext <- paste0(
+      dir_mask_tiles, "/Mask_LU_tile_", tile_numbers[j], ".tif"
+    ) %>%
+      rast()
+    
+    source(paste0(dir_code, "/f_cropstack.R"))
+    
+    cropstack(
+      x = cov_files_ogc,
+      y = my_ext,
+      folder = dir_tile_j,
+      mask = FALSE
     )
   }
 )
