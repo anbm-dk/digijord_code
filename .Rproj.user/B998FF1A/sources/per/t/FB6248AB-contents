@@ -303,13 +303,19 @@ obs %<>%
   mutate(ID_new = rowname, .before = everything()) %>%
   select(-rowname)
 
-write.table(
-  obs,
-  paste0(dir_results, "observations_texture.csv"),
-  row.names = FALSE,
-  col.names = TRUE,
-  sep = ";"
-)
+# Predict principal components
+
+use_pca <- TRUE
+
+if (use_pca) {
+  pcs_cov <- readRDS(paste0(dir_dat, "pcs_cov.rds"))
+  
+  obs_pcs <- predict(pcs_cov, obs)
+  
+  obs <- cbind(obs, obs_pcs)
+}
+
+# Select topsoil observations for plot
 
 obs_top <- obs %>%
   filter(
@@ -396,11 +402,15 @@ par()
 
 # 8: Set up models
 
-cov_selected <- cov_cats %>%
-  filter(anbm_use == 1) %>%
-  dplyr::select(., name) %>%
-  unlist() %>%
-  unname()
+if (use_pca) {
+  cov_selected <- colnames(obs_pcs)
+} else {
+  cov_selected <- cov_cats %>%
+    filter(anbm_use == 1) %>%
+    dplyr::select(., name) %>%
+    unlist() %>%
+    unname()
+}
 
 # Template for custom eval
 # evalerror <- function(preds, dtrain) {
@@ -468,8 +478,9 @@ xgb_opt_stepwise <- FALSE
 # Remember to include full dataset in the final model
 n <- 2000
 
-use_all_points <- TRUE
-# use_all_points <- FALSE
+use_all_points <- FALSE
+# use_all_points <- TRUE
+
 
 # 9: Train models
 
@@ -1843,7 +1854,6 @@ clusterExport(
     "map_spec",
     "predfolder",
     "dir_cov_10km",
-    # "models",
     "cov_selected",
     "predict_passna",
     "dir_dat",
@@ -2217,5 +2227,14 @@ c(maps_10_km[[1]][[5]][[1]], clay_difference) %>%
   
 try(dev.off())
 
+# Write observations to table
+
+write.table(
+  obs,
+  paste0(dir_results, "observations_texture.csv"),
+  row.names = FALSE,
+  col.names = TRUE,
+  sep = ","
+)
 
 # END

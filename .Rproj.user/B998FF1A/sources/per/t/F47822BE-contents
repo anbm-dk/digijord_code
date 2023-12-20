@@ -86,6 +86,21 @@ names(cov) <- cov_names
 
 crs(cov) <- mycrs
 
+cov_cats <- dir_code %>%
+  paste0(., "/cov_categories_20231110.csv") %>%
+  read.table(
+    sep = ",",
+    header = TRUE
+  )
+
+cov_selected <- cov_cats %>%
+  filter(anbm_use == 1) %>%
+  dplyr::select(., name) %>%
+  unlist() %>%
+  unname()
+
+cov <- terra::subset(cov, cov_selected)
+
 # 3 Create buffers (40 m = ~ 0.5 ha)
 
 buffer_dsc <- terra::buffer(

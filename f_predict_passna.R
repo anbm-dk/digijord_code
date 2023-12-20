@@ -1,12 +1,23 @@
 # Function to produce predictions where some, but not all covariates are NA
 
-predict_passna <- function(mod, dat, n_const = 0, n_digits = NULL, ...) {
+predict_passna <- function(
+    mod,
+    dat,
+    n_const = 0,
+    n_digits = NULL,
+    pcs = NULL,
+    ...
+    ) {
   # library(caret)  # Passed elsewhere
   # library(Cubist)  # Passed elsewhere
-  rfun2 <- function(mod2, dat2, n_const2, n_digits2, ...) {
+  rfun2 <- function(mod2, dat2, n_const2, n_digits2, pcs2, ...) {
     notallnas <- rowSums(is.na(dat2)) < (ncol(dat2) - n_const2)
     out2 <- rep(NA, nrow(dat2))
     if (sum(notallnas) > 0) {
+      if (!is.null(pcs2)) {
+        pcs_dat <- predict(pcs2, dat2)
+        dat2 <- cbind(dat2, pcs_dat)
+      }
       out2[notallnas] <- predict(
         object = mod2,
         newdata = dat2[notallnas, ],
@@ -19,20 +30,31 @@ predict_passna <- function(mod, dat, n_const = 0, n_digits = NULL, ...) {
     }
     return(out2)
   }
-  out <- rfun2(mod, dat, n_const, n_digits, ...)
+  out <- rfun2(mod, dat, n_const, n_digits, pcs, ...)
   return(out)
 }
 
-predict_passna_prob <- function(mod, dat, n_const = 0, n_digits = NULL, ...) {
+predict_passna_prob <- function(
+    mod,
+    dat,
+    n_const = 0,
+    n_digits = NULL,
+    pcs = NULL,
+    ...
+) {
   # library(caret)  # Passed elsewhere
   # library(Cubist)  # Passed elsewhere
-  rfun2 <- function(mod2, dat2, n_const2, n_digits2, ...) {
+  rfun2 <- function(mod2, dat2, n_const2, n_digits2, pcs2, ...) {
     notallnas <- rowSums(is.na(dat2)) < (ncol(dat2) - n_const2)
     out2 <- matrix(
       NA,
       nrow = nrow(dat2),
       ncol = length(mod2$levels))
     if (sum(notallnas) > 0) {
+      if (!is.null(pcs2)) {
+        pcs_dat <- predict(pcs2, dat2)
+        dat2 <- cbind(dat2, pcs_dat)
+      }
       out2[notallnas, ] <- as.matrix(
         predict.train(
           object = mod2,
@@ -48,7 +70,7 @@ predict_passna_prob <- function(mod, dat, n_const = 0, n_digits = NULL, ...) {
     }
     return(out2)
   }
-  out <- rfun2(mod, dat, n_const, n_digits, ...)
+  out <- rfun2(mod, dat, n_const, n_digits, pcs, ...)
   return(out)
 }
 

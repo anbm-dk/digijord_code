@@ -162,12 +162,12 @@ cov_pts <- bind_rows(pts_tiles) %>%
 #   as.df = FALSE
 # )
 
-saveRDS(
-  cov_pts,
-  paste0(dir_dat, "cov_pts_pca.rds")
-)
+# saveRDS(
+#   cov_pts,
+#   paste0(dir_dat, "cov_pts_pca.rds")
+# )
 
-# cov_pts <- readRDS(paste0(dir_dat, "cov_pts_pca.rds"))
+cov_pts <- readRDS(paste0(dir_dat, "cov_pts_pca.rds"))
 
 cov_pts %<>%
   select(-c(x, y)) %>%
@@ -190,6 +190,8 @@ pcs_raw <- prcomp(
 )
 
 # How many PCs does it take to cover 99% of the variation?
+
+summary(pcs_raw)$importance
 
 num_pcs <- sum((cumsum(pcs_raw$sdev) / sum(pcs_raw$sdev)) < 0.99) + 1
 

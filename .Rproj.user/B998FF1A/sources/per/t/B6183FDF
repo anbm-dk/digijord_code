@@ -3,7 +3,7 @@
     "path": "C:/Users/au542768/digijord/digijord_code/05b_cov_pca.R",
     "project_path": "05b_cov_pca.R",
     "type": "r_source",
-    "hash": "1804764789",
+    "hash": "2407636713",
     "contents": "",
     "dirty": false,
     "created": 1702627895462.0,
@@ -13,15 +13,15 @@
         "tempName": "Untitled1",
         "source_window_id": "",
         "Source": "Source",
-        "cursorPosition": "71,20",
-        "scrollLine": "58"
+        "cursorPosition": "206,17",
+        "scrollLine": "0"
     },
     "folds": "",
-    "lastKnownWriteTime": 1702998986,
+    "lastKnownWriteTime": 1703061538,
     "encoding": "UTF-8",
     "collab_server": "",
     "source_window": "",
-    "last_content_update": 1702998986836,
+    "last_content_update": 1703061538705,
     "read_only": false,
     "read_only_alternatives": []
 }
