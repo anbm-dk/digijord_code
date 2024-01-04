@@ -38,6 +38,7 @@ train_models <- TRUE
 # Categorical covariates now have fuzzy boundaries.
 # Filled gaps in bare soil composite.
 # Using colsample_bynode instead of colsample_bylevel.
+# Using principal components analysis for covariates
 testn <- 14
 mycrs <- "EPSG:25832"
 
@@ -485,7 +486,6 @@ n <- 2000
 use_all_points <- FALSE
 use_all_points <- TRUE
 
-
 # 9: Train models
 
 if (train_models) {
@@ -603,13 +603,15 @@ if (train_models) {
       
       # For SOC:
       # Separate densities for wetlands and uplands
-      if (frac == "SOC") {
+      if (frac == "SOC" & (sum(trdat_j$db == "SINKS") > 30)) {
         areas <- c(39807, 3299)
         
         w_j <- numeric(nrow(trdat_j))
         
         for (k in 0:1) {
-          trdat_j_wl_ind <- trdat_j$cwl_10m_crisp == k
+          # trdat_j_wl_ind <- trdat_j$cwl_10m_crisp == k
+          
+          trdat_j_wl_ind <- (trdat_j$db == "SINKS") == k
           
           trdat_j_wl_ind %<>% { ifelse(is.na(.), FALSE, .) }
           
