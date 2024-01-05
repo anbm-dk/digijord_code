@@ -63,7 +63,8 @@ mask_crop <- crop(
   dem,
   extend = TRUE,
   filename = paste0(dir_dat, "/layers/Mask_LU.tif"),
-  datatype = "INT1U"
+  datatype = "INT1U",
+  overwrite = TRUE
 )
 
 # Split mask into tiles
@@ -145,7 +146,8 @@ parSapplyLB(
       filename = paste0(
         dir_mask_tiles, "/Mask_LU_tile_", tile_numbers[j], ".tif"
         ),
-      datatype = "INT1U"
+      datatype = "INT1U",
+      overwrite = TRUE
     )
   }
 )

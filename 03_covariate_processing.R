@@ -335,36 +335,36 @@ crs(dem) <- mycrs
 
 # 3.6: Fill holes in cos_aspect_radians and sin_aspect_radians (2023-12-19)
 
-aspect_files <- cov_files %>%
-  grep('aspect_radians', ., value = TRUE)
-
-dir_cov_renamed <- dir_dat %>%
-  paste0(., "/covariates_renamed/") %T>%
-  dir.create()
-
-for (i in 1:length(aspect_files)) {
-  r <- aspect_files[i] %>% rast()
-  dtyp <- datatype(r)
-  newname_x <- sources(r) %>%
-    basename() %>%
-    file_path_sans_ext() %>%
-    gsub("\\.", "_", .) %>%
-    gsub("-", "_", .) %>%
-    tolower()
-  crs(r) <- mycrs
-  names(r) <- newname_x
-  outname_x <- dir_cov_renamed %>%
-    paste0(., "/", newname_x, ".tif")
-  ifel(
-    test = is.na(r),
-    yes = dem*0,
-    no = r,
-    datatype = dtyp,
-    filename = outname_x,
-    overwrite = TRUE,
-    gdal = "TILED=YES"
-  )
-}
+# aspect_files <- cov_files %>%
+#   grep('aspect_radians', ., value = TRUE)
+# 
+# dir_cov_renamed <- dir_dat %>%
+#   paste0(., "/covariates_renamed/") %T>%
+#   dir.create()
+# 
+# for (i in 1:length(aspect_files)) {
+#   r <- aspect_files[i] %>% rast()
+#   dtyp <- datatype(r)
+#   newname_x <- sources(r) %>%
+#     basename() %>%
+#     file_path_sans_ext() %>%
+#     gsub("\\.", "_", .) %>%
+#     gsub("-", "_", .) %>%
+#     tolower()
+#   crs(r) <- mycrs
+#   names(r) <- newname_x
+#   outname_x <- dir_cov_renamed %>%
+#     paste0(., "/", newname_x, ".tif")
+#   ifel(
+#     test = is.na(r),
+#     yes = dem*0,
+#     no = r,
+#     datatype = dtyp,
+#     filename = outname_x,
+#     overwrite = TRUE,
+#     gdal = "TILED=YES"
+#   )
+# }
 
 # 4: Update names in covariate table (2023-02-27)
 
@@ -639,6 +639,13 @@ square_ext <- squareshape %>%
   ext() %>%
   round(-1)
 
+mask_LU <- paste0(dir_dat, "/layers/Mask_LU.tif") %>% rast()
+
+mask_LU_10km <- crop(
+  mask_LU,
+  square_ext
+)
+
 outfolder <- dir_dat %>%
   paste0(., "/testarea_10km/covariates/")
 
@@ -648,8 +655,9 @@ source("f_cropstack.R")
 
 cov_files %>%
   cropstack(
-    y = square_ext,
-    folder = outfolder
+    y = mask_LU_10km,
+    folder = outfolder,
+    mask = TRUE
   )
 
 # END

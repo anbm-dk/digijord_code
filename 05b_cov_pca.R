@@ -151,7 +151,7 @@ cov_pts <- bind_rows(pts_tiles) %>%
     )
   )
 
-# Extract random points
+# Extract random points (sequential)
 
 # set.seed(1)
 
@@ -236,9 +236,9 @@ if (test_pca_10km) {
     rast() %>%
     subset(covnames_dropogc)
   
-  spatSample(cov_10km, 100000) %>%
-    apply(., 2, function(x) sum(is.na(x))) %>%
-    .[. != 0]
+  # spatSample(cov_10km, 100000) %>%
+  #   apply(., 2, function(x) sum(is.na(x))) %>%
+  #   .[. != 0]
   
   # Set NAs to zero for terodep10m and the sine and cosine of the aspect
   
@@ -251,6 +251,23 @@ if (test_pca_10km) {
   pcs_10km  <- terra::predict(cov_10km, pcs, na.rm = TRUE)
   
   plot(pcs_10km)
+  
+  library(tidyterra)
+  
+  tiff(
+    paste0(dir_dat, "/cov_pca_10km.tiff"),
+    width = 23,
+    height = 10,
+    units = "cm",
+    res = 300
+  )
+  
+  pcs_10km %>%
+    terra::subset(1:10) %>%
+    autoplot() +
+    facet_wrap(~ lyr, ncol = 5)
+  
+  try(dev.off())
 }
 
 

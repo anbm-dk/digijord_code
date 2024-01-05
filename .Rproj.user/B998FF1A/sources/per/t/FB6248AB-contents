@@ -21,7 +21,7 @@ dir_dat <- paste0(root, "/digijord_data/")
 
 source("f_predict_passna.R")
 
-train_models <- TRUE
+train_models <- FALSE
 
 # To do:
 # Pdp with depth
@@ -2117,8 +2117,8 @@ parSapplyLB(
     )
     
     write.table(
-      map_spec[,x],
-      paste0(predfolder, paste(map_spec[,x], collapse = "_"), ".txt")
+      map_spec[x, ],
+      paste0(predfolder, paste(map_spec[x, ], collapse = "_"), ".txt")
     )
 
     return(NULL)
