@@ -250,8 +250,6 @@ if (test_pca_10km) {
   
   pcs_10km  <- terra::predict(cov_10km, pcs, na.rm = TRUE)
   
-  plot(pcs_10km)
-  
   library(tidyterra)
   
   tiff(
