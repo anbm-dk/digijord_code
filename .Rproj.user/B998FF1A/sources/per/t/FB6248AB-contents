@@ -21,7 +21,7 @@ dir_dat <- paste0(root, "/digijord_data/")
 
 source("f_predict_passna.R")
 
-train_models <- FALSE
+train_models <- TRUE
 
 # To do:
 # Pdp with depth
@@ -1794,6 +1794,7 @@ l <- imp_all %>%
   filter(!(covariate %in% grep('ogc_pi', colnames(obs), value = TRUE))) %>%
   group_by(target) %>%
   mutate(Overall = Overall*100/max(Overall)) %>%
+  arrange(-Overall) %>%
   slice_head(n = ntop) %>%
   arrange(-Overall) %>%
   mutate(
@@ -1811,6 +1812,11 @@ l_cat <- cov_cats %>%
       category == "WATEM" ~ "OR",
       category == "sentinel_composite" ~ "S2 time series",
       category == "bare_soil" ~ "Bare soil",
+      desc_text %in% grep(
+        "bare soil",
+        cov_cats$desc_text,
+        value = TRUE
+        ) ~ "Bare soil", 
       .default = "Other"
     )
   )
@@ -1838,7 +1844,7 @@ l %<>% mutate(
     category == "CR" ~ "Climate and topography",
     category == "OR" ~ "Organisms and topography",
     category == "O" ~ "Organisms",
-    category == "RP" ~ "Topography and parent materials",
+    category == "RP" ~ "Parent materials",
     .default = category
   )
 )
