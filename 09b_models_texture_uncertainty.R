@@ -1,0 +1,2503 @@
+# 09b: Train texture models for uncertainty assessment
+
+# 1: Start up
+
+# library(Cubist)
+library(terra)
+library(magrittr)
+library(tools)
+library(dplyr)
+library(caret)
+library(tibble)
+library(tidyr)
+library(xgboost)
+library(stringr)
+
+library(doParallel)
+library(spatstat) # weights
+
+dir_code <- getwd()
+root <- dirname(dir_code)
+dir_dat <- paste0(root, "/digijord_data/")
+
+source("f_predict_passna.R")
+
+train_models <- TRUE
+use_pca <- TRUE
+
+# To do:
+# Pdp with depth
+# Profile examples
+
+# Test 1 - 8: Cubist.
+# Test 8: New covariates (chelsa, river valley bottoms, hillyness).
+# Test 9: xgboost.
+# Test 10: Predicted row and column (poor accuracy).
+# Test 11: Fever data, excluding water, sealed areas and urban areas.
+# Test 12: Depth boundaries as covariates, stepwise xgb optimization.
+# Test 13: Bayesian optimization.
+# Test 14: Fix mistake in covariate selection, new optimization function.
+# Categorical covariates now have fuzzy boundaries.
+# Filled gaps in bare soil composite.
+# Using colsample_bynode instead of colsample_bylevel.
+# Using principal components analysis for covariates
+testn <- 14
+mycrs <- "EPSG:25832"
+
+# Results folder
+
+dir_results <- dir_dat %>%
+  paste0(., "/results_test_", testn, "/") %T>%
+  dir.create()
+
+dir_boot <- dir_results %>%
+  paste0(., "/bootstrap/") %T>%
+  dir.create()
+
+dir_boot_models <- dir_boot %>%
+  paste0(., "/models/") %T>%
+  dir.create()
+
+# 2: Load observations
+
+dir_obs_proc <- dir_dat %>%
+  paste0(., "/observations/processed/")
+
+dsc <- dir_obs_proc %>%
+  paste0(., "dsc.csv") %>%
+  read.table(
+    header = TRUE,
+    sep = ";"
+  ) %>%
+  vect(
+    geom = c("UTMX", "UTMY"),
+    crs = mycrs,
+    keepgeom = TRUE
+  )
+
+SEGES <- dir_obs_proc %>%
+  paste0(., "SEGES.csv") %>%
+  read.table(
+    header = TRUE,
+    sep = ";"
+  ) %>%
+  vect(
+    geom = c("UTMX", "UTMY"),
+    crs = mycrs,
+    keepgeom = TRUE
+  )
+
+SINKS <- dir_obs_proc %>%
+  paste0(., "SINKS.csv") %>%
+  read.table(
+    header = TRUE,
+    sep = ";"
+  ) %>%
+  vect(
+    geom = c("UTMX", "UTMY"),
+    crs = mycrs,
+    keepgeom = TRUE
+  )
+
+profiles_texture <- dir_obs_proc %>%
+  paste0(., "profiles_texture.csv") %>%
+  read.table(
+    header = TRUE,
+    sep = ";"
+  ) %>%
+  vect(
+    geom = c("UTMX", "UTMY"),
+    crs = mycrs,
+    keepgeom = TRUE
+  )
+
+forest_samples <- dir_obs_proc %>%
+  paste0(., "forest_samples.csv") %>%
+  read.table(
+    header = TRUE,
+    sep = ";"
+  ) %>%
+  vect(
+    geom = c("UTMX", "UTMY"),
+    crs = mycrs,
+    keepgeom = TRUE
+  )
+
+# 3: Load folds
+
+dir_folds <- dir_dat %>%
+  paste0(., "/folds/")
+
+dsc_folds <- dir_folds %>%
+  paste0(., "dsc_folds.csv") %>%
+  read.table(
+    header = TRUE,
+    sep = ";"
+  )
+
+SEGES_folds <- dir_folds %>%
+  paste0(., "SEGES_folds.csv") %>%
+  read.table(
+    header = TRUE,
+    sep = ";"
+  )
+
+SINKS_folds <- dir_folds %>%
+  paste0(., "SINKS_folds.csv") %>%
+  read.table(
+    header = TRUE,
+    sep = ";"
+  )
+
+profiles_folds <- dir_folds %>%
+  paste0(., "profiles_folds.csv") %>%
+  read.table(
+    header = TRUE,
+    sep = ";"
+  ) %>%
+  right_join(values(profiles_texture)) %>%
+  select(lyr.1)
+
+forest_folds <- dir_folds %>%
+  paste0(., "forest_folds.csv") %>%
+  read.table(
+    header = TRUE,
+    sep = ";"
+  )
+
+# 4: Load covariate data
+
+dir_cov <- dir_dat %>% paste0(., "/covariates")
+
+cov_cats <- dir_code %>%
+  paste0(., "/cov_categories_20231110.csv") %>%
+  read.table(
+    sep = ",",
+    header = TRUE
+  )
+
+cov_files <- dir_cov %>% list.files()
+cov_names <- cov_files %>% tools::file_path_sans_ext()
+
+cov_names %>%
+  write.table(
+    paste0("cov_names_", Sys.Date(), ".csv")
+  )
+
+cov_names[!cov_names %in% cov_cats$name]
+
+
+# 5: Load extracted covariates
+
+dir_extr <- dir_dat %>%
+  paste0(., "/extracts/")
+
+usebuffer <- FALSE
+
+if (usebuffer) {
+  dsc_extr <- dir_extr %>%
+    paste0(., "/buffer_dsc_extr.csv") %>%
+    read.table(
+      header = TRUE,
+      sep = ";"
+    )
+
+  SEGES_extr <- dir_extr %>%
+    paste0(., "/buffer_SEGES_extr.csv") %>%
+    read.table(
+      header = TRUE,
+      sep = ";"
+    )
+} else {
+  dsc_extr <- dir_extr %>%
+    paste0(., "/dsc_extr.rds") %>%
+    readRDS()
+
+  SEGES_extr <- dir_extr %>%
+    paste0(., "/SEGES_extr.rds") %>%
+    readRDS()
+}
+
+SINKS_extr <- dir_extr %>%
+  paste0(., "/SINKS_extr.rds") %>%
+  readRDS()
+
+profiles_extr <- dir_extr %>%
+  paste0(., "profiles_extr.rds") %>%
+  readRDS() %>%
+  right_join(values(profiles_texture)) %>%
+  select(any_of(cov_names))
+
+SINKS_extr <- dir_extr %>%
+  paste0(., "/SINKS_extr.rds") %>%
+  readRDS()
+
+forests_extr <- dir_extr %>%
+  paste0(., "/forests_extr.rds") %>%
+  readRDS()
+
+# 6: Merge data
+
+obs_v <- list(dsc, SEGES, SINKS, profiles_texture, forest_samples) %>%
+  vect()
+
+# Extract mask values for all the observations
+
+mask_LU <- paste0(dir_dat, "/layers/Mask_LU.tif") %>% rast()
+
+mask_LU_extr <- terra::extract(
+  mask_LU,
+  obs_v,
+  ID = FALSE
+)
+
+mask_LU_extr %<>% unlist() %>% unname()
+
+# Observations as data frame
+
+obs_data <- obs_v %>%
+  values() %>%
+  mutate(
+    # logSOC = log(SOC),
+    # logCaCO3 = log(CaCO3),
+    year = date %>%
+      as.character() %>%
+      substr(start = 1, stop = 4) %>%
+      as.numeric(),
+    mask_LU = mask_LU_extr
+  )
+
+# fractions <- c("clay", "silt", "fine_sand", "coarse_sand", "logSOC", "logCaCO3")
+
+fractions_alt  <- c("clay", "silt", "fine_sand", "coarse_sand", "SOC", "CaCO3")
+fractions      <- fractions_alt
+fraction_names <- c("Clay", "Silt", "Fine sand", "Coarse sand", "SOC", "CaCO3")
+
+bounds_lower <- rep(0, 6)
+bounds_upper <- rep(100, 6)
+
+
+# 7: Make training data
+
+folds <- bind_rows(
+  dsc_folds,
+  SEGES_folds,
+  SINKS_folds,
+  profiles_folds,
+  forest_folds
+)
+
+names(folds) <- "fold"
+
+extr <- bind_rows(
+  dsc_extr,
+  SEGES_extr,
+  SINKS_extr,
+  profiles_extr,
+  forests_extr
+)
+
+obs <- cbind(obs_data, extr, folds) %>%
+  filter(
+    !is.na(UTMX),
+    !is.na(UTMY),
+    is.finite(fold),
+    lower > 0,
+    (upper < 200) | (upper == 200 & lower == 200),
+    !is.na(mask_LU),
+    !is.na(dhm2015_terraen_10m)
+    )
+
+# Predict principal components
+
+pcs_cov <- readRDS(paste0(dir_dat, "pcs_cov.rds"))
+
+if (use_pca) {
+  obs_pcs <- predict(pcs_cov, obs)
+  
+  obs <- cbind(obs, obs_pcs)
+  
+  obs %<>% filter(
+    !is.na(PC1)
+  )
+}
+
+# Make new ID
+
+obs %<>%
+  rownames_to_column() %>%
+  mutate(ID_new = rowname, .before = everything()) %>%
+  select(-rowname)
+
+obs_v <- vect(
+  obs,
+  geom = c("UTMX", "UTMY"),
+  crs = mycrs,
+  keepgeom = TRUE
+  )
+
+# Extract bootstrap weights
+
+poisson_r <- paste0(dir_folds, "/poisson_100m.tif") %>% rast()
+
+poisson_extr <- terra::extract(
+  poisson_r,
+  obs_v,
+  ID = FALSE
+)
+
+nboot <- ncol(poisson_extr)
+
+saveRDS(
+  poisson_extr,
+  paste0(dir_results, "poisson_extr.rds")
+  )
+
+# Select topsoil observations for plot
+
+obs_top <- obs %>%
+  filter(
+    upper < 30,
+    lower > 0
+  )
+
+obs_prf <- obs %>%
+  filter(
+    db == "Profile database"
+  )
+
+obs_top_v <- obs_top %>% vect(geom = c("UTMX", "UTMY"))
+
+library(tidyterra)
+
+my_breaks <- function(x) {
+  x <- unique(x)
+  n <- 6
+  i <- seq(0, 1, length.out = n)
+  breaks <- quantile(x, i, na.rm = TRUE)
+  breaks <- round(breaks, digits = 1)
+  breaks <- unique(breaks)
+  if ((breaks[1] %% 1) != 0) {
+    breaks[1] <- breaks[1] - 0.000001
+  }
+  if ((breaks[n] %% 1) != 0) {
+    breaks[n] <- breaks[n] + 0.000001
+  }
+  return(breaks)
+}
+
+set.seed(1)
+
+obs_top_plot <- obs_top_v %>%
+  mutate(random = runif(length(.))) %>%
+  arrange(random) %>%
+  select(any_of(fractions))
+
+frac_labels = c(
+  expression("Clay"~"(%)"),
+  expression("Silt"~"(%)"),
+  expression("Fine"~"sand"~"(%)"),
+  expression("Coarse"~"sand"~"(%)"),
+  expression("SOC"~"(%)"),
+  expression("CaCO"[3]~"(%)")
+)
+
+library(viridisLite)
+
+mycolors <- cividis(6) %>% rev() %>% .[-1] %>% rev()
+
+tiff(
+  paste0(dir_results, "/obs_map_test", testn, ".tiff"),
+  width = 16,
+  height = 10,
+  units = "cm",
+  res = 300
+)
+
+par(oma = c(2, 2, 0, 1))
+
+plot(
+  obs_top_plot,
+  y = 1:length(fractions),
+  breaks = 5,
+  breakby = my_breaks,
+  col = viridis(5),
+  colNA = NA,
+  cex = 0.1,
+  mar = c(0, 0, 1, 0),
+  main = frac_labels,
+  plg = list(
+    x = "topright", text.col = viridis(5), 
+    fill = viridis(5),
+    text.font = 
+      2)
+)
+
+try(dev.off())
+try(dev.off())
+
+par()
+
+# 8: Set up models
+
+if (use_pca) {
+  cov_selected <- c(
+    colnames(obs_pcs),
+    colnames(obs) %>%
+      grep('ogc_pi', ., value = TRUE)
+  )
+} else {
+  cov_selected <- cov_cats %>%
+    filter(anbm_use == 1) %>%
+    dplyr::select(., name) %>%
+    unlist() %>%
+    unname()
+}
+
+# Template for custom eval
+# evalerror <- function(preds, dtrain) {
+#   labels <- getinfo(dtrain, "label")
+#   err <- as.numeric(sum(labels != (preds > 0)))/length(labels)
+#   return(list(metric = "error", value = err))
+# }
+
+source("f_weighted_summaries.R")
+
+metrics <- rep("RMSEw", length(fractions))
+metrics[fractions == "SOC"] <- "RMSEw_log"
+metrics[fractions == "CaCO3"] <- "RMSEw_sqrt"
+
+# Function to calculate point densities
+
+qnorm(seq(0.55, 0.95, 0.1), 0, 1)
+
+source("f_get_dens.R")
+
+# Parameters for weights calculations
+
+w_interval <- 10
+w_increment <- 1
+w_startdepth <- 0
+w_maxdepth <- 200
+w_depths <- seq(w_startdepth, w_maxdepth, w_increment)
+w_iterations <- length(w_depths)
+
+# Tuning grid
+
+tgrid <- expand.grid(
+  nrounds = 10,
+  eta = 0.3,
+  max_depth = 6,
+  min_child_weight = 1,
+  gamma = 0,
+  colsample_bytree = 0.75,
+  subsample = 0.75
+)
+
+objectives <- c(rep("reg:squarederror", 4), rep("reg:tweedie", 2))
+
+trees_per_round <- 1  # only one tree per round for bootstrap models
+
+# Bayesian optimization
+
+library(ParBayesianOptimization)
+source("f_optimize_xgboost.R")
+
+bounds <- list(
+  eta = c(0.1, 1),
+  min_child_weight_sqrt = c(1, sqrt(100)),
+  gamma_sqrt = c(0, sqrt(100)),
+  colsample_bytree = c(0.1, 1),
+  subsample = c(0.1, 1),
+  colsample_bynode = c(0.1, 1),
+  ogcs_index = c(1L, 7L),
+  total_imp = c(0.5, 1)
+)
+
+xgb_opt_stepwise <- FALSE
+
+# Small random sample for testing
+# Remember to include full dataset in the final model
+n <- 2000
+
+use_all_points <- FALSE
+use_all_points <- TRUE
+
+# 9: Train models
+
+if (train_models) {
+  weights_objects <- list()  # No changed for bootstrap
+  
+  models_boot<- list()
+  
+  models_boot_scoreresults <- list()
+  models_boot_bestscores <- list()
+  models_boot_predictions <- list()
+  
+  models_weights <- matrix(
+    numeric(),
+    nrow = nrow(obs),
+    ncol = length(fractions)
+  )
+  colnames(models_weights) <- fractions
+  
+  models_indices <- matrix(
+    numeric(),
+    nrow = nrow(obs),
+    ncol = length(fractions)
+  )
+  colnames(models_indices) <- fractions
+
+  for (i in 1:length(fractions))
+  {
+    frac <- fractions[i]
+    
+    print(frac)
+
+    tr_step <- 1
+    
+    if (metrics[i] == "RMSEw_log") {
+      sumfun_i <- WeightedSummary_log
+    } else {
+      if (metrics[i] == "RMSEw_sqrt") {
+        sumfun_i <- WeightedSummary_sqrt
+      } else {
+        sumfun_i <- WeightedSummary
+      }
+    }
+    
+    # Filter valid observations
+    trdat <- obs %>%
+      filter(
+        is.finite(.data[[frac]])
+      )
+    
+    # Weighting by depth intervals
+    print("Calculating weights")
+    
+    w_mat <- matrix(numeric(), nrow = nrow(trdat), ncol = w_iterations)
+    cm_mat <- matrix(numeric(), nrow = nrow(trdat), ncol = w_iterations)
+    
+    for (j in 1:w_iterations)
+    {
+      upper_j <- w_depths[j] - w_interval
+      lower_j <- upper_j + w_interval * 2
+      
+      trdat_ind <- trdat$lower > upper_j & trdat$upper < lower_j
+      trdat_ind[is.na(trdat_ind)] <- FALSE
+      
+      trdat_j <- trdat[trdat_ind, ]
+      
+      trdat_j %<>%
+        mutate(
+          thickness = lower - upper,
+          upper_int = case_when(
+            upper > upper_j ~ upper,
+            .default = upper_j
+          ),
+          lower_int = case_when(
+            lower < lower_j ~ lower,
+            .default = lower_j
+          ),
+          cm_int = case_when(
+            thickness == 0 ~ 1,
+            .default = lower_int - upper_int
+          )
+        )
+      
+      cm_mat[trdat_ind, j] <- trdat_j$cm_int
+      
+      # # Sigma equal to the radius of a circle with an equal area per sample
+      # sigma_j <- sqrt(43107 / (nrow(trdat_j) * pi)) * 1000
+      
+      # Use the expected mean density as a baseline
+      # Do this calculation for the entire area, as a specific calculation for
+      # wetlands will give too much weight to these areas.
+      mean_dens_j <- nrow(trdat_j) / (43107 * 10^6)
+      
+      # For SOC:
+      # Separate densities for wetlands and uplands
+      if (frac == "SOC" & (sum(trdat_j$db == "SINKS") > 30)) {
+        areas <- c(39807, 3299)
+        
+        w_j <- numeric(nrow(trdat_j))
+        
+        for (k in 0:1) {
+          # trdat_j_wl_ind <- trdat_j$cwl_10m_crisp == k
+          
+          trdat_j_wl_ind <- (trdat_j$db == "SINKS") == k
+          
+          trdat_j_wl_ind %<>% { ifelse(is.na(.), FALSE, .) }
+          
+          trdat_jk <- trdat_j[trdat_j_wl_ind, ]
+          
+          # Sigma equal to the radius of a circle with an equal area per sample
+          sigma_jk <- sqrt(areas[k + 1] / (nrow(trdat_jk) * pi)) * 1000
+          
+          dens_jk <- get_dens(trdat_jk, sigma_jk)
+          
+          w_j[trdat_j_wl_ind] <- mean_dens_j / dens_jk
+        }
+      } else {
+        # Sigma equal to the radius of a circle with an equal area per sample
+        sigma_j <- sqrt(43107 / (nrow(trdat_j) * pi)) * 1000
+        
+        dens_j <- get_dens(trdat_j, sigma_j)
+        
+        w_j <- mean_dens_j / dens_j
+      }
+      
+      w_j[w_j > 1] <- 1
+      w_mat[trdat_ind, j] <- w_j
+    }
+    
+    cm_mat[is.na(cm_mat)] <- 0
+    
+    cm_sums <- apply(cm_mat, 1, sum)
+    
+    w_cm_mat <- w_mat*cm_mat
+    
+    w_cm_sums <- apply(
+      w_cm_mat,
+      1,
+      function(x) {
+        out <- sum(x, na.rm = TRUE)
+        return(out)
+      }
+    )
+    
+    w_depth <- w_cm_sums / cm_sums
+    w_depth[!is.finite(w_depth)] <- 0
+    
+    # Using the year as a covariate causes the model to identify the SINKS points
+    # based only on the sampling year, as the campaign took place over only two
+    # years, which were also underrepresented in the remaining training data.
+    if (frac == "SOC") {
+      w_year <- 0.99^(max(trdat$year, na.rm = TRUE) - trdat$year)
+      w_year %<>% { ifelse(is.na(.), 0, .) }
+      w_depth %<>% `*`(w_year)
+    }
+    
+    weights_objects[[i]] <- list()
+    weights_objects[[i]]$cm_mat <- cm_mat
+    weights_objects[[i]]$cm_sums <- cm_sums
+    weights_objects[[i]]$w_cm_mat <- w_cm_mat
+    weights_objects[[i]]$w_cm_sums <- w_cm_sums
+    weights_objects[[i]]$w_depth <- w_depth
+    
+    trdat$w <- w_depth
+    
+    trdat_w_indices <- which(obs$ID_new %in% trdat$ID_new)
+    
+    weights_objects[[i]]$indices <- trdat_w_indices
+    
+    models_weights[trdat_w_indices, i] <- w_depth
+    
+    # Three folds + 10 per cent holdout dataset
+    trdat %<>% mutate(
+      fold = ceiling(fold / 3)
+    )
+    
+    trdat %<>% filter(fold < 4)
+    
+    if (!use_all_points) {
+      set.seed(1)
+      trdat %<>% sample_n(n)
+    }
+    
+    trdat_indices <- which(obs$ID_new %in% trdat$ID_new)
+    
+    models_indices[, i] <- obs$ID_new %in% trdat$ID_new
+    
+    # Add depth boundaries and SOM removal as covariates
+    cov_keep_i <- c("upper", "lower")
+    if ( !(frac %in% c("SOC", "CaCO3")) ) {
+      cov_keep_i %<>% c(., "SOM_removed")
+    } 
+    n_const_i <- length(cov_keep_i)
+    
+    cov_c_i <- cov_selected %>% c(., cov_keep_i)
+    
+    # Prediction bounds
+    bounds_pred_i <- c(bounds_lower[i], bounds_upper[i])
+    
+    # Objects for bootstrap results
+    dir_boot_models_i <- dir_boot_models %>%
+      paste0(., "/", frac, "/") %T>%
+      dir.create()
+    
+    models_boot[[i]] <- list()
+    models_boot_scoreresults[[i]] <- list()
+    models_boot_bestscores[[i]] <- list()
+    
+    models_boot_predictions[[i]] <- matrix(
+      numeric(),
+      nrow = nrow(obs),
+      ncol = length(fractions)
+    )
+    colnames(models_boot_predictions[[i]]) <- fractions
+    
+    # bootstrap procedure
+    for (bootr in 1:nboot) {
+      bootr_chr <- bootr %>%
+        str_pad(
+          .,
+          nchar(nboot),
+          pad = "0"
+        )
+      
+      trdat_bootr <- trdat %>%
+        mutate(
+          weights_bootr = poisson_extr[trdat_indices, bootr],
+          w_combined = weights_bootr*w
+        ) %>%
+        filter(w_combined > 0)
+      
+      bootr_indices <- which(obs$ID_new %in% trdat_bootr$ID_new)
+      holdout_bootr <- obs[-bootr_indices, ]
+      holdout_indices <- which(obs$ID_new %in% holdout_bootr$ID_new)
+      
+      # List of folds
+      folds_bootr <- lapply(
+        unique(trdat_bootr$fold),
+        function(x) {
+          out <- trdat_bootr %>%
+            mutate(
+              is_j = fold != x,
+              rnum = row_number(),
+              ind_j = is_j * rnum
+            ) %>%
+            filter(ind_j != 0) %>%
+            dplyr::select(., ind_j) %>%
+            unlist() %>%
+            unname()
+        }
+      )
+      
+      # Bayes optimization
+      foreach::registerDoSEQ()
+      showConnections()
+      
+      model_bootr <- optimize_xgboost(
+        target = frac,  # character vector (length 1), target variable.
+        cov_names = cov_c_i,  # Character vector, covariate names,
+        data = trdat_bootr, # data frame, input data
+        bounds_bayes = bounds, # named list with bounds for bayesian opt.
+        bounds_pred = bounds_pred_i, # numeric, length 2, bounds for predicted values
+        cores = 19, # number cores for parallelization
+        trgrid = tgrid, # data frame with tuning parameters to be tested in basic model
+        folds = folds_i, # list with indices, folds for cross validation
+        sumfun = sumfun_i, # summary function for accuracy assessment
+        metric = metrics[i], # character, length 1, name of evaluation metric
+        max_metric = FALSE, # logical, should the evaluation metric be maximized
+        weights = trdat_bootr$w_combined, # numeric, weights for model training and evaluation
+        trees_per_round = 1, # numeric, length 1, number of trees that xgboost should train in each round
+        obj_xgb = objectives[i], # character, length 1, objective function for xgboost
+        colsample_bynode_basic = 0.75, # numeric, colsample_bynode for basic model
+        cov_keep = cov_keep_i, # Character vector, covariates that should always be present
+        final_round_mult = 1,  # Multiplier for the number of rounds in the final model
+        maxd = 10^3, # Maximum depth for optimized models
+        seed = 321,  # Random seed for model training,
+        classprob = FALSE
+      )
+      
+      models_boot_scoreresults[[i]][[bootr]] <- model_bootr$bayes_results
+      
+      print(
+        model_bootr$bayes_results$scoreSummary
+      )
+      
+      models_boot_bestscores[[i]][[bootr]] <- model_bootr$best_scores
+      
+      print(
+        models_boot_bestscores[[i]][[bootr]]
+      )
+      
+      models_boot[[i]][[bootr]] <- model_bootr$model
+      
+      # End of optimization
+      
+      models_boot_predictions[[i]][bootr_indices, bootr] <- model_bootr$pred %>%
+        arrange(rowIndex) %>%
+        distinct(rowIndex, .keep_all = TRUE) %>%
+        dplyr::select(., pred) %>%
+        unlist() %>%
+        unname()
+      
+      models_boot_predictions[[i]][-bootr_indices, bootr] <- predict_passna(
+        models_boot[[i]][[bootr]],
+        holdout_bootr,
+        n_const = n_const_i
+      )
+      
+      saveRDS(
+        models_boot[[i]][[bootr]],
+        paste0(dir_boot_models_i, "/model_", frac, "_", bootr_chr, ".rds")
+      )
+    }
+    
+    models_boot_bestscores[[i]] %<>%
+      bind_rows() %>%
+      mutate(
+        frac = frac
+      )
+  }
+  
+  # End of model training
+  
+  names(weights_objects) <- fractions
+  saveRDS(
+    weights_objects,
+    paste0(dir_results, "/weights_objects.rds")
+  )
+  
+  saveRDS(
+    models_boot_scoreresults,
+    paste0(dir_results, "/models_boot_scoreresults.rds")
+  )
+  
+  models_boot_bestscores %<>%
+    bind_rows()
+  saveRDS(
+    models_boot_bestscores,
+    paste0(dir_results, "/models_boot_bestscores.rds")
+  )
+  write.table(
+    models_boot_bestscores,
+    file = paste0(dir_results, "/models_boot_bestscores.csv"),
+    sep = ";",
+    row.names = FALSE
+  )
+  
+  write.table(
+    models_weights,
+    file = paste0(dir_results, "/models_weights.csv"),
+    sep = ";",
+    row.names = FALSE
+  )
+  
+  write.table(
+    models_indices,
+    file = paste0(dir_results, "/models_indices.csv"),
+    sep = ";",
+    row.names = FALSE
+  )
+} else {
+  # Load existing models
+  models_boot<- lapply(
+    1:length(fractions),
+    function(x) {
+      model_files <- 
+        fractions[x] %>%
+        paste0(dir_boot_models, "/", ., "/") %>%
+        list.files(full.names = TRUE)
+      
+      out <- lapply(
+        model_files,
+        function(x2) {
+          out2 <- readRDS(x2)
+        }
+      )
+      return(out)
+    }
+  )
+  
+  weights_objects <- dir_results %>%
+    paste0(., "/weights_objects.rds") %>%
+    readRDS()
+  
+  models_boot_scoreresults <- dir_results %>%
+    paste0(., "/models_boot_scoreresults.rds") %>%
+    readRDS()
+  
+  models_boot_bestscores <- dir_results %>%
+    paste0(., "/models_boot_bestscores.rds") %>%
+    readRDS()
+
+  models_weights <- dir_results %>%
+    paste0(., "/models_weights.csv") %>%
+    read.table(
+      ., header = TRUE,
+      sep = ";"
+      )
+  
+  models_indices <- dir_results %>%
+    paste0(., "/models_indices.csv") %>%
+    read.table(
+      ., header = TRUE,
+      sep = ";"
+    )
+  
+  models_boot_predictions <- dir_results %>%
+    paste0(., "/models_boot_predictions_raw.csv") %>%
+    read.table(
+      ., header = TRUE,
+      sep = ";"
+    )
+}
+
+names(models_boot) <- fractions
+
+
+
+# Model summary
+
+bestscores_df <- models_boot_bestscores %>% bind_rows()
+
+n_ogcs_models_boot<- bestscores_df$n_ogcs
+total_imp_models_boot<- bestscores_df$total_imp
+
+models_boot_sum <- lapply(models, function(x) {
+  results <- x$results
+  if ("RMSEw" %in% names(results)) {
+    out <- results %>% filter(RMSEw == min(RMSEw))
+  } else {
+    if ("RMSEw_sqrt" %in% names(results)) {
+      out <- results %>% filter(RMSEw_sqrt == min(RMSEw_sqrt))
+    } else {
+      out <- results %>%
+        filter(RMSEw_log == min(RMSEw_log))
+    }
+  }
+  return(out)
+}) %>%
+  bind_rows() %>%
+  mutate(
+    Fraction = fractions,
+    .before = 1
+  ) %>% mutate(
+    ogcs = n_ogcs_models,
+    total_imp = total_imp_models,
+    .after = 1
+  ) %T>%
+  write.table(
+    file = paste0(dir_results, "/models_boot_sum.csv"),
+    sep = ";",
+    row.names = FALSE
+  )
+
+models_boot_sum
+
+# Varimp for PCA models
+
+varImp_pcs <- function(
+    model,
+    pcs
+) {
+  imp_pcs <- varImp(model)$importance %>%
+    as.data.frame() %>%
+    rownames_to_column(var = "covariate") %>%
+    filter(covariate %in% colnames(pcs$rotation)) %>%
+    arrange(covariate)
+  
+  imp_notpc <- varImp(model)$importance %>%
+    as.data.frame() %>%
+    rownames_to_column(var = "covariate") %>%
+    filter(!(covariate %in% colnames(pcs$rotation))) %>%
+    arrange(covariate)
+  
+  if (nrow(imp_pcs) > 0) {
+    imp_rotated <- pcs$rotation %>% apply(., 2, function(x) {
+      xabs <- abs(x)
+      out <- xabs / sum(xabs)
+      return(out)
+    }) %>%
+      t() %>%
+      as.data.frame() %>%
+      rownames_to_column(var = "covariate") %>%
+      arrange(covariate) %>%
+      filter(covariate %in% imp_pcs$covariate) %>%
+      select(-covariate) %>%
+      apply(., 2, function(x) {return(x*imp_pcs$Overall)}) %>%
+      apply(., 2, "sum") %>%
+      data.frame(
+        covariate = names(.),
+        Overall = unname(.),
+        row.names = NULL
+      ) %>% 
+      select(c(covariate, Overall)) %>%
+      arrange(-Overall)
+    
+    out <- bind_rows(
+      imp_notpc,
+      imp_rotated
+    ) %>%
+      arrange(-Overall) %>%
+      mutate(Overall = Overall*100/max(Overall))
+  } else {
+    out <- varImp(model)$importance %>%
+      as.data.frame() %>%
+      rownames_to_column(var = "covariate")
+  }
+
+  return(out)
+}
+
+varImp_pcs(
+  models_boot[[5]],
+  pcs_cov
+)
+
+# Covariate importance
+
+imp_all <- models_boot %>%
+  seq_along() %>%
+  lapply(
+    function(x) {
+      if (use_pca) {
+        out <- varImp_pcs(
+          models_boot[[x]],
+          pcs_cov
+        ) %>%
+          mutate(fraction = names(models_boot)[x])
+      } else {
+        out <- varImp(models_boot[[x]])$importance %>%
+          as.data.frame() %>%
+          rownames_to_column(var = "covariate") %>%
+          mutate(fraction = names(models_boot)[x])
+        return(out)
+      }
+    }
+  ) %>%
+  bind_rows() %>%
+  pivot_wider(
+    id_cols = covariate,
+    names_from = fraction,
+    values_from = Overall
+  ) %>%
+  replace(is.na(.), 0) %>%
+  rowwise() %>%
+  mutate(mean_imp = mean(c_across(-covariate))) %>%
+  arrange(-mean_imp) %T>%
+  write.table(
+    file = paste0(dir_results, "/var_imp.csv"),
+    sep = ";",
+    row.names = FALSE
+  )
+
+imp_all
+
+# Standardize and transform predictions
+
+models_boot_predictions
+
+models_boot_predictions %<>%
+  apply(
+    1, function(x) {
+      sum_min <- sum(x[1:4])
+      
+      if (!is.na(sum_min)) {
+        x[1:4] %<>% `/`(sum_min) %>% `*`(100)
+      }
+      
+      x %<>% matrix(ncol = length(x)) %>% as.data.frame()
+      
+      return(x)
+    },
+    simplify = FALSE
+  ) %>%
+  bind_rows()
+
+colnames(models_boot_predictions) <- fractions
+
+write.table(
+  models_boot_predictions,
+  file = paste0(dir_results, "/models_boot_predictions_raw.csv"),
+  sep = ";",
+  row.names = FALSE
+)
+
+# Inspect models
+
+breaks <- c(0, 30, 60, 100, 200)
+
+get_acc <- function(i2) {
+  lookup <- c(obs = fractions[i2])
+  out <- obs %>%
+    mutate(
+      pred = models_boot_predictions[, i2],
+      weights = models_weights[, i2],
+      indices = factor(!models_indices[, i2], labels = c("CV", "Holdout")),
+      bare = obs$s2_count_max10_fuzzy > 0,
+      mean_d = (upper + lower)/2,
+      depth = cut(mean_d, breaks, include.lowest = TRUE)
+    ) %>%
+    rename(any_of(lookup)) %>%
+    filter(
+      is.finite(obs),
+      is.finite(pred),
+      is.finite(weights),
+      !is.na(depth)
+    ) %>% group_by(indices, bare, depth) %>%
+    summarise(
+      r2 = get_R2w(cbind(pred, obs), weights),
+      rmse = get_RMSEw(cbind(pred, obs), weights)
+    ) %>%
+    mutate(Fraction = fraction_names[i2], .before = everything())
+  return(out)
+}
+
+acc_all <- foreach(i = 1:length(fractions), .combine = rbind) %do%
+  get_acc(i)
+
+acc_all
+
+write.table(
+  acc_all,
+  paste0(dir_results, "/acc_all_test", testn, ".csv"),
+  sep = ";",
+  row.names = FALSE
+)
+
+# Accuracy for different datasets
+
+get_acc_db <- function(i2) {
+  lookup <- c(obs = fractions[i2])
+  out <- obs %>%
+    mutate(
+      pred = models_boot_predictions[, i2],
+      weights = models_weights[, i2],
+      indices = factor(!models_indices[, i2], labels = c("CV", "Holdout")),
+      bare = obs$s2_count_max10_fuzzy > 0,
+      mean_d = (upper + lower)/2,
+      depth = cut(mean_d, breaks, include.lowest = TRUE),
+      db = case_when(
+        db == "Forest evaluation" ~ "Forest sites",
+        db == "Forests DSC" ~ "Forest sites",
+        .default = db
+      )
+    ) %>%
+    rename(any_of(lookup)) %>%
+    filter(
+      is.finite(obs),
+      is.finite(pred),
+      is.finite(weights),
+      !is.na(depth)
+    ) %>% group_by(db, depth, .drop = TRUE) %>%
+    summarise(
+      r2 = get_R2w(cbind(pred, obs), weights),
+      rmse = get_RMSEw(cbind(pred, obs), weights)
+    ) %>%
+    mutate(Fraction = fraction_names[i2], .before = everything())
+  return(out)
+}
+
+acc_db <- foreach(i = 1:length(fractions), .combine = rbind) %do%
+  get_acc_db(i) %>%
+  mutate(
+    r2 = round(r2, digits = 2)
+  ) %>%
+  arrange(db) %>%
+  drop_na()
+
+acc_db %>% print(n = 200)
+
+write.table(
+  acc_db,
+  paste0(dir_results, "/acc_db_test", testn, ".csv"),
+  sep = ";",
+  row.names = FALSE
+)
+
+# Accuracy for JB class
+
+source("f_classify_soil_JB.R")
+
+JB_predicted <- classify_soil_JB(
+  clay = models_boot_predictions[, 1],
+  silt = models_boot_predictions[, 2],
+  sand_f = models_boot_predictions[, 3],
+  SOM = models_boot_predictions[, 5] / 0.568,
+  CaCO3 = models_boot_predictions[, 6]
+) %>%
+  factor(
+    levels = 1:12,
+    labels = paste0("JB", 1:12)
+    )
+
+JB_observed <- classify_soil_JB(
+  clay = obs$clay,
+  silt = obs$silt,
+  sand_f = obs$fine_sand,
+  SOM = obs$SOC / 0.568,
+  CaCO3 = obs$CaCO3
+) %>%
+  factor(
+    levels = 1:12,
+    labels = paste0("JB", 1:12)
+  )
+
+mean_weights <- apply(models_weights, 1, function(x) { mean(x, na.rm = TRUE) })
+
+JB_df <- data.frame(
+  ID_new = obs$ID_new,
+  observed = JB_observed,
+  predicted = JB_predicted,
+  upper = obs$upper,
+  lower = obs$lower,
+  imputed = obs$imputed,
+  w = mean_weights,
+  fold = obs$fold
+) %>% mutate(
+  acc = observed == predicted
+)
+
+library(MachineShop)  # weighted confusion matrix
+
+JB_acc_w <- JB_df %>%
+  filter(imputed == FALSE) %>%
+  select(-imputed) %>%
+  select(c(predicted, observed, w)) %>%
+  na.omit() %>%
+  confusion(
+    x = .[, 1],
+    y = .[, 2],
+    weights = .[, 3]
+  ) %>% .@.Data %T>%
+  write.table(
+    ., paste0(dir_results, "/acc_JB_test", testn, ".csv"),
+    sep = ";",
+    row.names = FALSE
+  )
+
+JB_acc_w
+
+# Analyse predictions and observations
+
+getpred <- function(
+    x2, i2, axmaxmin = TRUE, drop_imputed = TRUE, drop_inf = TRUE
+) {
+  
+  df <- obs %>% select(any_of(fractions[i2]))
+  colnames(df) <- "obs"
+  df$pred = models_boot_predictions[, i2]
+  
+  if (i2 == 5) df %<>% log()
+  if (i2 == 6) df %<>% sqrt()
+  
+  depths_x <- obs %>%
+    select(upper, lower, fold, ID_new, imputed)
+  df %<>% bind_cols(depths_x)
+  df %<>% mutate(
+    fraction = fractions[i2],
+    w = models_weights[, i2]
+  ) %>%
+    filter(
+      !is.na(obs),
+      !is.na(w)
+      )
+  
+  if (drop_inf) {
+    df %<>% filter(is.finite(obs))
+  }
+  
+  if (drop_imputed) {
+    df %<>% filter(imputed == FALSE)
+  }
+  
+  if (axmaxmin) {
+    if (i2 == 5) {
+      df %<>%
+        mutate(
+          ax_min = quantile(obs, 0.01)
+        )
+    } else {
+      df %<>% mutate(
+        ax_min = 0
+      )
+    }
+    df %<>% mutate(
+      ax_max = quantile(obs, 0.99)
+    )
+    df %<>%
+      filter(
+        obs < ax_max,
+        pred < ax_max,
+        obs >= ax_min,
+        pred >= ax_min
+      )
+  }
+  
+  return(df)
+}
+
+allpred <- foreach(i = 1:6, .combine = rbind) %do%
+  getpred(models_boot[[i]], i)
+
+allpred$fraction %<>% factor(levels = fractions)
+
+levels(allpred$fraction) <- c(
+  expression("Clay"~"(%)"),
+  expression("Silt"~"(%)"),
+  expression("Fine"~"sand"~"(%)"),
+  expression("Coarse"~"sand"~"(%)"),
+  expression("log[SOC"~"(%)]"),
+  expression(sqrt("CaCO"[3]~"(%)"))
+)
+
+my_breaks_dens <- c(0, 0.01, 0.02, 0.03, 0.05, 0.07, 0.1, 0.2, 0.3, 0.5, 0.7, 1)
+
+# mycolors1 <- rgb(
+#   seq(1, 0, length.out = 10),
+#   seq(1, 1, length.out = 10),
+#   seq(1, 1, length.out = 10)
+#   )
+mycolors2 <- rgb(
+  seq(0, 0, length.out = 20),
+  seq(1, 0, length.out = 20),
+  seq(1, 1, length.out = 20)
+)
+mycolors3 <- rgb(
+  seq(0, 0, length.out = 21),
+  seq(0, 0, length.out = 21),
+  seq(1, 0, length.out = 21)
+)
+
+mycolorgradient <- c(
+  # mycolors1,
+  mycolors2[-1],
+  mycolors3[-1])
+
+breaks <- c(0, 30, 60, 100, 200)
+
+tr_partitions <- c("CV", "Holdout")
+
+for (k in 1:2) {
+  if (k == 1) {
+    allpred_k <- allpred %>%
+      filter(fold < 10)
+  } else {
+    allpred_k <- allpred %>%
+      filter(fold == 10)
+  }
+  
+  for (i in 1:(length(breaks) - 1)) {
+    allpred_i <- allpred_k %>%
+      filter(
+        upper < breaks[i + 1],
+        lower > breaks[i]
+      )
+    
+    if (nrow(allpred_i) > 0) {
+      myplot <- allpred_i %>%
+        ggplot(aes(x = obs, y = pred, weight = w)) +
+        ggtitle(
+          paste0(
+            "Accuracy at ", breaks[i], " - ", breaks[i + 1], " cm depth, ",
+            tr_partitions[k]
+          )
+        ) + 
+        geom_hex(
+          aes(
+            alpha = after_stat(ndensity),
+            fill = after_stat(ndensity)
+          ),
+          bins = 30
+        ) +
+        scale_fill_gradientn(
+          colours = mycolorgradient,
+          aesthetics = "fill",
+          breaks = my_breaks_dens,
+          limits = c(0, 1),
+          na.value = 0,
+          trans = "sqrt"
+        ) +
+        guides(
+          fill = "legend"
+          , alpha = "legend"
+        ) +
+        scale_alpha_continuous(
+          limits= c(0, 1),
+          range = c(0.05, 1),
+          breaks = my_breaks_dens,
+          na.value = 0,
+          trans = "sqrt"
+        ) +
+        facet_wrap(~fraction, nrow = 2, scales = "free", labeller = label_parsed) +
+        theme_bw() +
+        theme(aspect.ratio = 1) +
+        scale_x_continuous(expand = c(0, 0)) +
+        scale_y_continuous(expand = c(0, 0)) +
+        geom_abline(col = "red") +
+        geom_blank(aes(y = ax_max)) +
+        geom_blank(aes(x = ax_max)) +
+        geom_blank(aes(y = ax_min)) +
+        geom_blank(aes(x = ax_min)) +
+        xlab("Observation") +
+        ylab("Prediction")
+      
+      tiff(
+        paste0(dir_results, "/", tr_partitions[k], "_accuracy_", LETTERS[i],
+               "_test", testn, ".tiff"),
+        width = 15,
+        height = 10,
+        units = "cm",
+        res = 300
+      )
+      
+      print(myplot)
+      
+      try(dev.off())
+    }
+  }
+}
+
+tiff(
+  paste0(dir_results, "/accuracy_all_test", testn, ".tiff"),
+  width = 15,
+  height = 10,
+  units = "cm",
+  res = 300
+)
+
+allpred %>%
+  ggplot(aes(x = obs, y = pred, weight = w)) +
+  geom_hex(
+    aes(
+      alpha = after_stat(ndensity),
+      fill = after_stat(ndensity)
+        ),
+    bins = 30
+    ) +
+  scale_fill_gradientn(
+    colours = mycolorgradient,
+    aesthetics = "fill",
+    breaks = my_breaks_dens,
+    limits= c(0, 1),
+    na.value = 0,
+    trans = "sqrt"
+  ) +
+  guides(
+    fill = "legend"
+    , alpha = "legend"
+    ) +
+  scale_alpha_continuous(
+    limits= c(0, 1),
+    range = c(0.05, 1),
+    breaks = my_breaks_dens,
+    na.value = 0,
+    trans = "sqrt"
+  ) +
+  facet_wrap(~fraction, nrow = 2, scales = "free", labeller = label_parsed) +
+  theme_bw() +
+  theme(aspect.ratio = 1) +
+  scale_x_continuous(expand = c(0, 0)) +
+  scale_y_continuous(expand = c(0, 0)) +
+  geom_abline(col = "red") +
+  geom_blank(aes(y = ax_max)) +
+  geom_blank(aes(x = ax_max)) +
+  geom_blank(aes(y = ax_min)) +
+  geom_blank(aes(x = ax_min)) +
+  xlab("Observation") +
+  ylab("Prediction")
+
+try(dev.off())
+
+
+# Accuracy vs depth
+
+d_out <- list()
+
+# Also calculate statistics by depth for the observations (to do)
+
+allpred_depth <- foreach(i = 1:6) %do%
+  getpred(
+    models_boot[[i]], i, axmaxmin = FALSE, drop_imputed = FALSE, drop_inf = FALSE
+  )
+
+for (i in 1:length(models_boot)) {
+  depth_weights <- weights_objects[[i]]$w_cm_mat / weights_objects[[i]]$w_cm_sums
+  
+  mdata <- allpred_depth[[i]]
+  
+  d_out[[i]] <- apply(
+    depth_weights, 2, 
+    function(x) {
+      ddat <- mdata %>%
+        mutate(
+          w_div = x
+        ) %>%
+        filter(
+          is.finite(w_div),
+          is.finite(obs),
+          is.finite(pred)
+        )
+      
+      if (i == 5) {
+        ddat %<>% filter(imputed == FALSE)
+      }
+      
+      RMSEws <- numeric()
+      R2ws <- numeric()
+      weights_ks <- numeric()
+      
+      for (k in 1:2) {
+        if (k == 1) {
+          ddat_k <- ddat %>%
+            filter(fold < 10)
+        } else {
+          ddat_k <- ddat %>%
+            filter(fold == 10)
+        }
+        
+        if (nrow(ddat_k) > 2) {
+          RMSEws[k] <- get_RMSEw(
+            select(ddat_k, c(pred, obs)),
+            ddat_k$w_div
+          )
+          R2ws[k] <- get_R2w(
+            select(ddat_k, c(pred, obs)),
+            ddat_k$w_div
+          )
+          weights_ks[k] <- sum(ddat_k$w_div)
+        } else {
+          
+          RMSEws[k] <- NA
+          R2ws[k] <- NA
+          weights_ks[k] <- NA
+        }
+      }
+      
+      out <- data.frame(
+        RMSEw = RMSEws,
+        R2w = R2ws,
+        Weights = weights_ks,
+        Dataset = tr_partitions
+      )
+      
+      return(out)
+    }
+  ) %>% bind_rows()
+  
+  d_out[[i]]$Fraction <- fractions[i]
+  d_out[[i]]$Depth = rep(w_depths, each = 2)
+}
+
+d_out %<>%
+  bind_rows() %>%
+  mutate(
+    Fraction = factor(
+      Fraction,
+      levels = fractions,
+      labels = c(
+        expression("Clay"~"(%)"),
+        expression("Silt"~"(%)"),
+        expression("Fine"~"sand"~"(%)"),
+        expression("Coarse"~"sand"~"(%)"),
+        expression("log[SOC"~"(%)]"),
+        expression(sqrt("CaCO"[3]~"(%)"))
+      )
+    ),
+    Dataset = as.factor(Dataset)
+  )
+
+myBreaks <- function(x) {
+  breaks <- c(
+    0,
+    (max(x)*1/2) %>% log2() %>% round(., digits = 0) %>% (2)^.
+    )
+  names(breaks) <- attr(breaks,"labels")
+  return(breaks)
+}
+
+tiff(
+  paste0(dir_results, "/depth_RMSEw_test_", testn, ".tiff"),
+  width = 16,
+  height = 10,
+  units = "cm",
+  res = 300
+)
+
+d_out %>%
+  ggplot(aes(x = RMSEw, y = Depth, color = Dataset)) +
+  facet_wrap(~Fraction, nrow = 1, scales = "free_x", labeller = label_parsed) +
+  geom_path() +
+  scale_y_reverse(expand = c(0, 0)) +
+  scale_x_continuous(
+    guide = guide_axis(check.overlap = TRUE),
+    breaks = myBreaks,
+    limits = c(0, NA),
+    expand = expansion(mult = c(0, 0.2), 
+                       add = c(0, 0))
+    ) +
+  theme_bw() + 
+  theme(strip.text.x = element_text(size = 6)) +
+  labs(
+    x = bquote(RMSE[w]),
+    y = "Depth (cm)"
+  )
+
+
+try(dev.off())
+try(dev.off())
+
+tiff(
+  paste0(dir_results, "/depth_R2w_test_", testn, ".tiff"),
+  width = 16,
+  height = 10,
+  units = "cm",
+  res = 300
+)
+
+d_out %>%
+  ggplot(aes(x = R2w, y = Depth, color = Dataset)) +
+  facet_wrap(~Fraction, nrow = 1, labeller = label_parsed) +
+  geom_path() +
+  scale_y_reverse(expand = c(0, 0)) +
+  scale_x_continuous(
+    guide = guide_axis(check.overlap = TRUE),
+    breaks = c(0, 0.3, 0.6),
+    expand = expansion(mult = c(0, 0), 
+                 add = c(0.01, 0.02))
+    ) +
+  theme_bw() + 
+  theme(strip.text.x = element_text(size = 6)) +
+  labs(
+    x = bquote({R^2}[w]),
+    y = "Depth (cm)"
+  )
+
+try(dev.off())
+try(dev.off())
+
+tiff(
+  paste0(dir_results, "/depth_weights_test_", testn, ".tiff"),
+  width = 16,
+  height = 10,
+  units = "cm",
+  res = 300
+)
+
+d_out %>%
+  ggplot(aes(x = Weights, y = Depth, color = Dataset)) +
+  facet_wrap(~ Fraction, nrow = 1, labeller = label_parsed) +
+  geom_path() +
+  scale_y_reverse(expand = c(0, 0)) +
+  scale_x_continuous(
+    guide = guide_axis(check.overlap = TRUE),
+    breaks = c(0, 2000),
+    expand = expansion(mult = c(0.01, 0.1), 
+                       add = c(0.01, 0.1))
+    ) +
+  theme_bw() + 
+  theme(strip.text.x = element_text(size = 6)) +
+  labs(
+    x = "Total weights",
+    y = "Depth (cm)"
+  )
+
+try(dev.off())
+try(dev.off())
+
+# JB accuracy with depth
+
+depth_weights <- weights_objects[[i]]$w_cm_mat / weights_objects[[i]]$w_cm_sums
+
+depth_weights_JB <- lapply(
+  1:length(fractions),
+  function(x) {
+    out <- matrix(
+      0,
+      nrow = nrow(obs),
+      ncol = ncol(weights_objects[[x]]$w_cm_mat)
+    )
+    d_w <- weights_objects[[x]]$w_cm_mat / weights_objects[[x]]$w_cm_sums
+    out[!is.na(models_weights[, x]),] <- d_w
+    out[is.na(out)] <- 0
+    return(out)
+  }
+) %>%
+  Reduce("+", .) %>%
+  "/"(6)
+
+JB_forplot <- c("JB1", "JB2", "JB3", "JB4", "JB5", "JB6", "JB7", "JB8", "JB11",
+                "JB12")
+
+# Sensitivity = Recall
+# Sensitivity= TP / (TP + FN)
+# Overall balanced accuracy = mean of recall for all classes
+
+# Recall= TP / (TP+FN)
+
+JB_acc_d <- lapply(
+  c(FALSE, TRUE),
+  function(x2) {
+    out2 <- lapply(
+      1:ncol(depth_weights_JB),
+      function(x) {
+        ddat <- JB_df %>%
+          mutate(
+            w_d = depth_weights_JB[, x]
+          ) %>% filter(
+            imputed == FALSE,
+            (fold == 10) == x2,
+            w_d > 0
+          ) %>% 
+          select(c(predicted, observed, w_d, acc)) %>%
+          na.omit()
+        
+        if(nrow(ddat) > 0) {
+          sens_spec <- ddat %>%
+            confusion(
+              x = .[, 1],
+              y = .[, 2],
+              weights = .[, 3]
+            ) %>%
+            summary() %>%
+            .@.Data %>%
+            t() %>%
+            as.data.frame() %>%
+            select(c(Sensitivity, Specificity)) %>%
+            mutate(
+              Sensitivity = case_when(
+                !is.finite(Sensitivity) ~ 0,
+                .default = Sensitivity
+              )
+            )
+          
+          out <- sens_spec %>% apply(., 1, mean)
+          out$BA <- sens_spec %>%
+            select(Sensitivity) %>%
+            unlist() %>%
+            mean()
+          out$OA <- weighted.mean(ddat$acc, ddat$w_d)
+          out$Depth <- w_depths[x]
+          out %<>% as.data.frame()
+        } else {
+          out <- NULL
+        }
+        return(out)
+      }
+    ) %>%
+      bind_rows() %>%
+      mutate(
+        Dataset = x2 + 1
+        # ,
+        # Depth = w_depths
+      )
+  }
+) %>%
+  bind_rows()
+
+if(length(unique(JB_acc_d$Dataset)) > 1) {
+  JB_acc_d %<>% mutate(
+    Dataset = factor(Dataset, labels = c("CV", "Holdout"))
+  )
+}
+  
+JB_forplot <- c("JB1", "JB2", "JB3", "JB4", "JB5", "JB6", "JB7", "JB8", "JB11",
+                "JB12", "BA", "OA")
+
+tiff(
+  paste0(dir_results, "/JB_acc_test", testn, ".tiff"),
+  width = 16,
+  height = 10,
+  units = "cm",
+  res = 300
+)
+
+JB_acc_d %>%
+  select(-c(JB9, JB10)) %>%
+  pivot_longer(
+    -c(Depth, Dataset),
+    values_to = "Accuracy"
+  ) %>%
+  mutate(
+    name = factor(
+      name,
+      levels = JB_forplot
+    )
+  ) %>%
+  ggplot(aes(x = Accuracy, y = Depth, color = Dataset)) +
+  geom_path() +
+  facet_wrap(~ name, nrow = 2) +
+  scale_y_reverse(expand = expansion(mult = 0, add = 0)) +
+  scale_x_continuous(breaks = c(0.5, 1))
+
+try(dev.off())
+
+# Covariate importance
+
+library(colorRamps)
+library(rcartocolor) # for colorblind palette
+
+mycolors <- carto_pal(12, "Safe") %>% sort()
+
+library(TSP)
+
+l <- list()
+
+ntop <- 20
+
+# for (i in 1:length(models_boot))
+# {
+#   l[[i]] <- varImp(models_boot[[i]])$importance %>%
+#     as_tibble(rownames = "covariate") %>%
+#     drop_na() %>%
+#     arrange(-Overall) %>%
+#     slice_head(n = ntop) %>%
+#     mutate(target = fractions[i]) %>%
+#     rowid_to_column("rank")
+# }
+# 
+# l %<>% bind_rows()
+
+l <- imp_all %>%
+  select(-mean_imp) %>%
+  pivot_longer(
+    cols = -covariate,
+    names_to = "target",
+    values_to = "Overall"
+  ) %>%
+  filter(!(covariate %in% grep('ogc_pi', colnames(obs), value = TRUE))) %>%
+  group_by(target) %>%
+  mutate(Overall = Overall*100/max(Overall)) %>%
+  arrange(-Overall) %>%
+  slice_head(n = ntop) %>%
+  arrange(-Overall) %>%
+  mutate(
+    target = factor(
+      target,
+      levels = fractions
+    )
+  )
+
+l_cat <- cov_cats %>%
+  mutate(
+    covariate = name,
+    category = case_when(
+      category == "basic" ~ scorpan,
+      category == "WATEM" ~ "OR",
+      category == "sentinel_composite" ~ "S2 time series",
+      category == "bare_soil" ~ "Bare soil",
+      desc_text %in% grep(
+        "bare soil",
+        cov_cats$desc_text,
+        value = TRUE
+        ) ~ "Bare soil", 
+      .default = "Other"
+    )
+  )
+
+l %<>%
+  left_join(l_cat)
+
+l %<>%
+  ungroup() %>%
+  arrange(target, Overall) %>%
+  mutate(order = row_number())
+
+l %<>% mutate(
+  category = case_when(
+    covariate == "upper" ~ "Depth",
+    covariate == "lower" ~ "Depth",
+    covariate == "year" ~ "Time",
+    category == "N" ~ "Spatial position",
+    category == "R" ~ "Topography",
+    category == "C" ~ "Climate",
+    category == "C " ~ "Climate",
+    category == "P" ~ "Parent materials",
+    category == "S" ~ "Soil",
+    category == "SO" ~ "Soil and organisms",
+    category == "CR" ~ "Climate and topography",
+    category == "OR" ~ "Organisms and topography",
+    category == "O" ~ "Organisms",
+    category == "RP" ~ "Parent materials",
+    .default = category
+  )
+)
+
+l$category %<>% as.factor()
+
+catcolors <- l$category %>%
+  levels() %>%
+  length() %>%
+  carto_pal(., "Safe")
+names(catcolors) <- levels(l$category)
+colScale <- scale_fill_manual(name = "category", values = catcolors)
+
+
+
+# Plot covariate importance
+
+tiff(
+  paste0(dir_results, "/importance_test", testn, ".tiff"),
+  width = 40,
+  height = 20,
+  units = "cm",
+  res = 300
+)
+
+l %>%
+  ggplot(aes(x = order, y = Overall, bg = category)) +
+  geom_col() +
+  facet_wrap(
+    ~target,
+    ncol = 3,
+    scales = "free"
+  ) +
+  # xlim(1, ntop) +
+  ylim(0, NA) +
+  coord_flip() +
+  scale_x_continuous(
+    breaks = l$order,
+    labels = l$covariate,
+    expand = c(0, 0)
+  ) +
+  colScale
+
+try(dev.off())
+
+
+# Plot importance for OGCs
+
+ndir_plot <- 64
+
+imp_ogc <- imp_all %>%
+  select(-mean_imp) %>%
+  pivot_longer(
+    cols = -covariate,
+    names_to = "target",
+    values_to = "Overall"
+  ) %>%
+  filter(covariate %in% grep('ogc_pi', colnames(obs), value = TRUE)) %>%
+  group_by(target) %>%
+  mutate(Overall = Overall*100/max(Overall)) %>%
+  arrange(covariate) %>%
+  mutate(
+    dir = substr(
+      covariate,
+      nchar(covariate) - 2,
+      nchar(covariate)
+    ) %>%
+      as.numeric() %>%
+      "*" (ndir_plot) %>%
+      "/" (1000) %>%
+      "+" (1) %>%
+      round(digits = 0)
+  ) %>%
+  filter(is.finite(Overall))
+
+imp_ogc2 <- imp_ogc %>%
+  mutate(dir = dir + ndir_plot)
+
+imp_ogc %<>% bind_rows(., imp_ogc2)
+
+# imp_ogc %<>% mutate(dir = row_number())
+
+imp_ogc %<>% mutate(
+  target = factor(
+    target,
+    levels = fractions,
+    labels = fraction_names
+  )
+)
+
+brks <- seq(
+  from = min(imp_ogc$dir),
+  by = (max(imp_ogc$dir) + 1 - min(imp_ogc$dir))/4,
+  length.out = 4
+)
+
+tiff(
+  paste0(dir_results, "/importance_ogc_test", testn, ".tiff"),
+  width = 40,
+  height = 20,
+  units = "cm",
+  res = 300
+)
+
+ggplot(imp_ogc, aes(x = dir, y = Overall)) +
+  coord_polar(
+    start = - pi/2 - pi/(ndir_plot*2),
+    direction = -1) +
+  geom_col(width = 1, colour = 'black', fill = rgb(0,2/3,2/3,1/2)) +
+  facet_wrap(
+    ~ target,
+    ncol = 3
+  ) +
+  scale_x_continuous(
+    breaks = brks,
+    labels = c('E', 'N', 'W', 'S')
+  ) +
+  scale_y_continuous(limits = c(0, 100), expand = c(0, 0)) +
+  ylab('Covariate importance') +
+  theme_bw() +
+  theme(axis.text.x = element_text(
+    colour = 'black'),
+    axis.title.x = element_blank(),
+    axis.text.y = element_text(colour = 'black'),
+    panel.grid.major = element_line(color = 'grey'),
+    panel.grid.minor = element_blank(),
+    panel.border = element_rect(linewidth = 1)
+  )
+
+try(dev.off())
+
+# 10: Make maps for the test area
+
+dir_cov_10km <- dir_dat %>%
+  paste0(., "/testarea_10km/covariates/")
+
+predfolder <- dir_results %>%
+  paste0(., "/predictions_testarea/") %T>%
+  dir.create()
+
+predfolders_all <- expand.grid(
+  SOM_removal = c("SOM_remov", "SOM_norem"),
+  d_interval = c(1:4),
+  t_norm = c("raw", "sum")
+) %>%
+  apply(
+    ., 1, 
+    function(x) {
+      out <- paste0(predfolder, x[1], "/depth_", x[2], "/", x[3])
+      dir.create(out, recursive = TRUE)
+      return(out)
+    }
+  )
+
+source("f_predict_passna.R")
+
+# Make the maps
+
+breaks <- c(0, 30, 60, 100, 200)
+
+uppers <- breaks %>% rev() %>% .[-1] %>% rev()
+lowers <- breaks %>% .[-1]
+
+map_spec <- expand_grid(
+  fraction_i = 1:6,
+  interval = 1:4,
+  SOM_removal = c("SOM_remov", "SOM_norem")
+)
+
+numCores <- 19
+
+try(stopCluster(cl))
+try(foreach::registerDoSEQ())
+try(rm(cl))
+
+showConnections()
+
+cl <- makeCluster(numCores)
+
+clusterEvalQ(
+  cl,
+  {
+    library(terra)
+    library(caret)
+    library(xgboost)
+    library(magrittr)
+    library(dplyr)
+    library(tools)
+  }
+)
+
+clusterExport(
+  cl,
+  c(
+    "uppers",
+    "lowers",
+    "map_spec",
+    "predfolder",
+    "dir_cov_10km",
+    "cov_selected",
+    "predict_passna",
+    "dir_dat",
+    "fractions",
+    "dir_results",
+    "pcs_cov",
+    "use_pca"
+  )
+)
+
+if (use_pca) {
+  clusterExport(cl, c("pcs_cov"))
+}
+
+parSapplyLB(
+  cl,
+  1:nrow(map_spec),
+  function(x) {
+    tmpfolder <- paste0(dir_dat, "/Temp/")
+    
+    model_file <- fractions[map_spec$fraction_i[x]] %>%
+      paste0(dir_results, "/model_", ., ".rds")
+    
+    model_x <- model_file %>% readRDS()
+
+    terraOptions(memfrac = 0.02, tempdir = tmpfolder)
+
+    cov_10km <- dir_cov_10km %>%
+      list.files(full.names = TRUE) %>%
+      rast()
+    
+    if (!use_pca) {
+      cov_10km %<>% subset(cov_selected)
+    }
+  
+    if (map_spec$fraction_i[x] %in% 1:4) {
+      outname <- predfolder %>%
+        paste0(
+          ., "/", map_spec$SOM_removal[x],
+          "/depth_", map_spec$interval[x],
+          "/raw/frc", 
+          map_spec$fraction_i[x], "_", fractions[map_spec$fraction_i[x]],
+          ".tif"
+        )
+    } else {
+      outname <- predfolder %>%
+        paste0(
+          ., "/", map_spec$SOM_removal[x],
+          "/depth_", map_spec$interval[x],
+          "/sum/frc", 
+          map_spec$fraction_i[x], "_", fractions[map_spec$fraction_i[x]],
+          ".tif"
+        )
+    }
+    
+    somrem <- 0
+    if (map_spec$SOM_removal[x] == "SOM_remov") {
+      somrem <- 1
+    }
+
+    predict(
+      cov_10km,
+      model_x,
+      fun = predict_passna,
+      na.rm = FALSE,
+      const = data.frame(
+        SOM_removed = somrem,
+        # year = 2010,
+        upper = uppers[map_spec$interval[x]],
+        lower = lowers[map_spec$interval[x]]
+      ),
+      n_const = 3,
+      n_digits = 1,
+      pcs = pcs_cov,
+      filename = outname,
+      overwrite = TRUE
+    )
+    
+    write.table(
+      map_spec[x, ],
+      paste0(predfolder, paste(map_spec[x, ], collapse = "_"), ".txt")
+    )
+
+    return(NULL)
+  }
+)
+
+stopCluster(cl)
+foreach::registerDoSEQ()
+rm(cl)
+
+# Standardize mineral sum to 100
+
+maps_raw_paths <- expand_grid(
+  interval = 1:4,
+  SOM_removal = c("SOM_remov", "SOM_norem")
+) %>%
+  arrange(SOM_removal)
+
+for (i in 1:nrow(maps_raw_paths)) {
+  mineral_raw <- paste0(
+    predfolder,
+    maps_raw_paths$SOM_removal[i],
+    "/depth_", maps_raw_paths$interval[i], "/raw/") %>%
+    list.files(full.names = TRUE) %>%
+    rast()
+  
+  mineral_sum_r <- mineral_raw %>% sum() 
+  
+  mineral_final <- mineral_raw*100 / mineral_sum_r
+  
+  mineral_final %<>% round(., digits = 1)
+  
+  for (j in 1:4) {
+    outname <- paste0(
+        predfolder,
+        maps_raw_paths$SOM_removal[i],
+        "/depth_", maps_raw_paths$interval[i],
+        "/sum/frc", 
+        j, "_", fractions[j],
+        ".tif"
+      )
+    writeRaster(
+      mineral_final[[j]],
+      filename = outname,
+      overwrite = TRUE
+      )
+  }
+}
+
+# Calculate soil class
+
+source("f_classify_soil_JB.R")
+
+maps_10km_jb <- lapply(
+  1:nrow(maps_raw_paths),
+  function(x) {
+    maps_loaded <- paste0(
+      predfolder,
+      maps_raw_paths$SOM_removal[x],
+      "/depth_", maps_raw_paths$interval[x], "/sum/") %>%
+      list.files(full.names = TRUE) %>%
+      rast()
+    
+    maps_forclass <- c(
+      maps_loaded[[1]],
+      maps_loaded[[2]],
+      maps_loaded[[3]],
+      maps_loaded[[5]] / 0.568,
+      maps_loaded[[6]]
+    )
+    
+    names(maps_forclass) <- c("clay", "silt", "sand_f", "SOM", "CaCO3")
+    
+    out <- lapp(maps_forclass, classify_soil_JB)
+    return(out)
+  }
+) %>%
+  rast()
+
+levels(maps_10km_jb) <- rep(
+  list(
+    data.frame(
+      id = 1:12,
+      Class = paste0("JB", 1:12)
+    )
+  ),
+  nlyr(maps_10km_jb)
+)
+
+maps_10km_jb_list <- list()
+maps_10km_jb_list$SOM_remov <- subset(maps_10km_jb, c(5:8))
+maps_10km_jb_list$SOM_norem <- subset(maps_10km_jb, c(1:4))
+
+
+jb_lyrnames <- paste0("JB class, ", uppers, " - ", lowers, " cm")
+names(maps_10km_jb_list$SOM_norem) <- jb_lyrnames
+names(maps_10km_jb_list$SOM_remov) <- jb_lyrnames
+
+# Load maps into a list
+
+maps_10_km <- lapply(
+  c("SOM_remov", "SOM_norem"),
+  function(x) {
+    out <- list()
+    for (i in 1:length(fractions)) {
+      
+      out[[i]] <- c(1:4) %>%
+        paste0(
+          predfolder, "/", x,
+          "/depth_", .,
+          "/sum/frc", i, "_", fractions[i],
+          ".tif"
+        ) %>%
+        rast()
+      names(out[[i]]) <- paste0(
+        fraction_names[i], ", ", uppers, " - ", lowers, " cm"
+      )
+    }
+    return(out)
+  }
+)
+
+names(maps_10_km) <- c("SOM_remov", "SOM_norem")
+
+# Figures for 10 km maps
+
+library(viridisLite)
+library(tidyterra)
+
+# Plot texture fractions with and without SOM removal
+
+somrem_names <- c("SOM_remov", "SOM_norem")
+
+try(dev.off())
+
+for (i in 1:length(somrem_names)) {
+  lapply(1:4, function(x) {
+    fname <- paste0(
+      dir_results, "/",
+      fractions[x],
+      "_", somrem_names[i],
+      "_10km_test",
+      testn, ".tiff"
+      )
+    
+    myplot <- autoplot(maps_10_km[[i]][[x]]) +
+      scale_fill_gradientn(colours = viridis(100), na.value = NA)
+    
+    tiff(
+      fname,
+      width = 16,
+      height = 14,
+      units = "cm",
+      res = 300
+    )
+    
+    print(myplot)
+    
+    try(dev.off())
+    try(dev.off())
+  })
+}
+
+# Plot SOC and CaCO3 only once
+
+try(dev.off())
+lapply(5:6, function(x) {
+  fname <- paste0(dir_results, "/", fractions[x], "_10km_test", testn, ".tiff")
+
+  myplot <- autoplot(maps_10_km[[1]][[x]]) +
+    scale_fill_gradientn(colours = viridis(100), na.value = NA)
+
+  tiff(
+    fname,
+    width = 16,
+    height = 14,
+    units = "cm",
+    res = 300
+  )
+
+  print(myplot)
+
+  try(dev.off())
+  try(dev.off())
+})
+
+# Plot soil class (JBNR)
+
+myrgb <- col2rgb(mycolors)
+tsp <- as.TSP(dist(t(myrgb)))
+set.seed(1)
+sol <- solve_TSP(tsp, control = list(repetitions = 1e3))
+ordered_cols <- mycolors[sol]
+
+classes_in_maps <- values(maps_10km_jb) %>%
+  unlist() %>%
+  matrix(ncol = 1) %>%
+  unique() %>%
+  sort()
+
+cols_in_maps <- ordered_cols[classes_in_maps]
+
+plot_jb <- lapply(
+  maps_10km_jb_list,
+  function(x) {
+    out <- autoplot(x) +
+      scale_fill_discrete(type = cols_in_maps)
+    return(out)
+  }
+)
+
+for (i in 1:2) {
+  tiff(
+    paste0(dir_results, "/JB_", somrem_names[i],"_test_", testn, ".tiff"),
+    width = 16,
+    height = 14,
+    units = "cm",
+    res = 300
+  )
+  
+  print(plot_jb[[i]])
+  
+  try(dev.off())
+}
+
+# Plot effects of SOM removal
+
+clay_SOM_rem <- c(maps_10_km[[1]][[1]][[1]], maps_10_km[[2]][[1]][[1]])
+
+names(clay_SOM_rem) <- c("SOM removed", "No SOM removal")
+
+tiff(
+  paste0(dir_results, "/clay_SOM_rem_test_", testn, ".tiff"),
+  width = 16,
+  height = 10,
+  units = "cm",
+  res = 300
+)
+
+autoplot(clay_SOM_rem) +
+  scale_fill_gradientn(colours = viridis(100), na.value = NA) +
+  ggtitle("Clay (%), 0 - 30 cm depth") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+try(dev.off())
+
+clay_difference <- maps_10_km[[1]][[1]][[1]] - maps_10_km[[2]][[1]][[1]]
+names(clay_difference) <- "Clay (%) difference"
+
+tiff(
+  paste0(dir_results, "/clay_difference_test_", testn, ".tiff"),
+  width = 16,
+  height = 10,
+  units = "cm",
+  res = 300
+)
+
+autoplot(clay_difference) +
+  scale_fill_gradientn(colours = viridis(100), na.value = NA) +
+  ggtitle("Effect of SOM removal, clay (%) difference") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+try(dev.off())
+
+JB_SOM_rem <- c(maps_10km_jb_list[[1]][[1]], maps_10km_jb_list[[2]][[1]])
+names(JB_SOM_rem) <- c("SOM removed", "No SOM removal")
+
+tiff(
+  paste0(dir_results, "/JB_SOM_rem_test_", testn, ".tiff"),
+  width = 16,
+  height = 10,
+  units = "cm",
+  res = 300
+)
+
+autoplot(JB_SOM_rem) +
+  scale_fill_discrete(type = cols_in_maps) +
+  ggtitle("JB, 0 - 30 cm depth") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+try(dev.off())
+
+set.seed(1)
+
+tiff(
+  paste0(dir_results, "/SOM_rem_map_cor_test_", testn, ".tiff"),
+  width = 16,
+  height = 10,
+  units = "cm",
+  res = 300
+)
+
+c(maps_10_km[[1]][[5]][[1]], clay_difference) %>%
+  spatSample(100000) %>% 
+  rename(
+    soc = 1,
+    clay_dif = 2
+  ) %>%
+  ggplot(aes(x = soc, y = clay_dif)) +
+  geom_point(alpha = 0.01, shape = 21, col = "black", bg = "black") +
+  geom_smooth() +
+  scale_x_log10() +
+  xlab("SOC (%)") +
+  ylab("Clay (%) difference")
+  
+try(dev.off())
+
+# Write observations to table
+
+write.table(
+  obs,
+  paste0(dir_results, "observations_texture.csv"),
+  row.names = FALSE,
+  col.names = TRUE,
+  sep = ","
+)
+
+# END

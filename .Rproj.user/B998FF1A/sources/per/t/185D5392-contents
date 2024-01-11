@@ -25,12 +25,6 @@ use_pca <- TRUE
 
 pcs_cov <- readRDS(paste0(dir_dat, "pcs_cov.rds"))
 
-if (use_pca) {
-  obs_pcs <- predict(pcs_cov, obs)
-  
-  obs <- cbind(obs, obs_pcs)
-}
-
 fractions_alt <- c("clay", "silt", "fine_sand", "coarse_sand", "SOC", "CaCO3")
 
 fractions <- fractions_alt
@@ -134,9 +128,13 @@ for (k in 1:nrow(SOC_CaCO3_depth_grid)) {
 
   model_i <- models[[i]]
   
-  cov_selected <- (varImp(model_i)$importance %>% row.names()) %>%
-    .[. %in% cov_cats$name]
-
+  if (!use_pca) {
+    cov_selected <- (varImp(model_i)$importance %>% row.names()) %>%
+      .[. %in% cov_cats$name]
+  } else {
+    cov_selected <- cov_cats$name
+  }
+  
   showConnections()
 
   cl <- makeCluster(numCores)
@@ -195,7 +193,7 @@ for (k in 1:nrow(SOC_CaCO3_depth_grid)) {
       names(cov_x) <- cov_x_names
       
       if (!use_pca) {
-        cov_x2 <- subset(cov_selected)
+        cov_x %<>% subset(cov_selected)
       }
 
       tilename_x <- basename(subdir_tiles[x])
@@ -208,7 +206,7 @@ for (k in 1:nrow(SOC_CaCO3_depth_grid)) {
           )
 
       predict(
-        cov_x2,
+        cov_x,
         model_i,
         fun = predict_passna,
         na.rm = FALSE,
@@ -330,7 +328,7 @@ for (j in 1:(length(breaks) - 1)) {
         names(cov_x) <- cov_x_names
         
         if (!use_pca) {
-          cov_x2 <- subset(cov_x, cov_selected)
+          cov_x %<>% subset(cov_selected)
         }
         
         tilename_x <- basename(subdir_tiles[x])
@@ -343,7 +341,7 @@ for (j in 1:(length(breaks) - 1)) {
           )
         
         predict(
-          cov_x2,
+          cov_x,
           model_i,
           fun = predict_passna,
           na.rm = FALSE,

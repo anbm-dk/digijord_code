@@ -1,4 +1,4 @@
-# 07: Train texture models
+# 09b: Train texture models for uncertainty assessment
 
 # 1: Start up
 
@@ -11,6 +11,7 @@ library(caret)
 library(tibble)
 library(tidyr)
 library(xgboost)
+library(stringr)
 
 library(doParallel)
 library(spatstat) # weights
@@ -22,6 +23,7 @@ dir_dat <- paste0(root, "/digijord_data/")
 source("f_predict_passna.R")
 
 train_models <- TRUE
+use_pca <- TRUE
 
 # To do:
 # Pdp with depth
@@ -46,6 +48,14 @@ mycrs <- "EPSG:25832"
 
 dir_results <- dir_dat %>%
   paste0(., "/results_test_", testn, "/") %T>%
+  dir.create()
+
+dir_boot <- dir_results %>%
+  paste0(., "/bootstrap/") %T>%
+  dir.create()
+
+dir_boot_models <- dir_boot %>%
+  paste0(., "/models/") %T>%
   dir.create()
 
 # 2: Load observations
@@ -243,6 +253,8 @@ mask_LU_extr <- terra::extract(
 
 mask_LU_extr %<>% unlist() %>% unname()
 
+# Observations as data frame
+
 obs_data <- obs_v %>%
   values() %>%
   mutate(
@@ -257,13 +269,9 @@ obs_data <- obs_v %>%
 
 # fractions <- c("clay", "silt", "fine_sand", "coarse_sand", "logSOC", "logCaCO3")
 
-fractions_alt <- c("clay", "silt", "fine_sand", "coarse_sand", "SOC", "CaCO3")
-
-fractions <- fractions_alt
-
-fraction_names <- c(
-  "Clay", "Silt", "Fine sand", "Coarse sand", "SOC", "CaCO3"
-)
+fractions_alt  <- c("clay", "silt", "fine_sand", "coarse_sand", "SOC", "CaCO3")
+fractions      <- fractions_alt
+fraction_names <- c("Clay", "Silt", "Fine sand", "Coarse sand", "SOC", "CaCO3")
 
 bounds_lower <- rep(0, 6)
 bounds_upper <- rep(100, 6)
@@ -293,9 +301,26 @@ obs <- cbind(obs_data, extr, folds) %>%
   filter(
     !is.na(UTMX),
     !is.na(UTMY),
+    is.finite(fold),
+    lower > 0,
+    (upper < 200) | (upper == 200 & lower == 200),
     !is.na(mask_LU),
-    is.finite(fold)
+    !is.na(dhm2015_terraen_10m)
     )
+
+# Predict principal components
+
+pcs_cov <- readRDS(paste0(dir_dat, "pcs_cov.rds"))
+
+if (use_pca) {
+  obs_pcs <- predict(pcs_cov, obs)
+  
+  obs <- cbind(obs, obs_pcs)
+  
+  obs %<>% filter(
+    !is.na(PC1)
+  )
+}
 
 # Make new ID
 
@@ -304,17 +329,29 @@ obs %<>%
   mutate(ID_new = rowname, .before = everything()) %>%
   select(-rowname)
 
-# Predict principal components
+obs_v <- vect(
+  obs,
+  geom = c("UTMX", "UTMY"),
+  crs = mycrs,
+  keepgeom = TRUE
+  )
 
-use_pca <- TRUE
+# Extract bootstrap weights
 
-pcs_cov <- readRDS(paste0(dir_dat, "pcs_cov.rds"))
+poisson_r <- paste0(dir_folds, "/poisson_100m.tif") %>% rast()
 
-if (use_pca) {
-  obs_pcs <- predict(pcs_cov, obs)
-  
-  obs <- cbind(obs, obs_pcs)
-}
+poisson_extr <- terra::extract(
+  poisson_r,
+  obs_v,
+  ID = FALSE
+)
+
+nboot <- ncol(poisson_extr)
+
+saveRDS(
+  poisson_extr,
+  paste0(dir_results, "poisson_extr.rds")
+  )
 
 # Select topsoil observations for plot
 
@@ -459,7 +496,7 @@ tgrid <- expand.grid(
 
 objectives <- c(rep("reg:squarederror", 4), rep("reg:tweedie", 2))
 
-trees_per_round <- 10
+trees_per_round <- 1  # only one tree per round for bootstrap models
 
 # Bayesian optimization
 
@@ -489,40 +526,28 @@ use_all_points <- TRUE
 # 9: Train models
 
 if (train_models) {
+  weights_objects <- list()  # No changed for bootstrap
   
-  n_ogcs_models <- numeric()
-  total_imp_models <- numeric()
+  models_boot<- list()
   
-  weights_objects <- list()
-  
-  models_tr_summaries <- list()
-  
-  models_scoreresults <- list()
-  models_bestscores <- list()
-  
-  models_predictions <- matrix(
-    numeric(),
-    nrow = nrow(obs),
-    ncol = length(fractions)
-  )
+  models_boot_scoreresults <- list()
+  models_boot_bestscores <- list()
+  models_boot_predictions <- list()
   
   models_weights <- matrix(
     numeric(),
     nrow = nrow(obs),
     ncol = length(fractions)
   )
+  colnames(models_weights) <- fractions
   
   models_indices <- matrix(
     numeric(),
     nrow = nrow(obs),
     ncol = length(fractions)
   )
-  
-  colnames(models_predictions) <- fractions
-  colnames(models_weights) <- fractions
-  
-  models <- list()
-  
+  colnames(models_indices) <- fractions
+
   for (i in 1:length(fractions))
   {
     frac <- fractions[i]
@@ -544,19 +569,8 @@ if (train_models) {
     # Filter valid observations
     trdat <- obs %>%
       filter(
-        is.finite(.data[[frac]]),
-        !is.na(UTMX),
-        !is.na(UTMY),
-        lower > 0,
-        (upper < 200) | (upper == 200 & lower == 200),
-        !is.na(dhm2015_terraen_10m)
+        is.finite(.data[[frac]])
       )
-    
-    if (use_pca) {
-      trdat %<>% filter(
-        !is.na(PC1)
-      )
-    }
     
     # Weighting by depth intervals
     print("Calculating weights")
@@ -695,129 +709,165 @@ if (train_models) {
     
     models_indices[, i] <- obs$ID_new %in% trdat$ID_new
     
-    holdout_i <- obs[-trdat_indices, ]
-    holdout_indices <- which(obs$ID_new %in% holdout_i$ID_new)
-    
-    # List of folds
-    folds_i <- lapply(
-      unique(trdat$fold),
-      function(x) {
-        out <- trdat %>%
-          mutate(
-            is_j = fold != x,
-            rnum = row_number(),
-            ind_j = is_j * rnum
-          ) %>%
-          filter(ind_j != 0) %>%
-          dplyr::select(., ind_j) %>%
-          unlist() %>%
-          unname()
-      }
-    )
-    
-
     # Add depth boundaries and SOM removal as covariates
     cov_keep_i <- c("upper", "lower")
     if ( !(frac %in% c("SOC", "CaCO3")) ) {
       cov_keep_i %<>% c(., "SOM_removed")
     } 
+    n_const_i <- length(cov_keep_i)
     
     cov_c_i <- cov_selected %>% c(., cov_keep_i)
     
-    # Bayes optimization
+    # Prediction bounds
     bounds_pred_i <- c(bounds_lower[i], bounds_upper[i])
     
-    foreach::registerDoSEQ()
-    showConnections()
+    # Objects for bootstrap results
+    dir_boot_models_i <- dir_boot_models %>%
+      paste0(., "/", frac, "/") %T>%
+      dir.create()
     
-    model_i <- optimize_xgboost(
-      target = frac,  # character vector (length 1), target variable.
-      cov_names = cov_c_i,  # Character vector, covariate names,
-      data = trdat, # data frame, input data
-      bounds_bayes = bounds, # named list with bounds for bayesian opt.
-      bounds_pred = bounds_pred_i, # numeric, length 2, bounds for predicted values
-      cores = 19, # number cores for parallelization
-      trgrid = tgrid, # data frame with tuning parameters to be tested in basic model
-      folds = folds_i, # list with indices, folds for cross validation
-      sumfun = sumfun_i, # summary function for accuracy assessment
-      metric = metrics[i], # character, length 1, name of evaluation metric
-      max_metric = FALSE, # logical, should the evaluation metric be maximized
-      weights = trdat$w, # numeric, weights for model training and evaluation
-      trees_per_round = 10, # numeric, length 1, number of trees that xgboost should train in each round
-      obj_xgb = objectives[i], # character, length 1, objective function for xgboost
-      colsample_bynode_basic = 0.75, # numeric, colsample_bynode for basic model
-      cov_keep = cov_keep_i, # Character vector, covariates that should always be present
-      final_round_mult = 5,  # Multiplier for the number of rounds in the final model
-      maxd = 10^3, # Maximum depth for optimized models
-      seed = 321,  # Random seed for model training,
-      classprob = FALSE
+    models_boot[[i]] <- list()
+    models_boot_scoreresults[[i]] <- list()
+    models_boot_bestscores[[i]] <- list()
+    
+    models_boot_predictions[[i]] <- matrix(
+      numeric(),
+      nrow = nrow(obs),
+      ncol = length(fractions)
     )
+    colnames(models_boot_predictions[[i]]) <- fractions
     
-    models_scoreresults[[i]] <- model_i$bayes_results
+    # bootstrap procedure
+    for (bootr in 1:nboot) {
+      bootr_chr <- bootr %>%
+        str_pad(
+          .,
+          nchar(nboot),
+          pad = "0"
+        )
+      
+      trdat_bootr <- trdat %>%
+        mutate(
+          weights_bootr = poisson_extr[trdat_indices, bootr],
+          w_combined = weights_bootr*w
+        ) %>%
+        filter(w_combined > 0)
+      
+      bootr_indices <- which(obs$ID_new %in% trdat_bootr$ID_new)
+      holdout_bootr <- obs[-bootr_indices, ]
+      holdout_indices <- which(obs$ID_new %in% holdout_bootr$ID_new)
+      
+      # List of folds
+      folds_bootr <- lapply(
+        unique(trdat_bootr$fold),
+        function(x) {
+          out <- trdat_bootr %>%
+            mutate(
+              is_j = fold != x,
+              rnum = row_number(),
+              ind_j = is_j * rnum
+            ) %>%
+            filter(ind_j != 0) %>%
+            dplyr::select(., ind_j) %>%
+            unlist() %>%
+            unname()
+        }
+      )
+      
+      # Bayes optimization
+      foreach::registerDoSEQ()
+      showConnections()
+      
+      model_bootr <- optimize_xgboost(
+        target = frac,  # character vector (length 1), target variable.
+        cov_names = cov_c_i,  # Character vector, covariate names,
+        data = trdat_bootr, # data frame, input data
+        bounds_bayes = bounds, # named list with bounds for bayesian opt.
+        bounds_pred = bounds_pred_i, # numeric, length 2, bounds for predicted values
+        cores = 19, # number cores for parallelization
+        trgrid = tgrid, # data frame with tuning parameters to be tested in basic model
+        folds = folds_i, # list with indices, folds for cross validation
+        sumfun = sumfun_i, # summary function for accuracy assessment
+        metric = metrics[i], # character, length 1, name of evaluation metric
+        max_metric = FALSE, # logical, should the evaluation metric be maximized
+        weights = trdat_bootr$w_combined, # numeric, weights for model training and evaluation
+        trees_per_round = 1, # numeric, length 1, number of trees that xgboost should train in each round
+        obj_xgb = objectives[i], # character, length 1, objective function for xgboost
+        colsample_bynode_basic = 0.75, # numeric, colsample_bynode for basic model
+        cov_keep = cov_keep_i, # Character vector, covariates that should always be present
+        final_round_mult = 1,  # Multiplier for the number of rounds in the final model
+        maxd = 10^3, # Maximum depth for optimized models
+        seed = 321,  # Random seed for model training,
+        classprob = FALSE
+      )
+      
+      models_boot_scoreresults[[i]][[bootr]] <- model_bootr$bayes_results
+      
+      print(
+        model_bootr$bayes_results$scoreSummary
+      )
+      
+      models_boot_bestscores[[i]][[bootr]] <- model_bootr$best_scores
+      
+      print(
+        models_boot_bestscores[[i]][[bootr]]
+      )
+      
+      models_boot[[i]][[bootr]] <- model_bootr$model
+      
+      # End of optimization
+      
+      models_boot_predictions[[i]][bootr_indices, bootr] <- model_bootr$pred %>%
+        arrange(rowIndex) %>%
+        distinct(rowIndex, .keep_all = TRUE) %>%
+        dplyr::select(., pred) %>%
+        unlist() %>%
+        unname()
+      
+      models_boot_predictions[[i]][-bootr_indices, bootr] <- predict_passna(
+        models_boot[[i]][[bootr]],
+        holdout_bootr,
+        n_const = n_const_i
+      )
+      
+      saveRDS(
+        models_boot[[i]][[bootr]],
+        paste0(dir_boot_models_i, "/model_", frac, "_", bootr_chr, ".rds")
+      )
+    }
     
-    print(
-      models_scoreresults[[i]]$scoreSummary
-    )
-    
-    models_bestscores[[i]] <- model_i$best_scores
-    
-    print(
-      models_bestscores[[i]]
-    )
-    
-    models[[i]] <- model_i$model
-    
-    print(models[[i]])
-    
-    # End of optimization
-    
-    models_predictions[trdat_indices, i] <- models[[i]]$pred %>%
-      arrange(rowIndex) %>%
-      distinct(rowIndex, .keep_all = TRUE) %>%
-      dplyr::select(., pred) %>%
-      unlist() %>%
-      unname()
-    
-    n_const_i <- length(cov_keep_i)
-    
-    models_predictions[holdout_indices, i] <- predict_passna(
-      models[[i]],
-      holdout_i,
-      n_const = n_const_i
-    )
-    
-    saveRDS(
-      models[[i]],
-      paste0(dir_results, "/model_", frac, ".rds")
-    )
+    models_boot_bestscores[[i]] %<>%
+      bind_rows() %>%
+      mutate(
+        frac = frac
+      )
   }
   
   # End of model training
   
   names(weights_objects) <- fractions
-  
   saveRDS(
     weights_objects,
     paste0(dir_results, "/weights_objects.rds")
   )
   
   saveRDS(
-    models_scoreresults,
-    paste0(dir_results, "/models_scoreresults.rds")
+    models_boot_scoreresults,
+    paste0(dir_results, "/models_boot_scoreresults.rds")
   )
   
+  models_boot_bestscores %<>%
+    bind_rows()
   saveRDS(
-    models_bestscores,
-    paste0(dir_results, "/models_bestscores.rds")
+    models_boot_bestscores,
+    paste0(dir_results, "/models_boot_bestscores.rds")
   )
-  
-  models_bestscores %>%
-    bind_rows() %>%
-    write.table(
-      file = paste0(dir_results, "/models_bestscores.csv"),
-      sep = ";",
-      row.names = FALSE
-    )
+  write.table(
+    models_boot_bestscores,
+    file = paste0(dir_results, "/models_boot_bestscores.csv"),
+    sep = ";",
+    row.names = FALSE
+  )
   
   write.table(
     models_weights,
@@ -834,12 +884,20 @@ if (train_models) {
   )
 } else {
   # Load existing models
-  models <- lapply(
+  models_boot<- lapply(
     1:length(fractions),
     function(x) {
-      out <- fractions[x] %>%
-        paste0(dir_results, "/model_", ., ".rds") %>%
-        readRDS()
+      model_files <- 
+        fractions[x] %>%
+        paste0(dir_boot_models, "/", ., "/") %>%
+        list.files(full.names = TRUE)
+      
+      out <- lapply(
+        model_files,
+        function(x2) {
+          out2 <- readRDS(x2)
+        }
+      )
       return(out)
     }
   )
@@ -848,12 +906,12 @@ if (train_models) {
     paste0(., "/weights_objects.rds") %>%
     readRDS()
   
-  models_scoreresults <- dir_results %>%
-    paste0(., "/models_scoreresults.rds") %>%
+  models_boot_scoreresults <- dir_results %>%
+    paste0(., "/models_boot_scoreresults.rds") %>%
     readRDS()
   
-  models_bestscores <- dir_results %>%
-    paste0(., "/models_bestscores.rds") %>%
+  models_boot_bestscores <- dir_results %>%
+    paste0(., "/models_boot_bestscores.rds") %>%
     readRDS()
 
   models_weights <- dir_results %>%
@@ -870,26 +928,26 @@ if (train_models) {
       sep = ";"
     )
   
-  models_predictions <- dir_results %>%
-    paste0(., "/models_predictions_raw.csv") %>%
+  models_boot_predictions <- dir_results %>%
+    paste0(., "/models_boot_predictions_raw.csv") %>%
     read.table(
       ., header = TRUE,
       sep = ";"
     )
 }
 
-names(models) <- fractions
+names(models_boot) <- fractions
 
 
 
 # Model summary
 
-bestscores_df <- models_bestscores %>% bind_rows()
+bestscores_df <- models_boot_bestscores %>% bind_rows()
 
-n_ogcs_models <- bestscores_df$n_ogcs
-total_imp_models <- bestscores_df$total_imp
+n_ogcs_models_boot<- bestscores_df$n_ogcs
+total_imp_models_boot<- bestscores_df$total_imp
 
-models_sum <- lapply(models, function(x) {
+models_boot_sum <- lapply(models, function(x) {
   results <- x$results
   if ("RMSEw" %in% names(results)) {
     out <- results %>% filter(RMSEw == min(RMSEw))
@@ -913,12 +971,12 @@ models_sum <- lapply(models, function(x) {
     .after = 1
   ) %T>%
   write.table(
-    file = paste0(dir_results, "/models_sum.csv"),
+    file = paste0(dir_results, "/models_boot_sum.csv"),
     sep = ";",
     row.names = FALSE
   )
 
-models_sum
+models_boot_sum
 
 # Varimp for PCA models
 
@@ -976,27 +1034,27 @@ varImp_pcs <- function(
 }
 
 varImp_pcs(
-  models[[5]],
+  models_boot[[5]],
   pcs_cov
 )
 
 # Covariate importance
 
-imp_all <- models %>%
+imp_all <- models_boot %>%
   seq_along() %>%
   lapply(
     function(x) {
       if (use_pca) {
         out <- varImp_pcs(
-          models[[x]],
+          models_boot[[x]],
           pcs_cov
         ) %>%
-          mutate(fraction = names(models)[x])
+          mutate(fraction = names(models_boot)[x])
       } else {
-        out <- varImp(models[[x]])$importance %>%
+        out <- varImp(models_boot[[x]])$importance %>%
           as.data.frame() %>%
           rownames_to_column(var = "covariate") %>%
-          mutate(fraction = names(models)[x])
+          mutate(fraction = names(models_boot)[x])
         return(out)
       }
     }
@@ -1021,9 +1079,9 @@ imp_all
 
 # Standardize and transform predictions
 
-models_predictions
+models_boot_predictions
 
-models_predictions %<>%
+models_boot_predictions %<>%
   apply(
     1, function(x) {
       sum_min <- sum(x[1:4])
@@ -1040,11 +1098,11 @@ models_predictions %<>%
   ) %>%
   bind_rows()
 
-colnames(models_predictions) <- fractions
+colnames(models_boot_predictions) <- fractions
 
 write.table(
-  models_predictions,
-  file = paste0(dir_results, "/models_predictions_raw.csv"),
+  models_boot_predictions,
+  file = paste0(dir_results, "/models_boot_predictions_raw.csv"),
   sep = ";",
   row.names = FALSE
 )
@@ -1057,7 +1115,7 @@ get_acc <- function(i2) {
   lookup <- c(obs = fractions[i2])
   out <- obs %>%
     mutate(
-      pred = models_predictions[, i2],
+      pred = models_boot_predictions[, i2],
       weights = models_weights[, i2],
       indices = factor(!models_indices[, i2], labels = c("CV", "Holdout")),
       bare = obs$s2_count_max10_fuzzy > 0,
@@ -1097,7 +1155,7 @@ get_acc_db <- function(i2) {
   lookup <- c(obs = fractions[i2])
   out <- obs %>%
     mutate(
-      pred = models_predictions[, i2],
+      pred = models_boot_predictions[, i2],
       weights = models_weights[, i2],
       indices = factor(!models_indices[, i2], labels = c("CV", "Holdout")),
       bare = obs$s2_count_max10_fuzzy > 0,
@@ -1146,11 +1204,11 @@ write.table(
 source("f_classify_soil_JB.R")
 
 JB_predicted <- classify_soil_JB(
-  clay = models_predictions[, 1],
-  silt = models_predictions[, 2],
-  sand_f = models_predictions[, 3],
-  SOM = models_predictions[, 5] / 0.568,
-  CaCO3 = models_predictions[, 6]
+  clay = models_boot_predictions[, 1],
+  silt = models_boot_predictions[, 2],
+  sand_f = models_boot_predictions[, 3],
+  SOM = models_boot_predictions[, 5] / 0.568,
+  CaCO3 = models_boot_predictions[, 6]
 ) %>%
   factor(
     levels = 1:12,
@@ -1212,7 +1270,7 @@ getpred <- function(
   
   df <- obs %>% select(any_of(fractions[i2]))
   colnames(df) <- "obs"
-  df$pred = models_predictions[, i2]
+  df$pred = models_boot_predictions[, i2]
   
   if (i2 == 5) df %<>% log()
   if (i2 == 6) df %<>% sqrt()
@@ -1264,7 +1322,7 @@ getpred <- function(
 }
 
 allpred <- foreach(i = 1:6, .combine = rbind) %do%
-  getpred(models[[i]], i)
+  getpred(models_boot[[i]], i)
 
 allpred$fraction %<>% factor(levels = fractions)
 
@@ -1444,10 +1502,10 @@ d_out <- list()
 
 allpred_depth <- foreach(i = 1:6) %do%
   getpred(
-    models[[i]], i, axmaxmin = FALSE, drop_imputed = FALSE, drop_inf = FALSE
+    models_boot[[i]], i, axmaxmin = FALSE, drop_imputed = FALSE, drop_inf = FALSE
   )
 
-for (i in 1:length(models)) {
+for (i in 1:length(models_boot)) {
   depth_weights <- weights_objects[[i]]$w_cm_mat / weights_objects[[i]]$w_cm_sums
   
   mdata <- allpred_depth[[i]]
@@ -1771,9 +1829,9 @@ l <- list()
 
 ntop <- 20
 
-# for (i in 1:length(models))
+# for (i in 1:length(models_boot))
 # {
-#   l[[i]] <- varImp(models[[i]])$importance %>%
+#   l[[i]] <- varImp(models_boot[[i]])$importance %>%
 #     as_tibble(rownames = "covariate") %>%
 #     drop_na() %>%
 #     arrange(-Overall) %>%

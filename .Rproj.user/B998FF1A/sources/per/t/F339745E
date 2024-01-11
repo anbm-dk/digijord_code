@@ -1,27 +1,27 @@
 {
-    "id": "D58F5FAE",
-    "path": "C:/Users/au542768/digijord/digijord_code/f_cropstack.R",
-    "project_path": "f_cropstack.R",
+    "id": "F339745E",
+    "path": "C:/Users/au542768/digijord/digijord_code/f_optimize_xgboost.R",
+    "project_path": "f_optimize_xgboost.R",
     "type": "r_source",
-    "hash": "1597278957",
+    "hash": "2645101831",
     "contents": "",
     "dirty": false,
-    "created": 1704451351683.0,
+    "created": 1704967811150.0,
     "source_on_save": false,
     "relative_order": 18,
     "properties": {
         "tempName": "Untitled1",
         "source_window_id": "",
         "Source": "Source",
-        "cursorPosition": "6,37",
-        "scrollLine": "0"
+        "cursorPosition": "257,34",
+        "scrollLine": "231"
     },
     "folds": "",
-    "lastKnownWriteTime": 1695373186,
+    "lastKnownWriteTime": 1701701208,
     "encoding": "UTF-8",
     "collab_server": "",
     "source_window": "",
-    "last_content_update": 1695373186,
+    "last_content_update": 1701701208,
     "read_only": false,
     "read_only_alternatives": []
 }
