@@ -25,6 +25,15 @@ source("f_predict_passna.R")
 train_models <- TRUE
 use_pca <- TRUE
 
+# Small random sample for testing
+# Remember to include full dataset in the final model
+n <- 2000
+
+use_all_points <- FALSE
+use_all_points <- TRUE
+
+nboot_max <- 100
+
 # To do:
 # Pdp with depth
 # Profile examples
@@ -276,7 +285,6 @@ fraction_names <- c("Clay", "Silt", "Fine sand", "Coarse sand", "SOC", "CaCO3")
 bounds_lower <- rep(0, 6)
 bounds_upper <- rep(100, 6)
 
-
 # 7: Make training data
 
 folds <- bind_rows(
@@ -348,9 +356,13 @@ poisson_extr <- terra::extract(
 
 nboot <- ncol(poisson_extr)
 
+if (nboot_max < nboot) {
+  nboot <- nboot_max
+}
+
 saveRDS(
   poisson_extr,
-  paste0(dir_results, "poisson_extr.rds")
+  paste0(dir_boot, "poisson_extr.rds")
   )
 
 # Select topsoil observations for plot
@@ -516,12 +528,7 @@ bounds <- list(
 
 xgb_opt_stepwise <- FALSE
 
-# Small random sample for testing
-# Remember to include full dataset in the final model
-n <- 2000
 
-use_all_points <- FALSE
-use_all_points <- TRUE
 
 # 9: Train models
 
@@ -733,9 +740,8 @@ if (train_models) {
     models_boot_predictions[[i]] <- matrix(
       numeric(),
       nrow = nrow(obs),
-      ncol = length(fractions)
+      ncol = ncol(poisson_extr)
     )
-    colnames(models_boot_predictions[[i]]) <- fractions
     
     # bootstrap procedure
     for (bootr in 1:nboot) {
@@ -786,7 +792,7 @@ if (train_models) {
         bounds_pred = bounds_pred_i, # numeric, length 2, bounds for predicted values
         cores = 19, # number cores for parallelization
         trgrid = tgrid, # data frame with tuning parameters to be tested in basic model
-        folds = folds_i, # list with indices, folds for cross validation
+        folds = folds_bootr, # list with indices, folds for cross validation
         sumfun = sumfun_i, # summary function for accuracy assessment
         metric = metrics[i], # character, length 1, name of evaluation metric
         max_metric = FALSE, # logical, should the evaluation metric be maximized
@@ -803,10 +809,6 @@ if (train_models) {
       
       models_boot_scoreresults[[i]][[bootr]] <- model_bootr$bayes_results
       
-      print(
-        model_bootr$bayes_results$scoreSummary
-      )
-      
       models_boot_bestscores[[i]][[bootr]] <- model_bootr$best_scores
       
       print(
@@ -817,12 +819,14 @@ if (train_models) {
       
       # End of optimization
       
-      models_boot_predictions[[i]][bootr_indices, bootr] <- model_bootr$pred %>%
+      model_bootr_pred <- model_bootr$model$pred %>%
         arrange(rowIndex) %>%
         distinct(rowIndex, .keep_all = TRUE) %>%
         dplyr::select(., pred) %>%
         unlist() %>%
         unname()
+      
+      models_boot_predictions[[i]][bootr_indices, bootr] <- model_bootr_pred
       
       models_boot_predictions[[i]][-bootr_indices, bootr] <- predict_passna(
         models_boot[[i]][[bootr]],
@@ -853,18 +857,18 @@ if (train_models) {
   
   saveRDS(
     models_boot_scoreresults,
-    paste0(dir_results, "/models_boot_scoreresults.rds")
+    paste0(dir_boot, "/models_boot_scoreresults.rds")
   )
   
   models_boot_bestscores %<>%
     bind_rows()
   saveRDS(
     models_boot_bestscores,
-    paste0(dir_results, "/models_boot_bestscores.rds")
+    paste0(dir_boot, "/models_boot_bestscores.rds")
   )
   write.table(
     models_boot_bestscores,
-    file = paste0(dir_results, "/models_boot_bestscores.csv"),
+    file = paste0(dir_boot, "/models_boot_bestscores.csv"),
     sep = ";",
     row.names = FALSE
   )
@@ -882,16 +886,20 @@ if (train_models) {
     sep = ";",
     row.names = FALSE
   )
+  
+  saveRDS(
+    models_boot_predictions,
+    paste0(dir_boot, "/models_boot_predictions.rds")
+  )
 } else {
   # Load existing models
-  models_boot<- lapply(
+  models_boot <- lapply(
     1:length(fractions),
     function(x) {
-      model_files <- 
-        fractions[x] %>%
+      model_files <- fractions[x] %>%
         paste0(dir_boot_models, "/", ., "/") %>%
         list.files(full.names = TRUE)
-      
+        
       out <- lapply(
         model_files,
         function(x2) {
@@ -906,11 +914,11 @@ if (train_models) {
     paste0(., "/weights_objects.rds") %>%
     readRDS()
   
-  models_boot_scoreresults <- dir_results %>%
+  models_boot_scoreresults <- dir_boot %>%
     paste0(., "/models_boot_scoreresults.rds") %>%
     readRDS()
   
-  models_boot_bestscores <- dir_results %>%
+  models_boot_bestscores <- dir_boot %>%
     paste0(., "/models_boot_bestscores.rds") %>%
     readRDS()
 
@@ -928,12 +936,9 @@ if (train_models) {
       sep = ";"
     )
   
-  models_boot_predictions <- dir_results %>%
-    paste0(., "/models_boot_predictions_raw.csv") %>%
-    read.table(
-      ., header = TRUE,
-      sep = ";"
-    )
+  models_boot_predictions <- dir_boot %>%
+    paste0(., "/models_boot_predictions.rds") %>%
+    readRDS()
 }
 
 names(models_boot) <- fractions
@@ -942,12 +947,12 @@ names(models_boot) <- fractions
 
 # Model summary
 
-bestscores_df <- models_boot_bestscores %>% bind_rows()
+bestscores_boot_df <- models_boot_bestscores
 
-n_ogcs_models_boot<- bestscores_df$n_ogcs
-total_imp_models_boot<- bestscores_df$total_imp
+n_ogcs_models_boot<- bestscores_boot_df$n_ogcs
+total_imp_models_boot<- bestscores_boot_df$total_imp
 
-models_boot_sum <- lapply(models, function(x) {
+models_boot_sum <- lapply(models_boot, function(x) {
   results <- x$results
   if ("RMSEw" %in% names(results)) {
     out <- results %>% filter(RMSEw == min(RMSEw))
@@ -966,8 +971,8 @@ models_boot_sum <- lapply(models, function(x) {
     Fraction = fractions,
     .before = 1
   ) %>% mutate(
-    ogcs = n_ogcs_models,
-    total_imp = total_imp_models,
+    ogcs = n_ogcs_models_boot,
+    total_imp = total_imp_models_boot,
     .after = 1
   ) %T>%
   write.table(
@@ -1100,11 +1105,9 @@ models_boot_predictions %<>%
 
 colnames(models_boot_predictions) <- fractions
 
-write.table(
+saveRDS(
   models_boot_predictions,
-  file = paste0(dir_results, "/models_boot_predictions_raw.csv"),
-  sep = ";",
-  row.names = FALSE
+  paste0(dir_boot, "/models_boot_predictions.rds")
 )
 
 # Inspect models
