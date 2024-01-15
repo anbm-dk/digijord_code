@@ -23,7 +23,8 @@ dir_dat <- paste0(root, "/digijord_data/")
 source("f_predict_passna.R")
 
 train_models <- TRUE
-use_pca <- TRUE
+# use_pca <- TRUE
+use_pca <- FALSE
 
 # Small random sample for testing
 # Remember to include full dataset in the final model
@@ -49,7 +50,9 @@ nboot_max <- 100
 # Categorical covariates now have fuzzy boundaries.
 # Filled gaps in bare soil composite.
 # Using colsample_bynode instead of colsample_bylevel.
-# Using principal components analysis for covariates
+# Tested principal components analysis for covariates, but dropped it again.
+# PCA worked well, but the prediction time increased too much.
+# Allowed max_imp to be as low as 0.1
 testn <- 14
 mycrs <- "EPSG:25832"
 
@@ -523,7 +526,7 @@ bounds <- list(
   subsample = c(0.1, 1),
   colsample_bynode = c(0.1, 1),
   ogcs_index = c(1L, 7L),
-  total_imp = c(0.5, 1)
+  total_imp = c(0.1, 1)
 )
 
 xgb_opt_stepwise <- FALSE
@@ -533,29 +536,18 @@ xgb_opt_stepwise <- FALSE
 # 9: Train models
 
 if (train_models) {
-  weights_objects <- list()  # No changed for bootstrap
+  weights_objects <- list()  # Not changed for bootstrap
   
-  models_boot<- list()
+  models_boot <- list()
   
   models_boot_scoreresults <- list()
   models_boot_bestscores <- list()
   models_boot_predictions <- list()
-  
-  models_weights <- matrix(
-    numeric(),
-    nrow = nrow(obs),
-    ncol = length(fractions)
-  )
-  colnames(models_weights) <- fractions
-  
-  models_indices <- matrix(
-    numeric(),
-    nrow = nrow(obs),
-    ncol = length(fractions)
-  )
-  colnames(models_indices) <- fractions
+  models_weights <- list()
+  models_indices <- list() #####
 
   for (i in 1:length(fractions))
+  # for (i in 4:length(fractions))
   {
     frac <- fractions[i]
     
@@ -698,7 +690,8 @@ if (train_models) {
     
     weights_objects[[i]]$indices <- trdat_w_indices
     
-    models_weights[trdat_w_indices, i] <- w_depth
+    models_weights[[i]] <- numeric(nrow(obs))
+    models_weights[[i]][trdat_w_indices] <- w_depth
     
     # Three folds + 10 per cent holdout dataset
     trdat %<>% mutate(
@@ -714,7 +707,7 @@ if (train_models) {
     
     trdat_indices <- which(obs$ID_new %in% trdat$ID_new)
     
-    models_indices[, i] <- obs$ID_new %in% trdat$ID_new
+    models_indices[[i]] <- obs$ID_new %in% trdat$ID_new
     
     # Add depth boundaries and SOM removal as covariates
     cov_keep_i <- c("upper", "lower")
@@ -744,6 +737,7 @@ if (train_models) {
     )
     
     # bootstrap procedure
+    print("Training models")
     for (bootr in 1:nboot) {
       bootr_chr <- bootr %>%
         str_pad(
@@ -839,58 +833,43 @@ if (train_models) {
         paste0(dir_boot_models_i, "/model_", frac, "_", bootr_chr, ".rds")
       )
     }
-    
+    # End of model training
     models_boot_bestscores[[i]] %<>%
       bind_rows() %>%
       mutate(
         frac = frac
       )
+    
+    saveRDS(
+      weights_objects[[i]],
+      paste0(dir_results, "/weights_objects_", frac, ".rds")
+    )
+    
+    saveRDS(
+      models_boot_scoreresults[[i]],
+      paste0(dir_boot, "/models_boot_scoreresults_", frac, ".rds")
+    )
+    
+    saveRDS(
+      models_boot_bestscores[[i]],
+      paste0(dir_boot, "/models_boot_bestscores_", frac, ".rds")
+    )
+    
+    saveRDS(
+      models_weights[[i]],
+      file = paste0(dir_results, "/models_weights_", frac, ".rds")
+    )
+    
+    saveRDS(
+      models_indices[[i]],
+      file = paste0(dir_results, "/models_indices_", frac, ".csv"),
+    )
+    
+    saveRDS(
+      models_boot_predictions[[i]],
+      paste0(dir_boot, "/models_boot_predictions_", frac, ".rds")
+    )
   }
-  
-  # End of model training
-  
-  names(weights_objects) <- fractions
-  saveRDS(
-    weights_objects,
-    paste0(dir_results, "/weights_objects.rds")
-  )
-  
-  saveRDS(
-    models_boot_scoreresults,
-    paste0(dir_boot, "/models_boot_scoreresults.rds")
-  )
-  
-  models_boot_bestscores %<>%
-    bind_rows()
-  saveRDS(
-    models_boot_bestscores,
-    paste0(dir_boot, "/models_boot_bestscores.rds")
-  )
-  write.table(
-    models_boot_bestscores,
-    file = paste0(dir_boot, "/models_boot_bestscores.csv"),
-    sep = ";",
-    row.names = FALSE
-  )
-  
-  write.table(
-    models_weights,
-    file = paste0(dir_results, "/models_weights.csv"),
-    sep = ";",
-    row.names = FALSE
-  )
-  
-  write.table(
-    models_indices,
-    file = paste0(dir_results, "/models_indices.csv"),
-    sep = ";",
-    row.names = FALSE
-  )
-  
-  saveRDS(
-    models_boot_predictions,
-    paste0(dir_boot, "/models_boot_predictions.rds")
-  )
 } else {
   # Load existing models
   models_boot <- lapply(
@@ -910,39 +889,49 @@ if (train_models) {
     }
   )
   
-  weights_objects <- dir_results %>%
-    paste0(., "/weights_objects.rds") %>%
-    readRDS()
+  weights_objects <- list()
+  models_boot_scoreresults <- list()
+  models_boot_bestscores <- list()
+  models_weights <- list()
+  models_indices <- list()
+  models_boot_predictions <- list()
   
-  models_boot_scoreresults <- dir_boot %>%
-    paste0(., "/models_boot_scoreresults.rds") %>%
-    readRDS()
-  
-  models_boot_bestscores <- dir_boot %>%
-    paste0(., "/models_boot_bestscores.rds") %>%
-    readRDS()
-
-  models_weights <- dir_results %>%
-    paste0(., "/models_weights.csv") %>%
-    read.table(
-      ., header = TRUE,
-      sep = ";"
-      )
-  
-  models_indices <- dir_results %>%
-    paste0(., "/models_indices.csv") %>%
-    read.table(
-      ., header = TRUE,
-      sep = ";"
-    )
-  
-  models_boot_predictions <- dir_boot %>%
-    paste0(., "/models_boot_predictions.rds") %>%
-    readRDS()
+  for (i in 1:length(fractions)) {
+    frac <- fractions[i]
+    
+    weights_objects[[i]] <- dir_results %>%
+      paste0(., "/weights_objects_", frac, ".rds") %>%
+      readRDS()
+    
+    models_boot_scoreresults[[i]] <- dir_boot %>%
+      paste0(., "/models_boot_scoreresults_", frac, ".rds") %>%
+      readRDS()
+    
+    models_boot_bestscores[[i]] <- dir_boot %>%
+      paste0(., "/models_boot_bestscores_", frac, ".rds") %>%
+      readRDS()
+    
+    models_weights[[i]] <- dir_results %>%
+      paste0(., "/models_weights_", frac, ".csv") %>%
+      readRDS()
+    
+    models_indices[[i]] <- dir_results %>%
+      paste0(., "/models_indices_", frac, ".csv") %>%
+      readRDS()
+    
+    models_boot_predictions[[i]] <- dir_boot %>%
+      paste0(., "/models_boot_predictions_", frac, ".rds") %>%
+      readRDS()
+  }
 }
 
 names(models_boot) <- fractions
-
+names(weights_objects) <- fractions
+names(models_boot_scoreresults) <- fractions
+names(models_boot_bestscores) <- fractions
+names(models_weights) <- fractions
+names(models_indices) <- fractions
+names(models_boot_predictions) <- fractions
 
 
 # Model summary
@@ -2178,7 +2167,7 @@ parSapplyLB(
       ),
       n_const = 3,
       n_digits = 1,
-      pcs = pcs_cov,
+      # pcs = pcs_cov,
       filename = outname,
       overwrite = TRUE
     )

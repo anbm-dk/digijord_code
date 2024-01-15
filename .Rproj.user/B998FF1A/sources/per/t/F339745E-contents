@@ -52,7 +52,7 @@ optimize_xgboost <- function(
     as.formula()
   # Basic model
   showConnections()
-  cl <- makePSOCKcluster(cores, outfile = " ")
+  cl <- makePSOCKcluster(cores, outfile = "")
   registerDoParallel(cl)
   set.seed(seed)
   basic_model <- caret::train(
@@ -264,7 +264,8 @@ optimize_xgboost <- function(
     eta_test_final <- best_pars$eta
   }
   showConnections()
-  cl <- makePSOCKcluster(cores, outfile = " ")
+  cl <- makePSOCKcluster(
+    cores, outfile = "")
   registerDoParallel(cl)
   set.seed(seed)
   model_final <- caret::train(

@@ -21,7 +21,8 @@ dir_results <- dir_dat %>%
 
 # fractions <- c("clay", "silt", "fine_sand", "coarse_sand", "logSOC", "logCaCO3")
 
-use_pca <- TRUE
+# use_pca <- TRUE
+use_pca <- FALSE
 
 pcs_cov <- readRDS(paste0(dir_dat, "pcs_cov.rds"))
 
@@ -218,7 +219,7 @@ for (k in 1:nrow(SOC_CaCO3_depth_grid)) {
         ),
         n_const = 2,
         n_digits = 1,
-        pcs = pcs_cov,
+        # pcs = pcs_cov,
         filename = outname_x,
         overwrite = TRUE
       )
@@ -353,7 +354,7 @@ for (j in 1:(length(breaks) - 1)) {
           ),
           n_const = 3,
           n_digits = 1,
-          pcs = pcs_cov,
+          # pcs = pcs_cov,
           filename = outname_x,
           overwrite = TRUE
         )
