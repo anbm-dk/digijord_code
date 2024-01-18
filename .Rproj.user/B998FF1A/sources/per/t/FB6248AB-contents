@@ -756,10 +756,10 @@ if (train_models) {
       models_boot_bestscores[[i]] <- list()
     }
     
-    if (is.list(models_boot_bestscores[[i]])) {
-      n_bestscores <- length(models_boot_bestscores[[i]])
-    } else {
+    if (is.data.frame(models_boot_bestscores[[i]])) {
       n_bestscores <- nrow(models_boot_bestscores[[i]])
+    } else {
+      n_bestscores <- length(models_boot_bestscores[[i]])
     }
     
     if (file.exists(boot_predictions_filename)) {
@@ -779,7 +779,7 @@ if (train_models) {
     
     start_boot <- min(n_models_exist, n_bestscores, n_predictions) + 1
   
-    if (start_boot < nboot) {
+    if (start_boot <= nboot) {
       # bootstrap procedure
       print("Training models")
       for (bootr in start_boot:nboot) {
