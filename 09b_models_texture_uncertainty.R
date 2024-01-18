@@ -538,12 +538,12 @@ xgb_opt_stepwise <- FALSE
 if (train_models) {
   weights_objects <- list()  # Not changed for bootstrap
   
-  models_boot <- list()
+  # models_boot <- list()
   
   models_boot_bestscores <- list()
   models_boot_predictions <- list()
   models_weights <- list()
-  models_indices <- list() #####
+  models_indices <- list()
 
   for (i in 1:length(fractions))
   # for (i in 4:length(fractions))
@@ -727,21 +727,21 @@ if (train_models) {
     
     n_models_exist <- dir_boot_models_i %>% list.files() %>% length()
     
-    if (n_models_exist == 0) {
-      models_boot[[i]] <- list()
-    } else {
-      model_files <- frac %>%
-        paste0(dir_boot_models, "/", ., "/") %>%
-        list.files(full.names = TRUE)
-      
-      models_boot[[i]] <- lapply(
-        model_files,
-        function(x2) {
-          out2 <- readRDS(x2)
-          return(out2)
-        }
-      )
-    }
+    # if (n_models_exist == 0) {
+    #   models_boot[[i]] <- list()
+    # } else {
+    #   model_files <- frac %>%
+    #     paste0(dir_boot_models, "/", ., "/") %>%
+    #     list.files(full.names = TRUE)
+    #   
+    #   models_boot[[i]] <- lapply(
+    #     model_files,
+    #     function(x2) {
+    #       out2 <- readRDS(x2)
+    #       return(out2)
+    #     }
+    #   )
+    # }
     
     bestscores_filename <- paste0(
       dir_boot, "/models_boot_bestscores_", frac, ".rds"
@@ -851,7 +851,7 @@ if (train_models) {
           models_boot_bestscores[[i]][[bootr]]
         )
         
-        models_boot[[i]][[bootr]] <- model_bootr$model
+        # models_boot[[i]][[bootr]] <- model_bootr$model
         
         # End of optimization
         
@@ -865,13 +865,13 @@ if (train_models) {
         models_boot_predictions[[i]][bootr_indices, bootr] <- model_bootr_pred
         
         models_boot_predictions[[i]][-bootr_indices, bootr] <- predict_passna(
-          models_boot[[i]][[bootr]],
+          model_bootr$model,
           holdout_bootr,
           n_const = n_const_i
         )
         
         saveRDS(
-          models_boot[[i]][[bootr]],
+          model_bootr$model,
           paste0(dir_boot_models_i, "/model_", frac, "_", bootr_chr, ".rds")
         )
         saveRDS(
@@ -900,23 +900,23 @@ if (train_models) {
     )
   }
 } else {
-  # Load existing models
-  models_boot <- lapply(
-    1:length(fractions),
-    function(x) {
-      model_files <- fractions[x] %>%
-        paste0(dir_boot_models, "/", ., "/") %>%
-        list.files(full.names = TRUE)
-        
-      out <- lapply(
-        model_files,
-        function(x2) {
-          out2 <- readRDS(x2)
-        }
-      )
-      return(out)
-    }
-  )
+  # # Load existing models
+  # models_boot <- lapply(
+  #   1:length(fractions),
+  #   function(x) {
+  #     model_files <- fractions[x] %>%
+  #       paste0(dir_boot_models, "/", ., "/") %>%
+  #       list.files(full.names = TRUE)
+  #       
+  #     out <- lapply(
+  #       model_files,
+  #       function(x2) {
+  #         out2 <- readRDS(x2)
+  #       }
+  #     )
+  #     return(out)
+  #   }
+  # )
   
   weights_objects <- list()
   models_boot_bestscores <- list()
@@ -949,12 +949,14 @@ if (train_models) {
   }
 }
 
-names(models_boot) <- fractions
+# names(models_boot) <- fractions
 names(weights_objects) <- fractions
 names(models_boot_bestscores) <- fractions
 names(models_weights) <- fractions
 names(models_indices) <- fractions
 names(models_boot_predictions) <- fractions
+
+# END OF MODEL TRAINING LOOP
 
 # models_boot_bestscores[[i]] %<>%
 #   bind_rows() %>%
