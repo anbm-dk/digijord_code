@@ -540,7 +540,6 @@ if (train_models) {
   
   models_boot <- list()
   
-  models_boot_scoreresults <- list()
   models_boot_bestscores <- list()
   models_boot_predictions <- list()
   models_weights <- list()
@@ -726,148 +725,178 @@ if (train_models) {
       paste0(., "/", frac, "/") %T>%
       dir.create()
     
-    models_boot[[i]] <- list()
-    models_boot_scoreresults[[i]] <- list()
-    models_boot_bestscores[[i]] <- list()
+    n_models_exist <- dir_boot_models_i %>% list.files() %>% length()
     
-    models_boot_predictions[[i]] <- matrix(
-      numeric(),
-      nrow = nrow(obs),
-      ncol = ncol(poisson_extr)
-    )
-    
-    # bootstrap procedure
-    print("Training models")
-    for (bootr in 1:nboot) {
-      bootr_chr <- bootr %>%
-        str_pad(
-          .,
-          nchar(nboot),
-          pad = "0"
-        )
+    if (n_models_exist == 0) {
+      models_boot[[i]] <- list()
+    } else {
+      model_files <- frac %>%
+        paste0(dir_boot_models, "/", ., "/") %>%
+        list.files(full.names = TRUE)
       
-      trdat_bootr <- trdat %>%
-        mutate(
-          weights_bootr = poisson_extr[trdat_indices, bootr],
-          w_combined = weights_bootr*w
-        ) %>%
-        filter(w_combined > 0)
-      
-      bootr_indices <- which(obs$ID_new %in% trdat_bootr$ID_new)
-      holdout_bootr <- obs[-bootr_indices, ]
-      holdout_indices <- which(obs$ID_new %in% holdout_bootr$ID_new)
-      
-      # List of folds
-      folds_bootr <- lapply(
-        unique(trdat_bootr$fold),
-        function(x) {
-          out <- trdat_bootr %>%
-            mutate(
-              is_j = fold != x,
-              rnum = row_number(),
-              ind_j = is_j * rnum
-            ) %>%
-            filter(ind_j != 0) %>%
-            dplyr::select(., ind_j) %>%
-            unlist() %>%
-            unname()
+      models_boot[[i]] <- lapply(
+        model_files,
+        function(x2) {
+          out2 <- readRDS(x2)
+          return(out2)
         }
       )
-      
-      # Bayes optimization
-      foreach::registerDoSEQ()
-      showConnections()
-      
-      model_bootr <- optimize_xgboost(
-        target = frac,  # character vector (length 1), target variable.
-        cov_names = cov_c_i,  # Character vector, covariate names,
-        data = trdat_bootr, # data frame, input data
-        bounds_bayes = bounds, # named list with bounds for bayesian opt.
-        bounds_pred = bounds_pred_i, # numeric, length 2, bounds for predicted values
-        cores = 19, # number cores for parallelization
-        trgrid = tgrid, # data frame with tuning parameters to be tested in basic model
-        folds = folds_bootr, # list with indices, folds for cross validation
-        sumfun = sumfun_i, # summary function for accuracy assessment
-        metric = metrics[i], # character, length 1, name of evaluation metric
-        max_metric = FALSE, # logical, should the evaluation metric be maximized
-        weights = trdat_bootr$w_combined, # numeric, weights for model training and evaluation
-        trees_per_round = 1, # numeric, length 1, number of trees that xgboost should train in each round
-        obj_xgb = objectives[i], # character, length 1, objective function for xgboost
-        colsample_bynode_basic = 0.75, # numeric, colsample_bynode for basic model
-        cov_keep = cov_keep_i, # Character vector, covariates that should always be present
-        final_round_mult = 1,  # Multiplier for the number of rounds in the final model
-        maxd = 10^3, # Maximum depth for optimized models
-        seed = 321,  # Random seed for model training,
-        classprob = FALSE
+    }
+    
+    bestscores_filename <- paste0(
+      dir_boot, "/models_boot_bestscores_", frac, ".rds"
       )
-      
-      models_boot_scoreresults[[i]][[bootr]] <- model_bootr$bayes_results
-      
-      models_boot_bestscores[[i]][[bootr]] <- model_bootr$best_scores
-      
-      print(
-        models_boot_bestscores[[i]][[bootr]]
+    boot_predictions_filename <- paste0(
+      dir_boot, "/models_boot_predictions_", frac, ".rds"
       )
-      
-      models_boot[[i]][[bootr]] <- model_bootr$model
-      
-      # End of optimization
-      
-      model_bootr_pred <- model_bootr$model$pred %>%
-        arrange(rowIndex) %>%
-        distinct(rowIndex, .keep_all = TRUE) %>%
-        dplyr::select(., pred) %>%
-        unlist() %>%
-        unname()
-      
-      models_boot_predictions[[i]][bootr_indices, bootr] <- model_bootr_pred
-      
-      models_boot_predictions[[i]][-bootr_indices, bootr] <- predict_passna(
-        models_boot[[i]][[bootr]],
-        holdout_bootr,
-        n_const = n_const_i
-      )
-      
-      saveRDS(
-        models_boot[[i]][[bootr]],
-        paste0(dir_boot_models_i, "/model_", frac, "_", bootr_chr, ".rds")
+    
+    if (file.exists(bestscores_filename)) {
+      models_boot_bestscores[[i]] <- bestscores_filename %>% readRDS()
+    } else {
+      models_boot_bestscores[[i]] <- list()
+    }
+    
+    if (is.list(models_boot_bestscores[[i]])) {
+      n_bestscores <- length(models_boot_bestscores[[i]])
+    } else {
+      n_bestscores <- nrow(models_boot_bestscores[[i]])
+    }
+    
+    if (file.exists(boot_predictions_filename)) {
+      models_boot_predictions[[i]] <- boot_predictions_filename %>% readRDS()
+    } else {
+      models_boot_predictions[[i]] <- matrix(
+        numeric(),
+        nrow = nrow(obs),
+        ncol = ncol(poisson_extr)
       )
     }
-    # End of model training
-    models_boot_bestscores[[i]] %<>%
-      bind_rows() %>%
-      mutate(
-        frac = frac
-      )
+    n_predictions <- models_boot_predictions[[i]] %>%
+      colSums() %>%
+      is.na() %>%
+      not() %>%
+      sum()
+    
+    start_boot <- min(n_models_exist, n_bestscores, n_predictions) + 1
+  
+    if (start_boot < nboot) {
+      # bootstrap procedure
+      print("Training models")
+      for (bootr in start_boot:nboot) {
+        bootr_chr <- bootr %>%
+          str_pad(
+            .,
+            nchar(nboot),
+            pad = "0"
+          )
+        
+        trdat_bootr <- trdat %>%
+          mutate(
+            weights_bootr = poisson_extr[trdat_indices, bootr],
+            w_combined = weights_bootr*w
+          ) %>%
+          filter(w_combined > 0)
+        
+        bootr_indices <- which(obs$ID_new %in% trdat_bootr$ID_new)
+        holdout_bootr <- obs[-bootr_indices, ]
+        holdout_indices <- which(obs$ID_new %in% holdout_bootr$ID_new)
+        
+        # List of folds
+        folds_bootr <- lapply(
+          unique(trdat_bootr$fold),
+          function(x) {
+            out <- trdat_bootr %>%
+              mutate(
+                is_j = fold != x,
+                rnum = row_number(),
+                ind_j = is_j * rnum
+              ) %>%
+              filter(ind_j != 0) %>%
+              dplyr::select(., ind_j) %>%
+              unlist() %>%
+              unname()
+          }
+        )
+        
+        # Bayes optimization
+        foreach::registerDoSEQ()
+        showConnections()
+        
+        model_bootr <- optimize_xgboost(
+          target = frac,  # character vector (length 1), target variable.
+          cov_names = cov_c_i,  # Character vector, covariate names,
+          data = trdat_bootr, # data frame, input data
+          bounds_bayes = bounds, # named list with bounds for bayesian opt.
+          bounds_pred = bounds_pred_i, # numeric, length 2, bounds for predicted values
+          cores = 19, # number cores for parallelization
+          trgrid = tgrid, # data frame with tuning parameters to be tested in basic model
+          folds = folds_bootr, # list with indices, folds for cross validation
+          sumfun = sumfun_i, # summary function for accuracy assessment
+          metric = metrics[i], # character, length 1, name of evaluation metric
+          max_metric = FALSE, # logical, should the evaluation metric be maximized
+          weights = trdat_bootr$w_combined, # numeric, weights for model training and evaluation
+          trees_per_round = 1, # numeric, length 1, number of trees that xgboost should train in each round
+          obj_xgb = objectives[i], # character, length 1, objective function for xgboost
+          colsample_bynode_basic = 0.75, # numeric, colsample_bynode for basic model
+          cov_keep = cov_keep_i, # Character vector, covariates that should always be present
+          final_round_mult = 1,  # Multiplier for the number of rounds in the final model
+          maxd = 10^3, # Maximum depth for optimized models
+          seed = 321,  # Random seed for model training,
+          classprob = FALSE
+        )
+        
+        models_boot_bestscores[[i]][[bootr]] <- model_bootr$best_scores
+        
+        print(
+          models_boot_bestscores[[i]][[bootr]]
+        )
+        
+        models_boot[[i]][[bootr]] <- model_bootr$model
+        
+        # End of optimization
+        
+        model_bootr_pred <- model_bootr$model$pred %>%
+          arrange(rowIndex) %>%
+          distinct(rowIndex, .keep_all = TRUE) %>%
+          dplyr::select(., pred) %>%
+          unlist() %>%
+          unname()
+        
+        models_boot_predictions[[i]][bootr_indices, bootr] <- model_bootr_pred
+        
+        models_boot_predictions[[i]][-bootr_indices, bootr] <- predict_passna(
+          models_boot[[i]][[bootr]],
+          holdout_bootr,
+          n_const = n_const_i
+        )
+        
+        saveRDS(
+          models_boot[[i]][[bootr]],
+          paste0(dir_boot_models_i, "/model_", frac, "_", bootr_chr, ".rds")
+        )
+        saveRDS(
+          models_boot_bestscores[[i]],
+          paste0(dir_boot, "/models_boot_bestscores_", frac, ".rds")
+        )
+        saveRDS(
+          models_boot_predictions[[i]],
+          paste0(dir_boot, "/models_boot_predictions_", frac, ".rds")
+        )
+      }
+      # End of model training
+    }
     
     saveRDS(
       weights_objects[[i]],
       paste0(dir_results, "/weights_objects_", frac, ".rds")
     )
-    
-    saveRDS(
-      models_boot_scoreresults[[i]],
-      paste0(dir_boot, "/models_boot_scoreresults_", frac, ".rds")
-    )
-    
-    saveRDS(
-      models_boot_bestscores[[i]],
-      paste0(dir_boot, "/models_boot_bestscores_", frac, ".rds")
-    )
-    
     saveRDS(
       models_weights[[i]],
       file = paste0(dir_results, "/models_weights_", frac, ".rds")
     )
-    
     saveRDS(
       models_indices[[i]],
       file = paste0(dir_results, "/models_indices_", frac, ".csv"),
-    )
-    
-    saveRDS(
-      models_boot_predictions[[i]],
-      paste0(dir_boot, "/models_boot_predictions_", frac, ".rds")
     )
   }
 } else {
@@ -890,7 +919,6 @@ if (train_models) {
   )
   
   weights_objects <- list()
-  models_boot_scoreresults <- list()
   models_boot_bestscores <- list()
   models_weights <- list()
   models_indices <- list()
@@ -903,12 +931,12 @@ if (train_models) {
       paste0(., "/weights_objects_", frac, ".rds") %>%
       readRDS()
     
-    models_boot_scoreresults[[i]] <- dir_boot %>%
-      paste0(., "/models_boot_scoreresults_", frac, ".rds") %>%
-      readRDS()
-    
     models_boot_bestscores[[i]] <- dir_boot %>%
       paste0(., "/models_boot_bestscores_", frac, ".rds") %>%
+      readRDS()
+    
+    models_boot_predictions[[i]] <- dir_boot %>%
+      paste0(., "/models_boot_predictions_", frac, ".rds") %>%
       readRDS()
     
     models_weights[[i]] <- dir_results %>%
@@ -918,21 +946,21 @@ if (train_models) {
     models_indices[[i]] <- dir_results %>%
       paste0(., "/models_indices_", frac, ".csv") %>%
       readRDS()
-    
-    models_boot_predictions[[i]] <- dir_boot %>%
-      paste0(., "/models_boot_predictions_", frac, ".rds") %>%
-      readRDS()
   }
 }
 
 names(models_boot) <- fractions
 names(weights_objects) <- fractions
-names(models_boot_scoreresults) <- fractions
 names(models_boot_bestscores) <- fractions
 names(models_weights) <- fractions
 names(models_indices) <- fractions
 names(models_boot_predictions) <- fractions
 
+# models_boot_bestscores[[i]] %<>%
+#   bind_rows() %>%
+#   mutate(
+#     frac = frac
+#   )
 
 # Model summary
 

@@ -52,8 +52,9 @@ optimize_xgboost <- function(
     as.formula()
   # Basic model
   showConnections()
-  cl <- makePSOCKcluster(cores, outfile = "")
-  registerDoParallel(cl)
+  cl <- parallel::makePSOCKcluster(cores, outfile = "log.txt")
+  on.exit(parallel::stopCluster(cl))
+  doParallel::registerDoParallel(cl)
   set.seed(seed)
   basic_model <- caret::train(
     form = formula_basic,
@@ -63,7 +64,7 @@ optimize_xgboost <- function(
     tuneGrid = trgrid,
     trControl = trainControl(
       index = folds,
-      savePredictions = "final",
+      # savePredictions = "final",
       predictionBounds = bounds_pred,
       summaryFunction = sumfun,
       allowParallel = TRUE,
@@ -78,17 +79,17 @@ optimize_xgboost <- function(
     tree_method = "approx",
     nthread = 1
   )
-  stopCluster(cl)
+  parallel::stopCluster(cl)
   foreach::registerDoSEQ()
   rm(cl)
   showConnections()
   # Scaled cumulative covariate importance
   cov_ranked <- basic_model %>%
-    varImp(basic_model, useModel = TRUE) %>%
+    caret::varImp(basic_model, useModel = TRUE) %>%
     .$importance %>%
-    rownames_to_column() %>%
-    arrange(desc(Overall)) %>%
-    mutate(
+    tibble::rownames_to_column() %>%
+    dplyr::arrange(desc(Overall)) %>%
+    dplyr::mutate(
       scaled = Overall/sum(Overall),
       cumul = cumsum(scaled)
     )
@@ -106,7 +107,7 @@ optimize_xgboost <- function(
   ) {
     # Drop unimportant covariates and add OGCs
     cov_filtered <- cov_ranked %>%
-      filter(cumul < total_imp) %>%  #!
+      dplyr::filter(cumul < total_imp) %>%  #!
       .$rowname %>%
       c(., ogcs_names_list[[ogcs_index]])  # !
     # Add permanent covariates
@@ -138,9 +139,8 @@ optimize_xgboost <- function(
         colsample_bytree = colsample_bytree, # !
         subsample = subsample # !
       ),
-      trControl = trainControl(
+      trControl = caret::trainControl(
         index = folds,
-        savePredictions = "final",
         predictionBounds = bounds_pred,
         summaryFunction = sumfun,
         allowParallel = FALSE,
@@ -159,11 +159,11 @@ optimize_xgboost <- function(
     )
     if (max_metric) {
       out_score <- model_out$results %>%
-        select(any_of(metric)) %>%
+        dplyr::select(any_of(metric)) %>%
         max()
     } else {
       out_score <- model_out$results %>%
-        select(any_of(metric)) %>%
+        dplyr::select(any_of(metric)) %>%
         min() %>%
         "*"(-1)
     }
@@ -179,8 +179,9 @@ optimize_xgboost <- function(
   }
   # Bayesian optimization
   showConnections()
-  cl <- makeCluster(cores)
-  registerDoParallel(cl, outfile = "")
+  cl <- parallel::makePSOCKcluster(cores, outfile = "log.txt")
+  on.exit(parallel::stopCluster(cl))
+  doParallel::registerDoParallel(cl)
   clusterEvalQ(
     cl,
     {
@@ -214,7 +215,7 @@ optimize_xgboost <- function(
     envir = environment()
   )
   set.seed(seed)
-  scoreresults <- bayesOpt(
+  scoreresults <- ParBayesianOptimization::bayesOpt(
     FUN = scoringFunction,
     bounds = bounds_bayes,
     initPoints = cores*2,
@@ -264,9 +265,9 @@ optimize_xgboost <- function(
     eta_test_final <- best_pars$eta
   }
   showConnections()
-  cl <- makePSOCKcluster(
-    cores, outfile = "")
-  registerDoParallel(cl)
+  cl <- parallel::makePSOCKcluster(cores, outfile = "log.txt")
+  on.exit(parallel::stopCluster(cl))
+  doParallel::registerDoParallel(cl)
   set.seed(seed)
   model_final <- caret::train(
     form = formula_final,
