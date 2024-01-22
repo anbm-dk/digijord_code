@@ -176,7 +176,7 @@ if (only_top) {
 for (j in j_depth) {
   breaks_j <- breaks[j:(j + 1)]
   breaks_j_chr <- breaks_chr[j:(j + 1)]
-  print(paste0("Depth ", breaks_j_chr, " cm"))
+  print(paste0("Depth ", paste(breaks_j_chr, collapse = " - "), " cm"))
   dir_pred_tiles_depth <- dir_pred_tiles %>%
     paste0(
       ., "/depth_", breaks_j_chr[1], "_", breaks_j_chr[2], "_cm/"
@@ -255,26 +255,25 @@ for (j in j_depth) {
           outname_x_final <- dir_pred_tiles_bootr %>%
             paste0(., "/", tilename_x, "/", frac, ".tif")
           
+          const_i <- data.frame(
+            upper = breaks_j[1],
+            lower = breaks_j[2]
+          )
+          
+          # Write temporary files for the mineral fractions
+          if (i %in% frac_ind_mineral) {
+            outname_x_tmp <- dir_pred_tiles_tmp %>%
+              paste0(., "/", tilename_x, "/", frac, ".tif")
+            
+            outname_x <- outname_x_tmp
+            
+            const_i$SOM_removed <- 1
+          } else {
+            outname_x <- outname_x_final
+          }
+          
           # Omit predictions if the output file already exists
-          if (!file.exists(outname_x_final)) {
-            
-            const_i <- data.frame(
-              upper = breaks_j[1],
-              lower = breaks_j[2]
-            )
-            
-            # Write temporary files for the mineral fractions
-            if (i %in% frac_ind_mineral) {
-              outname_x_tmp <- dir_pred_tiles_tmp %>%
-                paste0(., "/", tilename_x, "/", frac, ".tif")
-              
-              outname_x <- outname_x_tmp
-              
-              const_i$SOM_removed <- 1
-            } else {
-              outname_x <- outname_x_final
-            }
-            
+          if (!file.exists(outname_x)) {
             tmpfolder <- paste0(dir_dat, "/Temp/")
             
             terraOptions(memfrac = 0.02, tempdir = tmpfolder)
@@ -368,6 +367,7 @@ for (j in j_depth) {
           
           layernames <- tmp_files_tile_x %>%
             tools::file_path_sans_ext() %>%
+            basename() %>%
             c(., "Fine_sand")
           
           outname_x <- dir_pred_tiles_100 %>%
