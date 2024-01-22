@@ -900,24 +900,6 @@ if (train_models) {
     )
   }
 } else {
-  # # Load existing models
-  # models_boot <- lapply(
-  #   1:length(fractions),
-  #   function(x) {
-  #     model_files <- fractions[x] %>%
-  #       paste0(dir_boot_models, "/", ., "/") %>%
-  #       list.files(full.names = TRUE)
-  #       
-  #     out <- lapply(
-  #       model_files,
-  #       function(x2) {
-  #         out2 <- readRDS(x2)
-  #       }
-  #     )
-  #     return(out)
-  #   }
-  # )
-  
   weights_objects <- list()
   models_boot_bestscores <- list()
   models_weights <- list()
@@ -948,6 +930,16 @@ if (train_models) {
       readRDS()
   }
 }
+
+models_boot_files <- lapply(
+  1:length(fractions),
+  function(x) {
+    out <- fractions[x] %>%
+      paste0(dir_boot_models, "/", ., "/") %>%
+      list.files(full.names = TRUE)
+    return(out)
+  }
+)
 
 # names(models_boot) <- fractions
 names(weights_objects) <- fractions

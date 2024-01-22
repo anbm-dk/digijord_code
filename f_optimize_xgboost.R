@@ -53,7 +53,6 @@ optimize_xgboost <- function(
   # Basic model
   showConnections()
   cl <- parallel::makePSOCKcluster(cores, outfile = "log.txt")
-  on.exit(parallel::stopCluster(cl))
   doParallel::registerDoParallel(cl)
   set.seed(seed)
   basic_model <- caret::train(
@@ -180,7 +179,6 @@ optimize_xgboost <- function(
   # Bayesian optimization
   showConnections()
   cl <- parallel::makePSOCKcluster(cores, outfile = "log.txt")
-  on.exit(parallel::stopCluster(cl))
   doParallel::registerDoParallel(cl)
   clusterEvalQ(
     cl,
@@ -266,7 +264,7 @@ optimize_xgboost <- function(
   }
   showConnections()
   cl <- parallel::makePSOCKcluster(cores, outfile = "log.txt")
-  on.exit(parallel::stopCluster(cl))
+  # on.exit(parallel::stopCluster(cl))
   doParallel::registerDoParallel(cl)
   set.seed(seed)
   model_final <- caret::train(
