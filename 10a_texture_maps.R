@@ -590,7 +590,7 @@ for (j in 1:(length(breaks) - 1)) {
       lapp(
         rs_s2,
         classify_soil_JB,
-        SOM_factor = 1 / 0.568,
+        SOM_factor = 1 / 0.587,
         filename = outname_x,
         overwrite = TRUE,
         wopt = list(

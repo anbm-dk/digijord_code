@@ -1221,7 +1221,7 @@ JB_predicted <- classify_soil_JB(
   clay = models_boot_predictions[, 1],
   silt = models_boot_predictions[, 2],
   sand_f = models_boot_predictions[, 3],
-  SOM = models_boot_predictions[, 5] / 0.568,
+  SOM = models_boot_predictions[, 5] / 0.587,
   CaCO3 = models_boot_predictions[, 6]
 ) %>%
   factor(
@@ -1233,7 +1233,7 @@ JB_observed <- classify_soil_JB(
   clay = obs$clay,
   silt = obs$silt,
   sand_f = obs$fine_sand,
-  SOM = obs$SOC / 0.568,
+  SOM = obs$SOC / 0.587,
   CaCO3 = obs$CaCO3
 ) %>%
   factor(
@@ -2264,7 +2264,7 @@ maps_10km_jb <- lapply(
       maps_loaded[[1]],
       maps_loaded[[2]],
       maps_loaded[[3]],
-      maps_loaded[[5]] / 0.568,
+      maps_loaded[[5]] / 0.587,
       maps_loaded[[6]]
     )
     
