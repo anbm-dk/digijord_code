@@ -20,6 +20,7 @@ library(dplyr)
 library(xgboost)
 library(foreach)
 library(stringr)
+library(tools) # file_path_sans_ext
 
 dir_code <- getwd()
 root <- dirname(dir_code)
@@ -141,7 +142,7 @@ nboot <- lapply(
 
 nboot_final <- 100
 
-nboot_max <- 3
+nboot_max <- 100
 # nboot_max <- 100
 
 nboot <- min(c(nboot, nboot_max))
@@ -216,7 +217,7 @@ for (j in j_depth) {
         dir.create(showWarnings = FALSE, recursive = TRUE)
     }
     
-    n_outfiles_missing < dir_pred_tiles_bootr %>%
+    n_outfiles_missing <- dir_pred_tiles_bootr %>%
       paste0(., "/", tilenames, "/") %>%
       rep(., each = length(fraction_names_underscore)) %>%
       paste0(., fraction_names_underscore, ".tif") %>%
@@ -306,7 +307,7 @@ for (j in j_depth) {
               
               cov_x_names <- cov_x_files %>%
                 basename() %>%
-                file_path_sans_ext()
+                tools::file_path_sans_ext()
               
               cov_x <- cov_x_files %>% rast()
               
@@ -431,7 +432,7 @@ for (j in j_depth) {
       rm(cl)
     }
     
-    n_JB_outfiles_missing < dir_pred_tiles_bootr %>%
+    n_JB_outfiles_missing <- dir_pred_tiles_bootr %>%
       paste0(., "/", tilenames, "/") %>%
       paste0(., "JB.tif") %>%
       file.exists() %>%
@@ -589,48 +590,40 @@ for (j in j_depth) {
         # Calculate mean
         app(
           r_frac_tile,
-          fun = function(x2) {
-            out2 <- mean(x2, na.rm = TRUE)
-            out2 <- round(out2, digits = n_digits)
-            return(out2)
-          },
-          filename = outname_x_mean,
-          wopt = list(overwrite = TRUE)
-        )
+          fun = mean
+        ) %>%
+          math(
+            fun = "round",
+            digits = n_digits,
+            filename = outname_x_mean,
+            overwrite = TRUE
+          )
         # Calculate standard deviation
         app(
           r_frac_tile,
-          fun = function(x2) {
-            out2 <- sd(x2, na.rm = TRUE)
-            out2 <- round(out2, digits = n_digits)
-            return(out2)
-          },
-          filename = outname_x_sd,
-          wopt = list(overwrite = TRUE)
-        )
+          fun = sd
+        ) %>%
+          math(
+            fun = "round",
+            digits = n_digits,
+            filename = outname_x_sd,
+            overwrite = TRUE
+          )
         # Calculate 5% quantile
-        app(
+        terra::quantile(
           r_frac_tile,
-          fun = function(x2) {
-            out2 <- stats::quantile(x2, 0.05, na.rm = TRUE)
-            out2 <- round(out2, digits = n_digits)
-            return(out2)
-          },
+          probs = 0.05,
+          na.rm = TRUE, 
           filename = outname_x_q05,
-          wopt = list(overwrite = TRUE)
+          overwrite = TRUE
         )
         # Calculate 95% quantile
-        app(
+        terra::quantile(
           r_frac_tile,
-          fun = function(x2) {
-            out2 <- stats::quantile(x2, 0.95, na.rm = TRUE)
-            out2 <- round(out2, digits = n_digits)
-            return(out2)
-          },
-          filename = outname_x_q95,
-          wopt = list(overwrite = TRUE)
+          probs = 0.95,
+          na.rm = TRUE, 
+          filename = outname_x_q95
         )
-        
         return(NULL)
       }
     )
@@ -673,7 +666,8 @@ for (j in j_depth) {
       "dir_sum_depth_tiles",
       "fraction_names_underscore",
       "nboot",
-      "dir_pred_tiles_depth"
+      "dir_pred_tiles_depth",
+      "classify_soil_JB"
     )
   )
   
@@ -720,23 +714,18 @@ for (j in j_depth) {
         )
       )
       # Calculate JB uncertainty
-      app(
-        r_JB_tile_all,
-        fun = function(x2) {
-          out2 <- table(x2) %>%
-            max() %>%
-            "-"(n_JB_lyr) %>%
-            "/"(n_JB_lyr) %>%
-            "*"(-100)
-          return(out2)
-        },
-        filename = outname_x_JB_unc,
-        wopt = list(
-          overwrite = TRUE,
-          datatype = "INT1U",
-          NAflag = 101
+      mode_JB <- terra::modal(r_JB_tile_all, na.rm = TRUE)
+      terra::compare(r_JB_tile_all, mode_JB, "!=") %>%
+        app(
+          fun = sum,
+          na.rm = TRUE,
+          filename = outname_x_JB_unc,
+          wopt = list(
+            overwrite = TRUE,
+            datatype = "INT1U",
+            NAflag = 101
+          )
         )
-      )
       
       return(NULL)
     }
@@ -752,7 +741,7 @@ for (j in j_depth) {
     dir_sum_depth_tiles, "/", tilenames[1], "/") %>%
     list.files() %>%
     basename() %>%
-    file_path_sans_ext()
+    tools::file_path_sans_ext()
   
   dir_merged_depth <- dir_pred_boot %>%
     paste0(
@@ -773,7 +762,7 @@ for (j in j_depth) {
     
     merge(
       outtiles_sprc,
-      filename = paste(dir_merged_depth, "/", outfiles_basenames[i], ".tif"),
+      filename = paste0(dir_merged_depth, "/", outfiles_basenames[i], ".tif"),
       overwrite = TRUE,
       gdal = "TILED=YES",
       datatype = dtyp_i,
