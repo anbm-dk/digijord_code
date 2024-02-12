@@ -22,7 +22,8 @@ dir_dat <- paste0(root, "/digijord_data/")
 
 source("f_predict_passna.R")
 
-train_models <- TRUE
+# train_models <- TRUE
+train_models <- FALSE
 # use_pca <- TRUE
 use_pca <- FALSE
 
@@ -188,15 +189,17 @@ cov_cats <- dir_code %>%
     header = TRUE
   )
 
-cov_files <- dir_cov %>% list.files()
-cov_names <- cov_files %>% tools::file_path_sans_ext()
+# cov_files <- dir_cov %>% list.files()
+# cov_names <- cov_files %>% tools::file_path_sans_ext()
+
+cov_names <- cov_cats$name
 
 cov_names %>%
   write.table(
     paste0("cov_names_", Sys.Date(), ".csv")
   )
 
-cov_names[!cov_names %in% cov_cats$name]
+# cov_names[!cov_names %in% cov_cats$name]
 
 
 # 5: Load extracted covariates
@@ -922,7 +925,7 @@ if (train_models) {
       readRDS()
     
     models_weights[[i]] <- dir_results %>%
-      paste0(., "/models_weights_", frac, ".csv") %>%
+      paste0(., "/models_weights_", frac, ".rds") %>%
       readRDS()
     
     models_indices[[i]] <- dir_results %>%
@@ -955,6 +958,64 @@ names(models_boot_predictions) <- fractions
 #   mutate(
 #     frac = frac
 #   )
+
+# Summarise observations
+
+saveRDS(obs, file = paste0(dir_results, "/observations_texture.rds"))
+
+breaks <- c(0, 30, 60, 100, 200)
+
+weights_pivot <- models_weights %>%
+  bind_rows() %>%
+  pivot_longer(any_of(fractions), names_to = "fraction")
+
+obs
+
+obs %>%
+  mutate(
+    mean_d = (upper + lower)/2,
+    depth = cut(mean_d, breaks, include.lowest = TRUE),
+    SOC = case_when(
+      imputed == TRUE ~ NA,
+      .default = SOC
+      )
+  ) %>%
+  pivot_longer(any_of(fractions), names_to = "fraction") %>%
+  select(c(value, depth, fraction)) %>%
+  mutate(weight = weights_pivot$value) %>%
+  group_by(fraction, depth) %>%
+  drop_na() %>%
+  summarise(
+    mean = weighted.mean(value, weight, na.rm = TRUE),
+    q05 = weighted.quantile(value, weight, 0.05, na.rm = TRUE),
+    q95 = weighted.quantile(value, weight, 0.95, na.rm = TRUE),
+    sd = weighted.var(value, weight, na.rm = TRUE)^0.5,
+    n = n(),
+    w = sum(weight)
+    ) %>%
+  as.data.frame()
+
+obs %>%
+  mutate(
+    mean_d = (upper + lower)/2,
+    depth = cut(mean_d, breaks, include.lowest = TRUE),
+    SOC = case_when(
+      imputed == TRUE ~ NA,
+      .default = SOC
+    )
+  ) %>%
+  pivot_longer(any_of(fractions), names_to = "fraction") %>%
+  select(c(db, value, depth, fraction)) %>%
+  group_by(db, fraction, depth) %>%
+  drop_na() %>%
+  summarise(n = n()) %>%
+  pivot_wider(
+    id_cols = c(db, depth), 
+    values_from = n, 
+    names_from = fraction,
+    values_fill = 0,
+  ) %>%
+  as.data.frame()
 
 # Model summary
 

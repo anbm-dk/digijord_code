@@ -3,24 +3,24 @@
     "path": "C:/Users/au542768/digijord/digijord_code/09b_models_texture_uncertainty.R",
     "project_path": "09b_models_texture_uncertainty.R",
     "type": "r_source",
-    "hash": "1906144561",
+    "hash": "3313952592",
     "contents": "",
     "dirty": false,
     "created": 1681739734164.0,
     "source_on_save": false,
-    "relative_order": 11,
+    "relative_order": 12,
     "properties": {
         "source_window_id": "",
         "Source": "Source",
-        "cursorPosition": "1231,21",
-        "scrollLine": "0"
+        "cursorPosition": "1018,0",
+        "scrollLine": "1013"
     },
-    "folds": "",
-    "lastKnownWriteTime": 1705955961,
+    "folds": "938|15|943|2|\n",
+    "lastKnownWriteTime": 1707726769,
     "encoding": "UTF-8",
     "collab_server": "",
     "source_window": "",
-    "last_content_update": 1705955961069,
+    "last_content_update": 1707726769610,
     "read_only": false,
     "read_only_alternatives": []
 }
