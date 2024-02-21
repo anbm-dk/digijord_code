@@ -1380,7 +1380,7 @@ fine_sand_model_mean <- apply(models_boot_predictions[[3]], 1, mean)
 cor(boot_mean_predictions[, 3], obs$fine_sand, use = "pairwise.complete.obs")^2
 cor(fine_sand_model_mean, obs$fine_sand, use = "pairwise.complete.obs")^2
 
-cor(fine_sand_model_mean, fine_sand_residual_mean, use = "pairwise.complete.obs")
+cor(fine_sand_model_mean, boot_mean_predictions[, 3], use = "pairwise.complete.obs")
 
 saveRDS(
   boot_mean_predictions,
@@ -1391,14 +1391,59 @@ saveRDS(
 
 breaks <- c(0, 30, 60, 100, 200)
 
-get_acc <- function(i2) {
+# Fine sand accuracy, based on method
+
+finesand_acc <- data.frame(
+  pred_model = fine_sand_model_mean,
+  pred_residual = boot_mean_predictions[, 3],
+  observed = obs$fine_sand,
+  dataset = obs$fold,
+  w = models_weights[[3]],
+  upper = obs$upper,
+  lower = obs$lower
+) %>%
+  filter(is.finite(observed)) %>% mutate(
+    indices = factor(dataset == 10, labels = c("CV", "Holdout")),
+    mean_d = (upper + lower)/2,
+    depth = cut(mean_d, breaks, include.lowest = TRUE)
+  ) %>%
+  filter(is.finite(depth)) %>%
+  pivot_longer(
+    cols = c(pred_model, pred_residual),
+    names_to = "method",
+    values_to = "predicted"
+  ) %>%
+  group_by(
+    indices, depth, method
+  ) %>%
+  summarise(
+    r2w = round(get_R2w(cbind(predicted, observed), w), digits = 3),
+    rmsew = round(get_RMSEw(cbind(predicted, observed), w), digits = 3)
+  )
+
+finesand_acc
+
+write.table(
+  finesand_acc,
+  paste0(dir_results, "/boot_finesand_acc_test", testn, ".csv"),
+  sep = ";",
+  row.names = FALSE
+)
+
+# General accuracy for all observations
+
+get_acc_all <- function(i2) {
   lookup <- c(obs = fractions[i2])
-  out <- obs %>%
+  dat_i <- obs %>%
     mutate(
       pred = boot_mean_predictions[, i2],
       weights = models_weights[[i2]],
       indices = factor(!models_indices[[i2]], labels = c("CV", "Holdout")),
       bare = obs$s2_count_max10_fuzzy > 0,
+      bare = case_when(
+        is.na(bare) ~ 0,
+        .default = bare
+      ),
       mean_d = (upper + lower)/2,
       depth = cut(mean_d, breaks, include.lowest = TRUE)
     ) %>%
@@ -1408,23 +1453,127 @@ get_acc <- function(i2) {
       is.finite(pred),
       is.finite(weights),
       !is.na(depth)
-    ) %>% group_by(indices, bare, depth) %>%
+    )
+  
+  if (i2 == 5) {
+    dat_i %<>% filter(
+      imputed == FALSE
+    )
+  }
+  out <- dat_i %>% group_by(indices, depth) %>%
     summarise(
-      r2 = get_R2w(cbind(pred, obs), weights),
-      rmse = get_RMSEw(cbind(pred, obs), weights)
+      r2 = round(get_R2w(cbind(pred, obs), weights), digits = 3),
+      rmse = round(get_RMSEw(cbind(pred, obs), weights), digits = 3)
     ) %>%
     mutate(Fraction = fraction_names[i2], .before = everything())
   return(out)
 }
 
 acc_all <- foreach(i = 1:length(fractions), .combine = rbind) %do%
-  get_acc(i)
+  get_acc_all(i)
 
 acc_all
 
 write.table(
   acc_all,
   paste0(dir_results, "/boot_acc_all_test", testn, ".csv"),
+  sep = ";",
+  row.names = FALSE
+)
+
+# Accuracy for soils with less than 6% SOC
+
+get_acc_lowsoc<- function(i2) {
+  lookup <- c(obs = fractions[i2])
+  out <- obs %>%
+    mutate(
+      pred = boot_mean_predictions[, i2],
+      weights = models_weights[[i2]],
+      indices = factor(!models_indices[[i2]], labels = c("CV", "Holdout")),
+      bare = obs$s2_count_max10_fuzzy > 0,
+      bare = case_when(
+        is.na(bare) ~ 0,
+        .default = bare
+      ),
+      mean_d = (upper + lower)/2,
+      depth = cut(mean_d, breaks, include.lowest = TRUE),
+      imputed = obs$imputed
+    ) %>%
+    rename(any_of(lookup)) %>%
+    filter(
+      is.finite(obs),
+      obs <= 6,
+      is.finite(pred),
+      is.finite(weights),
+      !is.na(depth),
+      imputed == FALSE
+    ) %>% group_by(indices, depth) %>%
+    summarise(
+      r2 = round(get_R2w(cbind(pred, obs), weights), digits = 3),
+      rmse = round(get_RMSEw(cbind(pred, obs), weights), digits = 3)
+    ) %>%
+    mutate(Fraction = fraction_names[i2], .before = everything())
+  return(out)
+}
+
+acc_lowsoc <- get_acc_lowsoc(5)
+
+acc_lowsoc
+
+write.table(
+  acc_lowsoc,
+  paste0(dir_results, "/boot_acc_lowsoc_test", testn, ".csv"),
+  sep = ";",
+  row.names = FALSE
+)
+
+# Accuracy depending on the presence of bare soil
+
+get_acc_bare <- function(i2) {
+  lookup <- c(obs = fractions[i2])
+  dat_i <- obs %>%
+    mutate(
+      pred = boot_mean_predictions[, i2],
+      weights = models_weights[[i2]],
+      indices = factor(!models_indices[[i2]], labels = c("CV", "Holdout")),
+      bare = obs$s2_count_max10_fuzzy > 0,
+      bare = case_when(
+        is.na(bare) ~ 0,
+        .default = bare
+        ),
+      mean_d = (upper + lower)/2,
+      depth = cut(mean_d, breaks, include.lowest = TRUE)
+    ) %>%
+    rename(any_of(lookup)) %>%
+    filter(
+      is.finite(obs),
+      is.finite(pred),
+      is.finite(weights),
+      !is.na(depth),
+      imputed == FALSE
+    )
+  if (i2 == 5) {
+    dat_i %<>% filter(
+      imputed == FALSE
+    )
+  }
+  out <- dat_i %>% group_by(indices, depth) %>%
+    summarise(
+      r2 = round(get_R2w(cbind(pred, obs), weights), digits = 3),
+      rmse = round(get_RMSEw(cbind(pred, obs), weights), digits = 3)
+    ) %>%
+    mutate(Fraction = fraction_names[i2], .before = everything())
+  return(out)
+}
+
+acc_bare <- foreach(i = 1:length(fractions), .combine = rbind) %do%
+  get_acc_bare(i)
+
+acc_bare
+
+write.table(
+  acc_bare,
+  paste0(dir_results, "/boot_acc_bare_test", testn, ".csv"),
   sep = ";",
   row.names = FALSE
 )

@@ -147,7 +147,6 @@ nboot_max <- 100
 
 nboot <- min(c(nboot, nboot_max))
 
-
 boot_all_chr <- c(1:nboot) %>%
   str_pad(
     .,
@@ -177,14 +176,16 @@ breaks_chr <- breaks %>%
 j_all_depths <- 1:(length(breaks) - 1)
 j_only_top <- 1
 
-only_top <- TRUE
-# only_top <- FALSE
+# only_top <- TRUE
+# # only_top <- FALSE
+# 
+# if (only_top) {
+#   j_depth <- j_only_top
+# } else {
+#   j_depth <- j_all_depths
+# }
 
-if (only_top) {
-  j_depth <- j_only_top
-} else {
-  j_depth <- j_all_depths
-}
+j_depth < - 2 # Predict second layer
 
 # Delete texture class predictions (force recalculation)
 
