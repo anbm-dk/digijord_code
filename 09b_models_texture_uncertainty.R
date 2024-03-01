@@ -456,6 +456,19 @@ try(dev.off())
 
 par()
 
+# Summarise imputed values
+
+
+obs %>%
+  filter(db == "SINKS") %>%
+  group_by(imputed, upper) %>%
+  summarise(n = n(), mean = mean(SOC), median = median(SOC), min = min(SOC), max = max(SOC), sd = sd(SOC)) 
+
+obs %>%
+  filter(db == "SINKS") %>%
+  group_by(upper) %>%
+  summarise(n = n(), mean = mean(SOC), median = median(SOC), min = min(SOC), max = max(SOC), sd = sd(SOC)) 
+
 # 8: Set up models
 
 if (use_pca) {
@@ -1523,6 +1536,54 @@ acc_lowsoc
 write.table(
   acc_lowsoc,
   paste0(dir_results, "/boot_acc_lowsoc_test", testn, ".csv"),
+  sep = ";",
+  row.names = FALSE
+)
+
+# Accuracy for soils with less than 6% SOC
+
+get_acc_highsoc<- function(i2) {
+  lookup <- c(obs = fractions[i2])
+  out <- obs %>%
+    mutate(
+      pred = boot_mean_predictions[, i2],
+      weights = models_weights[[i2]],
+      indices = factor(!models_indices[[i2]], labels = c("CV", "Holdout")),
+      bare = obs$s2_count_max10_fuzzy > 0,
+      bare = case_when(
+        is.na(bare) ~ 0,
+        .default = bare
+      ),
+      mean_d = (upper + lower)/2,
+      depth = cut(mean_d, breaks, include.lowest = TRUE),
+      imputed = obs$imputed
+    ) %>%
+    rename(any_of(lookup)) %>%
+    filter(
+      is.finite(obs),
+      obs > 6,
+      is.finite(pred),
+      is.finite(weights),
+      !is.na(depth),
+      imputed == FALSE
+    ) %>% group_by(indices, depth) %>%
+    summarise(
+      r2w = round(get_R2w(cbind(pred, obs), weights), digits = 3),
+      rmsew = round(get_RMSEw(cbind(pred, obs), weights), digits = 3),
+      r2 = round(cor(pred, obs)^2, digits = 3),
+      rmse = round(RMSE(pred, obs), digits = 3)
+    ) %>%
+    mutate(Fraction = fraction_names[i2], .before = everything())
+  return(out)
+}
+
+acc_highsoc <- get_acc_highsoc(5)
+
+acc_highsoc
+
+write.table(
+  acc_highsoc,
+  paste0(dir_results, "/boot_acc_highsoc_test", testn, ".csv"),
   sep = ";",
   row.names = FALSE
 )
