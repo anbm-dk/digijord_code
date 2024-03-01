@@ -1,22 +1,16 @@
-# 10c: Map the effect of SOM removal on texture predictions
+# 10b: Mapping uncertainties for texture fractions
 
-# Procedure:
-# For depth 1:
-## For each tile:
-### For each bootstrap iteration:
-#### Predict texture fractions with and without som removal (tmp)
-#### Standardize texture predictions (tmp)
-#### Calculate differences for mineral texture fractions (tmp)
-#### Predict SOC and CaCO3 only once (tmp)
-#### Map soil texture class with and without som removal (tmp)
-#### Calculate differences for texture classes (tmp)
-### Summarize texture without SOM removal (save)
-### Summarize only mean value for SOC and CaCO3 (save)
-### Summarize texture classes without SOM removal (save)
-### Summarize differences for texture with and without som removal (save)
-### Summarize differences for texture classes (save)
-## Merge maps of summarized mineral fractions classes (save)
-
+# Steps for mapping:
+# 1st Level: Depth interval (topsoils first). Summarize across bootstrap
+# repetitions and merge tiles before mapping the next depth interval.  
+# 2nd Level: Bootstrap repetitions. One repetition at a time, across all texture
+# fractions for the depth in question, using tiles. Standardize texture
+# fractions and calculate the soil class for the repetition in question before
+# continuing to the next repetition.
+# 3rd Level: Fraction. Map texture fractions one at a time for the given
+# repetition and depth interval.
+# Omit the predictive model for fine sand. Calculate it as the residual of the
+# other fractions, relative to a sum of 100.
 
 library(parallel)
 library(caret)
@@ -110,57 +104,15 @@ tilenames <- basename(subdir_tiles)
 # Directory for saving bootstrap predictions
 
 dir_pred_boot <- dir_boot %>%
-  paste0(., "/predictions_difference/") %T>%
+  paste0(., "/predictions/") %T>%
   dir.create(showWarnings = FALSE, recursive = TRUE)
 
-# Folder for temporary bootstrap predictions for the current tile
-dir_pred_tileboot_tmp
+dir_pred_tiles <- dir_pred_boot %>%
+  paste0(., "/tiles/") %T>%
+  dir.create(showWarnings = FALSE, recursive = TRUE)
 
-# Folder for non-standardized mineral fraction predictions:
-# Subfolders (3 files each):
-# - with SOM removed
-# - without SOM removal
-
-dir_pred_tileboot_raw 
-dir_pred_tileboot_raw_somrem
-dir_pred_tileboot_raw_norem
-
-# Folder for standardized predictions:
-# Files:
-# - mineral texture fractions (2x4 files):
-# -- with SOM removed
-# -- without SOM removal
-# - mineral fraction differences (4 files)
-# - SOC and CaCO3 (2 files)
-# - texture class (2 files)
-# -- with SOM removed
-# -- without SOM removal
-
-# - texture class difference (1 file)
-
-dir_pred_tileboot_final
-
-
-# Folder for summary of the tile
-# Files:
-# - Mean and SD for each mineral fraction, without SOM removal (2x4 = 8 files)
-# - Mean and SD for differences (2 x 4 files = 8 files)
-# - Mean for SOC and CaCO3 (2 files)
-# - Texture class for mean texture without SOM removal (1 file)
-# - Uncertainty for texture class without SOM removal (1 file)
-# - Sum of texture class differences (1 file)
-
-dir_pred_tiles_sum
-
-# Merge tiles:
-# Files:
-# - Mean and SD for each mineral fraction, without SOM removal (2x4 = 8 files)
-# - Mean and SD for differences (2 x 4 files = 8 files)
-# - Texture class for mean texture without SOM removal (1 file)
-# - Uncertainty for texture class without SOM removal (1 file)
-# - Sum of texture class differences (1 file)
-
-dir_pred_tiles_sum
+# Directory for temporary texture predictions, for standardization
+# Overwrite for each depth + bootstrap repetition
 
 dir_pred_tiles_tmp <- dir_pred_tiles %>%
   paste0(., "/tmp_fractions/") %T>%
@@ -224,29 +176,16 @@ breaks_chr <- breaks %>%
 j_all_depths <- 1:(length(breaks) - 1)
 j_only_top <- 1
 
-only_top <- TRUE
+# only_top <- TRUE
 # # only_top <- FALSE
+# 
+# if (only_top) {
+#   j_depth <- j_only_top
+# } else {
+#   j_depth <- j_all_depths
+# }
 
-if (only_top) {
-  j_depth <- j_only_top
-} else {
-  j_depth <- j_all_depths
-}
-
-# Table with prediction combinations for each tile
-
-pred_combinations <- bind_rows(
-  expand.grid(
-    bootr = 1:nboot,
-    fraction_ind = frac_ind_mineral[frac_ind_mineral %in% frac_ind_predict],
-    som_removed = c(0, 1)
-  ),
-  expand.grid(
-    bootr = 1:nboot,
-    fraction_ind = frac_ind_predict[!frac_ind_predict %in% frac_ind_mineral],
-    som_removed = NA
-  )
-)
+j_depth <- 2 # Predict second layer
 
 # Delete texture class predictions (force recalculation)
 
