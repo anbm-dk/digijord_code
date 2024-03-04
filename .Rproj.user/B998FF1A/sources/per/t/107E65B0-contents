@@ -306,7 +306,7 @@ for (j in j_depth) {
   for (x in 1:length(tilenames)) {
     tilename_x <- basename(subdir_tiles[x])
     
-    print(paste0("Mapping ",tilename_x))
+    print(paste0("Mapping ", tilename_x))
     
     n_outfiles_missing <- dir_pred_tiles_sum %>%
       paste0(., "/", tilename_x, "/") %>%
@@ -353,7 +353,11 @@ for (j in j_depth) {
           "frac_ind_mineral",
           "frac_ind_mineral_predict",
           "frac_ind_nonmineral",
-          "fraction_names_underscore"
+          "fraction_names_underscore",
+          "models_boot_files",
+          "cov_cats",
+          "names_somremoval",
+          "numbers_somremoval"
         )
       )
       
@@ -394,28 +398,25 @@ for (j in j_depth) {
               outname_x <- dir_pred_tileboot_raw_subdirs[m] %>%
                 paste0(., "/", name_bootr, "/", frac, ".tif")
               
-              if (!file.exists(outname_x)) {
-                
-                const_i <- data.frame(
-                  upper = breaks_j[1],
-                  lower = breaks_j[2],
-                  SOM_removed = numbers_somremoval[m]
-                )
-                
-                cov_i %<>% terra::subset(., cov_selected)
-                
-                predict(
-                  cov_i,
-                  model_i,
-                  fun = predict_passna,
-                  na.rm = FALSE,
-                  const = const_i,
-                  n_const = ncol(const_i),
-                  n_digits = 1,
-                  filename = outname_x,
-                  overwrite = TRUE
-                )
-              }
+              const_i <- data.frame(
+                upper = breaks_j[1],
+                lower = breaks_j[2],
+                SOM_removed = numbers_somremoval[m]
+              )
+              
+              cov_i <- cov_x %>% terra::subset(., cov_selected)
+              
+              predict(
+                cov_i,
+                model_i,
+                fun = predict_passna,
+                na.rm = FALSE,
+                const = const_i,
+                n_const = ncol(const_i),
+                n_digits = 1,
+                filename = outname_x,
+                overwrite = TRUE
+              )
             }
           }
           # standardize mineral fractions
@@ -479,28 +480,26 @@ for (j in j_depth) {
             outname_x <- dir_pred_tileboot_standard %>%
               paste0(., "/", name_bootr, "/", frac, ".tif")
             
-            if (!file.exists(outname_x)) {
-              
-              const_i <- data.frame(
-                upper = breaks_j[1],
-                lower = breaks_j[2]
-              )
-              
-              cov_i %<>% terra::subset(., cov_selected)
-              
-              predict(
-                cov_i,
-                model_i,
-                fun = predict_passna,
-                na.rm = FALSE,
-                const = const_i,
-                n_const = ncol(const_i),
-                n_digits = 1,
-                filename = outname_x,
-                overwrite = TRUE
-              )
-            }
+            const_i <- data.frame(
+              upper = breaks_j[1],
+              lower = breaks_j[2]
+            )
+            
+            cov_i <- cov_x %>% terra::subset(., cov_selected)
+            
+            predict(
+              cov_i,
+              model_i,
+              fun = predict_passna,
+              na.rm = FALSE,
+              const = const_i,
+              n_const = ncol(const_i),
+              n_digits = 1,
+              filename = outname_x,
+              overwrite = TRUE
+            )
           }
+
           # Calculate JB
           # - somrem
           # - norem
@@ -573,11 +572,13 @@ for (j in j_depth) {
           
           # Calculate JB differences
           r1 <- dir_pred_tileboot_standard %>%
-            paste0(., "/", name_bootr, "/JB_", names_somremoval[1], ".tif")
+            paste0(., "/", name_bootr, "/JB_", names_somremoval[1], ".tif") %>%
+            rast()
           r2 <- dir_pred_tileboot_standard %>%
-            paste0(., "/", name_bootr, "/JB_", names_somremoval[2], ".tif")
+            paste0(., "/", name_bootr, "/JB_", names_somremoval[2], ".tif") %>%
+            rast()
           
-          r_diff <- r1 == r2
+          r_diff <- r1 != r2
           
           writeRaster(
             r_diff,
@@ -613,6 +614,7 @@ for (j in j_depth) {
           library(magrittr)
           library(dplyr)
           library(tools)
+          library(stringr)
         }
       )
       
@@ -635,7 +637,8 @@ for (j in j_depth) {
           "frac_ind_mineral_predict",
           "frac_ind_nonmineral",
           "fraction_names_underscore",
-          "names_summary_num"
+          "names_summary_num",
+          "dir_pred_tiles_sum"
         )
       )
       
@@ -807,6 +810,8 @@ for (j in j_depth) {
     
     outtiles_sprc <- summary_tiles_i %>% sprc()
     
+    outfile_basename <- names_merge[i] %>% file_path_sans_ext()
+    
     merge(
       outtiles_sprc,
       filename = paste0(dir_pred_merged_depth, "/", names_merge[i]),
@@ -814,7 +819,7 @@ for (j in j_depth) {
       gdal = "TILED=YES",
       datatype = dtyp_i,
       NAflag = naflag_i,
-      names = outfiles_basenames[i]
+      names = outfile_basename
     )
   }
 }
