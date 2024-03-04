@@ -44,6 +44,8 @@ fractions <- fractions_alt
 
 frac_ind_mineral <- c(1:4)
 frac_ind_predict <- c(1:length(fractions))[-3]  # Exclude fine sand
+frac_ind_mineral_predict <- frac_ind_mineral[frac_ind_mineral %in% frac_ind_predict]
+frac_ind_nonmineral <- frac_ind_predict[!frac_ind_predict %in% frac_ind_mineral]
 
 fraction_names <- c(
   "Clay", "Silt", "Fine sand", "Coarse sand", "SOC", "CaCO3"
@@ -93,88 +95,10 @@ models_boot_files <- lapply(
   }
 )
 
-# Tiles for model prediction
+# Names for SOM removal
 
-numCores <- detectCores() - 1
-numCores
-
-dir_tiles <- dir_dat %>%
-  paste0(., "/tiles_591/")
-
-subdir_tiles <- dir_tiles %>%
-  list.dirs() %>%
-  .[-1]
-
-tilenames <- basename(subdir_tiles)
-
-# Directory for saving bootstrap predictions
-
-dir_pred_boot <- dir_boot %>%
-  paste0(., "/predictions_difference/") %T>%
-  dir.create(showWarnings = FALSE, recursive = TRUE)
-
-# Folder for temporary bootstrap predictions for the current tile
-dir_pred_tileboot_tmp
-
-# Folder for non-standardized mineral fraction predictions:
-# Subfolders (3 files each):
-# - with SOM removed
-# - without SOM removal
-
-dir_pred_tileboot_raw 
-dir_pred_tileboot_raw_somrem
-dir_pred_tileboot_raw_norem
-
-# Folder for standardized predictions:
-# Files:
-# - mineral texture fractions (2x4 files):
-# -- with SOM removed
-# -- without SOM removal
-# - mineral fraction differences (4 files)
-# - SOC and CaCO3 (2 files)
-# - texture class (2 files)
-# -- with SOM removed
-# -- without SOM removal
-
-# - texture class difference (1 file)
-
-dir_pred_tileboot_final
-
-
-# Folder for summary of the tile
-# Files:
-# - Mean and SD for each mineral fraction, without SOM removal (2x4 = 8 files)
-# - Mean and SD for differences (2 x 4 files = 8 files)
-# - Mean for SOC and CaCO3 (2 files)
-# - Texture class for mean texture without SOM removal (1 file)
-# - Uncertainty for texture class without SOM removal (1 file)
-# - Sum of texture class differences (1 file)
-
-dir_pred_tiles_sum
-
-# Merge tiles:
-# Files:
-# - Mean and SD for each mineral fraction, without SOM removal (2x4 = 8 files)
-# - Mean and SD for differences (2 x 4 files = 8 files)
-# - Texture class for mean texture without SOM removal (1 file)
-# - Uncertainty for texture class without SOM removal (1 file)
-# - Sum of texture class differences (1 file)
-
-dir_pred_tiles_sum
-
-dir_pred_tiles_tmp <- dir_pred_tiles %>%
-  paste0(., "/tmp_fractions/") %T>%
-  dir.create(showWarnings = FALSE, recursive = TRUE)
-
-for (x in 1:length(tilenames)) {
-  dir_pred_tiles_tmp %>%
-    paste0(., "/", tilenames[x], "/") %T>%
-    dir.create(showWarnings = FALSE, recursive = TRUE)
-}
-
-dir_boot_sum_tiles <- dir_pred_boot %>%
-  paste0(., "/summary/") %T>%
-  dir.create(showWarnings = FALSE)
+names_somremoval <- c("norem", "somrem")
+numbers_somremoval <- 0:1
 
 # Set number of bootstrap repetitions to use
 
@@ -190,7 +114,7 @@ nboot <- lapply(
 
 nboot_final <- 100
 
-nboot_max <- 100
+nboot_max <- 19
 # nboot_max <- 100
 
 nboot <- min(c(nboot, nboot_max))
@@ -202,6 +126,145 @@ boot_all_chr <- c(1:nboot) %>%
     pad = "0"
   ) %>%
   paste0("boot_", .)
+
+
+# Tiles for model prediction
+
+numCores <- detectCores() - 1
+numCores
+
+dir_tiles <- dir_dat %>%
+  paste0(., "/tiles_591/")
+
+subdir_tiles <- dir_tiles %>%
+  list.dirs() %>%
+  .[-1]
+
+tilenames <- basename(subdir_tiles)
+
+n_tiles_use <- 3
+# n_tiles_use <- length(subdir_tiles)
+
+if (n_tiles_use < length(subdir_tiles)) {
+  tilenames <- tilenames[1:n_tiles_use]
+}
+
+# Directory for saving bootstrap predictions
+dir_pred_diff <- dir_boot %>%
+  paste0(., "/predictions_difference/") %T>%
+  dir.create(showWarnings = FALSE, recursive = TRUE)
+
+# Folder for temporary bootstrap predictions for the current tile
+dir_pred_tileboot_tmp <- dir_pred_diff %>%
+  paste0(., "/tile_x_tmp/") %T>%
+  dir.create(showWarnings = FALSE, recursive = TRUE)
+
+# Folder for non-standardized mineral fraction predictions:
+# Subfolders (3 files each):
+# - with SOM removed
+# - without SOM removal
+
+dir_pred_tileboot_raw <- dir_pred_tileboot_tmp %>%
+  paste0(., "/mineral_raw/") %T>%
+  dir.create(showWarnings = FALSE, recursive = TRUE)
+
+dir_pred_tileboot_raw_subdirs <- dir_pred_tileboot_raw %>%
+  paste0(., "/", names_somremoval, "/") %T>%
+  sapply(
+    function(x) {
+      dir.create(x, showWarnings = FALSE, recursive = TRUE)
+    }
+  )
+
+# Subfolders for bootstrap predictions
+dir_pred_tileboot_raw_subdirs %>%
+  sapply(., function(x2) {
+    paste0(x2, "/", boot_all_chr) %>%
+      sapply(
+        function(x) {
+          dir.create(x, showWarnings = FALSE, recursive = TRUE)
+        }
+      )
+  }
+  )
+
+dir_pred_tex100 <- dir_pred_tileboot_tmp %>%
+  paste0(., "/tex100/") %T>%
+  dir.create(showWarnings = FALSE, recursive = TRUE)
+
+# Folder for standardized predictions:
+# Files:
+# - mineral texture fractions (2x4 files):
+# -- with SOM removed
+# -- without SOM removal
+# - mineral fraction differences (4 files)
+# - SOC and CaCO3 (2 files)
+# - texture class (2 files)
+# -- with SOM removed
+# -- without SOM removal
+# - texture class difference (1 file)
+
+dir_pred_tileboot_standard <- dir_pred_tileboot_tmp %>%
+  paste0(., "/standardized/") %T>%
+  dir.create(showWarnings = FALSE, recursive = TRUE)
+
+# Subfolders for bootstrap predictions
+dir_pred_tileboot_standard %>%
+  paste0(., "/", boot_all_chr) %>%
+  sapply(
+    function(x) {
+      dir.create(x, showWarnings = FALSE, recursive = TRUE)
+    }
+  )
+
+# Folder for tile summaries
+dir_pred_tiles_sum <- dir_pred_diff %>%
+  paste0(., "/summarized/") %T>%
+  dir.create(showWarnings = FALSE, recursive = TRUE)
+
+# Subfolder for each tile
+dir_pred_tiles_sum %>%
+  paste0(., "/", tilenames) %>%
+  sapply(
+    function(x) {
+      dir.create(x, showWarnings = FALSE, recursive = TRUE)
+    }
+  )
+
+# Files:
+# - Mean and SD for each mineral fraction, without SOM removal (2x4 = 8 files)
+# - Mean and SD for differences (2 x 4 files = 8 files)
+# - Mean for SOC and CaCO3 (2 files)
+# - Texture class for mean texture without SOM removal (1 file)
+# - Uncertainty for texture class without SOM removal (1 file)
+# - Sum of texture class differences (1 file)
+
+names_summary <- c(
+  paste0(fraction_names_underscore[frac_ind_mineral], "_norem_mean.tif"),
+  paste0(fraction_names_underscore[frac_ind_mineral], "_norem_SD.tif"),
+  paste0(fraction_names_underscore[frac_ind_mineral], "_diff_mean.tif"),
+  paste0(fraction_names_underscore[frac_ind_mineral], "_diff_SD.tif"),
+  paste0(fraction_names_underscore[5:6], "_mean.tif"),
+  "JB_norem_mean.tif",
+  "JB_norem_unc.tif",
+  "JB_diff_mean.tif"
+)
+names_summary
+
+# Merge tiles:
+# Files:
+# - Mean and SD for each mineral fraction, without SOM removal (2x4 = 8 files)
+# - Mean and SD for differences (2 x 4 files = 8 files)
+# - Texture class for mean texture without SOM removal (1 file)
+# - Uncertainty for texture class without SOM removal (1 file)
+# - Sum of texture class differences (1 file)
+
+dir_pred_merged <- dir_pred_diff %>%
+  paste0(., "/final/") %T>%
+  dir.create(showWarnings = FALSE, recursive = TRUE)
+
+names_merge <- grep("SOC|CaCO3", names_summary, value = TRUE, invert = TRUE)
+names_merge
 
 # Set up loop for predicting each soil depth
 
@@ -233,244 +296,148 @@ if (only_top) {
   j_depth <- j_all_depths
 }
 
-# Table with prediction combinations for each tile
-
-pred_combinations <- bind_rows(
-  expand.grid(
-    bootr = 1:nboot,
-    fraction_ind = frac_ind_mineral[frac_ind_mineral %in% frac_ind_predict],
-    som_removed = c(0, 1)
-  ),
-  expand.grid(
-    bootr = 1:nboot,
-    fraction_ind = frac_ind_predict[!frac_ind_predict %in% frac_ind_mineral],
-    som_removed = NA
-  )
-)
-
-# Delete texture class predictions (force recalculation)
-
-# dir_pred_tiles %>%
-#   list.files(
-#     pattern = "JB",
-#     recursive = TRUE,
-#     full.names = TRUE
-#     ) %>%
-#   file.remove()
-
 # Execute loop for predicting each soil depth
 for (j in j_depth) {
   breaks_j <- breaks[j:(j + 1)]
   breaks_j_chr <- breaks_chr[j:(j + 1)]
   print(paste0("Depth ", paste(breaks_j_chr, collapse = " - "), " cm"))
-  dir_pred_tiles_depth <- dir_pred_tiles %>%
-    paste0(
-      ., "/depth_", breaks_j_chr[1], "_", breaks_j_chr[2], "_cm/"
-    ) %T>%
-    dir.create(showWarnings = FALSE, recursive = TRUE)
   
-  # Loop for predicting maps from bootstrap repetitions
-  for (bootr in 1:nboot) {
-    bootr_chr <- bootr %>%
-      str_pad(
-        .,
-        nchar(nboot_final),
-        pad = "0"
-      )
-    print(paste0("Bootstrap repetition ", bootr_chr))
+  # Loop for predicting tiles
+  for (x in 1:length(tilenames)) {
+    tilename_x <- basename(subdir_tiles[x])
     
-    dir_pred_tiles_bootr <- dir_pred_tiles_depth %>%
-      paste0(., "/boot_", bootr_chr, "/") %T>%
-      dir.create(showWarnings = FALSE, recursive = TRUE)
-
-    for (x in 1:length(tilenames)) {
-      dir_pred_tiles_bootr %>%
-        paste0(., "/", tilenames[x], "/") %T>%
-        dir.create(showWarnings = FALSE, recursive = TRUE)
-    }
+    print(paste0("Mapping ",tilename_x))
     
-    n_outfiles_missing <- dir_pred_tiles_bootr %>%
-      paste0(., "/", tilenames, "/") %>%
-      rep(., each = length(fraction_names_underscore)) %>%
-      paste0(., fraction_names_underscore, ".tif") %>%
+    n_outfiles_missing <- dir_pred_tiles_sum %>%
+      paste0(., "/", tilename_x, "/") %>%
+      rep(., each = length(names_summary)) %>%
+      paste0(., names_summary, ".tif") %>%
       file.exists() %>%
       not() %>%
       sum()
     
     if (n_outfiles_missing > 0) {
-      for (i in frac_ind_predict) {
-        frac <- fraction_names_underscore[i]
-        print(paste0("Mapping ", frac))
-        
-        model_i <- models_boot_files[[i]][bootr] %>% readRDS()
-        
-        cov_selected <- (varImp(model_i)$importance %>% row.names()) %>%
-          .[. %in% cov_cats$name]
-        
-        showConnections()
-        
-        cl <- makeCluster(numCores)
-        
-        clusterEvalQ(
-          cl,
-          {
-            library(terra)
-            library(caret)
-            library(xgboost)
-            library(magrittr)
-            library(dplyr)
-            library(tools)
-          }
-        )
-        
-        clusterExport(
-          cl,
-          c(
-            "i",
-            "model_i",
-            "subdir_tiles",
-            "dir_pred_tiles_bootr",
-            "dir_pred_tiles_tmp",
-            "frac",
-            "cov_selected",
-            "predict_passna",
-            "dir_dat",
-            "n_digits",
-            "breaks_j",
-            "breaks_j_chr",
-            "frac_ind_mineral"
-          )
-        )
-        
-        parSapplyLB(
-          cl,
-          1:length(subdir_tiles),
-          function(x) {
-            tilename_x <- basename(subdir_tiles[x])
-            
-            outname_x_final <- dir_pred_tiles_bootr %>%
-              paste0(., "/", tilename_x, "/", frac, ".tif")
-            
-            const_i <- data.frame(
-              upper = breaks_j[1],
-              lower = breaks_j[2]
-            )
-            
-            # Write temporary files for the mineral fractions
-            if (i %in% frac_ind_mineral) {
-              outname_x_tmp <- dir_pred_tiles_tmp %>%
-                paste0(., "/", tilename_x, "/", frac, ".tif")
-              
-              outname_x <- outname_x_tmp
-              
-              const_i$SOM_removed <- 1
-            } else {
-              outname_x <- outname_x_final
-            }
-            
-            # Omit predictions if the output file already exists
-            if (!file.exists(outname_x_final)) {
-              tmpfolder <- paste0(dir_dat, "/Temp/")
-              
-              terraOptions(memfrac = 0.02, tempdir = tmpfolder)
-              
-              cov_x_files <- subdir_tiles[x] %>%
-                list.files(full.names = TRUE)
-              
-              cov_x_names <- cov_x_files %>%
-                basename() %>%
-                tools::file_path_sans_ext()
-              
-              cov_x <- cov_x_files %>% rast()
-              
-              names(cov_x) <- cov_x_names
-              
-              cov_x %<>% terra::subset(., cov_selected)
-              
-              predict(
-                cov_x,
-                model_i,
-                fun = predict_passna,
-                na.rm = FALSE,
-                const = const_i,
-                n_const = ncol(const_i),
-                n_digits = 1,
-                filename = outname_x,
-                overwrite = TRUE
-              )
-            }
-            return(NULL)
-          }
-        )
-        
-        stopCluster(cl)
-        foreach::registerDoSEQ()
-        rm(cl)
-      }
-      # Standardize mineral texture predictions
-      print("Standardizing mineral fractions")
-      dir_pred_tiles_100 <- paste0(dir_pred_tiles, "/tmp_tex100") %T>%
-        dir.create(showWarnings = FALSE, recursive = TRUE)
-      for (x in 1:length(tilenames)) {
-        dir_pred_tiles_100 %>%
-          paste0(., "/", tilenames[x], "/") %T>%
-          dir.create(showWarnings = FALSE, recursive = TRUE)
-      }
-      showConnections()
+# Function for parallel bootstrap prediction
       cl <- makeCluster(numCores)
+      
       clusterEvalQ(
         cl,
         {
           library(terra)
+          library(caret)
+          library(xgboost)
           library(magrittr)
           library(dplyr)
           library(tools)
         }
       )
+      
       clusterExport(
         cl,
         c(
+          "boot_all_chr",
+          "x",
           "subdir_tiles",
+          "tilename_x",
+          "dir_pred_diff",
+          "dir_pred_tileboot_raw",
+          "dir_pred_tileboot_raw_subdirs",
+          "dir_pred_tileboot_standard",
+          "dir_pred_tileboot_tmp",
+          "dir_pred_tex100",
+          "predict_passna",
           "dir_dat",
           "n_digits",
-          "dir_pred_tiles_100",
-          "fraction_names_underscore",
+          "breaks_j",
           "breaks_j_chr",
-          "dir_pred_tiles_tmp",
-          "dir_pred_tiles_bootr"
+          "frac_ind_mineral",
+          "frac_ind_mineral_predict",
+          "frac_ind_nonmineral",
+          "fraction_names_underscore"
         )
       )
+      
       parSapplyLB(
         cl,
-        1:length(subdir_tiles),
-        function(x) {
-          tilename_x <- basename(subdir_tiles[x])
-          n_rs_tex <- dir_pred_tiles_bootr %>%
-            paste0(., "/", tilename_x, "/") %>%
-            list.files(pattern = ".tif", full.names = TRUE) %>%
-            length()
+        1:length(boot_all_chr),
+        function(bootr) {
+          name_bootr <- boot_all_chr[bootr]
           
-          if (n_rs_tex < 6) {
-            tmpfolder <- paste0(dir_dat, "/Temp/")
+          tmpfolder <- paste0(dir_dat, "/Temp/")
+          
+          terraOptions(memfrac = 0.02, tempdir = tmpfolder)
+          
+          # Load covariates
+          cov_x_files <- subdir_tiles[x] %>%
+            list.files(full.names = TRUE)
+          
+          cov_x_names <- cov_x_files %>%
+            basename() %>%
+            tools::file_path_sans_ext()
+          
+          cov_x <- cov_x_files %>% rast()
+          
+          names(cov_x) <- cov_x_names
+          
+          # Predict mineral fractions
+          # - norem
+          # - somrem
+          for (i in frac_ind_mineral_predict) {
+            frac <- fraction_names_underscore[i]
             
-            terraOptions(memfrac = 0.02, tempdir = tmpfolder)
+            model_i <- models_boot_files[[i]][bootr] %>% readRDS()
             
-            tmp_files_tile_x <- dir_pred_tiles_tmp %>%
-              paste0(., "/", tilename_x, "/") %>% 
+            cov_selected <- (varImp(model_i)$importance %>% row.names()) %>%
+              .[. %in% cov_cats$name]
+            
+            for (m in 1:length(names_somremoval)) {
+              outname_x <- dir_pred_tileboot_raw_subdirs[m] %>%
+                paste0(., "/", name_bootr, "/", frac, ".tif")
+              
+              if (!file.exists(outname_x)) {
+                
+                const_i <- data.frame(
+                  upper = breaks_j[1],
+                  lower = breaks_j[2],
+                  SOM_removed = numbers_somremoval[m]
+                )
+                
+                cov_i %<>% terra::subset(., cov_selected)
+                
+                predict(
+                  cov_i,
+                  model_i,
+                  fun = predict_passna,
+                  na.rm = FALSE,
+                  const = const_i,
+                  n_const = ncol(const_i),
+                  n_digits = 1,
+                  filename = outname_x,
+                  overwrite = TRUE
+                )
+              }
+            }
+          }
+          # standardize mineral fractions
+          # - norem
+          # - somrem
+          for (m in 1:length(names_somremoval)) {
+            tmp_files_bootr <- dir_pred_tileboot_raw_subdirs[m] %>%
+              paste0(., "/", name_bootr, "/") %>% 
               list.files(full.names = TRUE)
             
-            rs_pred_tile_x <- tmp_files_tile_x %>% rast()
+            rs_pred_bootr <- tmp_files_bootr %>% rast()
             
-            layernames <- tmp_files_tile_x %>%
+            layernames <- tmp_files_bootr %>%
               tools::file_path_sans_ext() %>%
               basename() %>%
               c(., "Fine_sand")
             
-            outname_x <- dir_pred_tiles_100 %>%
-              paste0(., "/", tilename_x, ".tif")
+            outname_x <- dir_pred_tex100 %>%
+              paste0(., "/", name_bootr, "_", names_somremoval[m], ".tif")
             
             app(
-              rs_pred_tile_x,
+              rs_pred_bootr,
               function(r) {
                 res <- max(c(100 - sum(r), 0))
                 out <- c(r, res)
@@ -486,8 +453,11 @@ for (j in j_depth) {
             tex100_x <- outname_x %>% rast()
             
             for (i in 1:length(layernames)) {
-              outname_x_final <- dir_pred_tiles_bootr %>%
-                paste0(., "/", tilename_x, "/", layernames[i], ".tif")
+              outname_x_final <- dir_pred_tileboot_standard %>%
+                paste0(
+                  ., "/", name_bootr, "/", layernames[i], "_",
+                  names_somremoval[m], ".tif"
+                )
               
               writeRaster(
                 tex100_x[[i]],
@@ -496,85 +466,74 @@ for (j in j_depth) {
               )
             }
           }
-          return(NULL)
-        }
-      )
-      stopCluster(cl)
-      foreach::registerDoSEQ()
-      rm(cl)
-    }
-    
-    n_JB_outfiles_missing <- dir_pred_tiles_bootr %>%
-      paste0(., "/", tilenames, "/") %>%
-      paste0(., "JB.tif") %>%
-      file.exists() %>%
-      not() %>%
-      sum()
-    
-    if (n_JB_outfiles_missing > 0) {
-      # Classify JB
-      print("Calculating soil texture class")
-      source("f_classify_soil_JB.R")
-      
-      showConnections()
-      
-      cl <- makeCluster(numCores)
-      
-      clusterEvalQ(
-        cl,
-        {
-          library(terra)
-          library(magrittr)
-          library(dplyr)
-          library(caret)
-          library(xgboost)
-          library(tools)
-        }
-      )
-      
-      clusterExport(
-        cl,
-        c(
-          "breaks_j_chr",
-          "subdir_tiles",
-          "dir_dat",
-          "dir_pred_tiles_bootr",
-          "fraction_names_underscore",
-          "classify_soil_JB"
-        )
-      )
-      
-      parSapplyLB(
-        cl,
-        1:length(subdir_tiles),
-        function(x) {
-          tilename_x <- basename(subdir_tiles[x])
-          
-          outname_x <- dir_pred_tiles_bootr %>%
-            paste0(., "/", tilename_x, "/JB.tif")
-          
-          if (!file.exists(outname_x)) {
-            tmpfolder <- paste0(dir_dat, "/Temp/")
+          # Predict SOC and CaCO3
+          for (i in frac_ind_nonmineral) {
+            frac <- fraction_names_underscore[i]
             
-            terraOptions(memfrac = 0.02, tempdir = tmpfolder)
+            model_i <- models_boot_files[[i]][bootr] %>% readRDS()
             
-            rs_tex <- dir_pred_tiles_bootr %>%
+            cov_selected <- (varImp(model_i)$importance %>% row.names()) %>%
+              .[. %in% cov_cats$name]
+            
+            
+            outname_x <- dir_pred_tileboot_standard %>%
+              paste0(., "/", name_bootr, "/", frac, ".tif")
+            
+            if (!file.exists(outname_x)) {
+              
+              const_i <- data.frame(
+                upper = breaks_j[1],
+                lower = breaks_j[2]
+              )
+              
+              cov_i %<>% terra::subset(., cov_selected)
+              
+              predict(
+                cov_i,
+                model_i,
+                fun = predict_passna,
+                na.rm = FALSE,
+                const = const_i,
+                n_const = ncol(const_i),
+                n_digits = 1,
+                filename = outname_x,
+                overwrite = TRUE
+              )
+            }
+          }
+          # Calculate JB
+          # - somrem
+          # - norem
+          source("f_classify_soil_JB.R")
+          
+          for (m in 1:length(names_somremoval)) {
+            outname_x <- dir_pred_tileboot_standard %>%
+              paste0(., "/", name_bootr, "/JB_", names_somremoval[m], ".tif")
+            
+            rs_tex <- c(
               paste0(
-                ., "/", tilename_x, "/",
-                fraction_names_underscore,
+                dir_pred_tileboot_standard, "/", name_bootr, "/",
+                fraction_names_underscore[frac_ind_mineral],
+                "_", names_somremoval[m],
                 ".tif"
-              ) %>%
+              ),
+              paste0(
+                dir_pred_tileboot_standard, "/", name_bootr, "/",
+                fraction_names_underscore[frac_ind_nonmineral],
+                ".tif"
+              )
+            ) %>%
               rast()
             
             rs_s2 <- terra::subset(rs_tex, c(1, 2, 3, 5, 6))
-            
             names(rs_s2) <- c("clay", "silt", "sand_f", "SOM", "CaCO3")
             
             lapp(
               rs_s2,
               classify_soil_JB,
               # SOM_factor = 1 / 0.587,
-              SOM_factor = 1 / 0.6,
+              # SOM_factor = 1 / 0.6,
+              SOM_factor = 0,  # NB! Disregard SOM as, JB11 depends on Peat2022
               filename = outname_x,
               overwrite = TRUE,
               wopt = list(
@@ -582,191 +541,200 @@ for (j in j_depth) {
                 NAflag = 13
               )
             )
-            return(NULL)
           }
+          
+          # Calculate mineral fraction differences
+          for (i in frac_ind_mineral) {
+            r1 <- dir_pred_tileboot_standard %>%
+              paste0(
+                ., "/", name_bootr, "/", fraction_names_underscore[i], "_",
+                names_somremoval[1], ".tif"
+              ) %>% rast()
+            r2 <- dir_pred_tileboot_standard %>%
+              paste0(
+                ., "/", name_bootr, "/", fraction_names_underscore[i], "_",
+                names_somremoval[2], ".tif"
+              ) %>% rast()
+            
+            r_diff <- r2 - r1
+            
+            outname <- dir_pred_tileboot_standard %>%
+              paste0(
+                ., "/", name_bootr, "/", fraction_names_underscore[i],
+                "_diff.tif"
+              )
+            
+            writeRaster(
+              r_diff,
+              filename = outname,
+              overwrite = TRUE
+            )
+          }
+          
+          # Calculate JB differences
+          r1 <- dir_pred_tileboot_standard %>%
+            paste0(., "/", name_bootr, "/JB_", names_somremoval[1], ".tif")
+          r2 <- dir_pred_tileboot_standard %>%
+            paste0(., "/", name_bootr, "/JB_", names_somremoval[2], ".tif")
+          
+          r_diff <- r1 == r2
+          
+          writeRaster(
+            r_diff,
+            filename = paste0(
+              dir_pred_tileboot_standard,
+              "/", name_bootr, "/JB_diff.tif"
+            ),
+            overwrite = TRUE,
+            datatype = "INT1U"
+          )
+
+          return(NULL)
         }
       )
+      
       stopCluster(cl)
       foreach::registerDoSEQ()
       rm(cl)
-    }
-  }
-  
-  # Summarize results across bootstrap repetitions
-  dir_sum_depth_tiles <- dir_boot_sum_tiles %>%
-    paste0(
-      ., "/depth_", breaks_j_chr[1], "_", breaks_j_chr[2], "_cm/"
-    ) %T>%
-    dir.create(showWarnings = FALSE)
-  
-  for (x in 1:length(tilenames)) {
-    dir_sum_depth_tiles %>%
-      paste0(., "/", tilenames[x], "/") %T>%
-      dir.create(showWarnings = FALSE, recursive = TRUE)
-  }
-  
-  for (i in 1:length(fraction_names_underscore)) {
-    frac <- fraction_names_underscore[i]
-    print(paste0("Summarizing ", frac))
-
-    showConnections()
-
-    cl <- makeCluster(numCores)
-
-    clusterEvalQ(
-      cl,
-      {
-        library(terra)
-        library(magrittr)
-        library(dplyr)
-        library(tools)
-      }
-    )
-
-    clusterExport(
-      cl,
-      c(
-        "boot_all_chr",
-        "subdir_tiles",
-        "frac",
-        "dir_dat",
-        "n_digits",
-        "dir_sum_depth_tiles",
-        "dir_pred_tiles_depth"
-      )
-    )
-
-    parSapplyLB(
-      cl,
-      1:length(subdir_tiles),
-      function(x) {
-        tilename_x <- basename(subdir_tiles[x])
-
-        r_frac_tile <- paste0(
-          dir_pred_tiles_depth, "/", boot_all_chr, "/", tilename_x, "/",
-          frac, ".tif") %>%
-          rast()
-
-        outname_x_mean <- dir_sum_depth_tiles %>%
-          paste0(., "/", tilename_x, "/", frac, "_mean.tif")
-        outname_x_sd <- dir_sum_depth_tiles %>%
-          paste0(., "/", tilename_x, "/", frac, "_sd.tif")
-        outname_x_q05 <- dir_sum_depth_tiles %>%
-          paste0(., "/", tilename_x, "/", frac, "_q05.tif")
-        outname_x_q95 <- dir_sum_depth_tiles %>%
-          paste0(., "/", tilename_x, "/", frac, "_q95.tif")
-
-        tmpfolder <- paste0(dir_dat, "/Temp/")
-
-        terraOptions(memfrac = 0.02, tempdir = tmpfolder)
-
-        # Calculate mean
-        app(
-          r_frac_tile,
-          fun = mean
-        ) %>%
-          math(
-            fun = "round",
-            digits = n_digits,
-            filename = outname_x_mean,
-            overwrite = TRUE
-          )
-        # Calculate standard deviation
-        app(
-          r_frac_tile,
-          fun = sd
-        ) %>%
-          math(
-            fun = "round",
-            digits = n_digits,
-            filename = outname_x_sd,
-            overwrite = TRUE
-          )
-        # Calculate 5% quantile
-        terra::quantile(
-          r_frac_tile,
-          probs = 0.05,
-          na.rm = TRUE,
-          filename = outname_x_q05,
-          overwrite = TRUE
-        )
-        # Calculate 95% quantile
-        terra::quantile(
-          r_frac_tile,
-          probs = 0.95,
-          na.rm = TRUE,
-          filename = outname_x_q95,
-          overwrite = TRUE
-        )
-        return(NULL)
-      }
-    )
-
-    stopCluster(cl)
-    foreach::registerDoSEQ()
-    rm(cl)
-  }
-
-  # Calculate mean soil class and soil class uncertainties
-  
-  print("Summarizing texture classes")
-  source("f_classify_soil_JB.R")
-  showConnections()
-  
-  cl <- makeCluster(numCores)
-  
-  clusterEvalQ(
-    cl,
-    {
-      library(terra)
-      library(magrittr)
-      library(dplyr)
-      library(tools)
-    }
-  )
-  
-  clusterExport(
-    cl,
-    c(
-      "boot_all_chr",
-      "subdir_tiles",
-      "dir_dat",
-      "n_digits",
-      "breaks_j",
-      "breaks_j_chr",
-      "dir_sum_depth_tiles",
-      "fraction_names_underscore",
-      "nboot",
-      "dir_pred_tiles_depth",
-      "classify_soil_JB"
-    )
-  )
-  
-  parSapplyLB(
-    cl,
-    1:length(subdir_tiles),
-    function(x) {
-      tilename_x <- basename(subdir_tiles[x])
       
-      r_frac_tile_means <- paste0(
-        dir_sum_depth_tiles, "/", tilename_x, "/",
-        fraction_names_underscore, "_mean.tif") %>%
+      # Summarize results across bootstrap repetitions
+      
+      names_summary_num <- names_summary %>%
+        grep("JB", .,  invert = TRUE, value = TRUE)
+
+      cl <- makeCluster(numCores)
+      
+      clusterEvalQ(
+        cl,
+        {
+          library(terra)
+          library(caret)
+          library(xgboost)
+          library(magrittr)
+          library(dplyr)
+          library(tools)
+        }
+      )
+      
+      clusterExport(
+        cl,
+        c(
+          "boot_all_chr",
+          "x",
+          "tilename_x",
+          "dir_pred_diff",
+          "dir_pred_tileboot_raw",
+          "dir_pred_tileboot_raw_subdirs",
+          "dir_pred_tileboot_standard",
+          "dir_pred_tileboot_tmp",
+          "dir_dat",
+          "n_digits",
+          "breaks_j",
+          "breaks_j_chr",
+          "frac_ind_mineral",
+          "frac_ind_mineral_predict",
+          "frac_ind_nonmineral",
+          "fraction_names_underscore",
+          "names_summary_num"
+        )
+      )
+      
+      parSapplyLB(
+        cl,
+        1:length(names_summary_num),
+        function(i) {
+          tmpfolder <- paste0(dir_dat, "/Temp/")
+          terraOptions(memfrac = 0.02, tempdir = tmpfolder)
+          
+          splitname <- names_summary_num[i] %>%
+            file_path_sans_ext() %>%
+            str_split(., "_") %>%
+            unlist()
+          
+          stat_i <- splitname[length(splitname)]
+          input_name <- splitname[-length(splitname)] %>% paste(collapse = "_")
+          
+          input_layers_i <- dir_pred_tileboot_standard %>%
+            list.files(recursive = TRUE, full.names = TRUE) %>%
+            grep(input_name, ., value = TRUE) %>%
+            rast()
+          
+          if (stat_i == "mean") {
+            outname <- dir_pred_tiles_sum %>%
+              paste0(., "/", tilename_x, "/", input_name, "_mean.tif")
+            
+            app(
+              input_layers_i,
+              fun = mean
+            ) %>%
+              math(
+                fun = "round",
+                digits = n_digits,
+                filename = outname,
+                overwrite = TRUE
+              )
+          }
+          
+          if (stat_i == "SD") {
+            outname <- dir_pred_tiles_sum %>%
+              paste0(., "/", tilename_x, "/", input_name, "_sd.tif")
+            
+            app(
+              input_layers_i,
+              fun = sd
+            ) %>%
+              math(
+                fun = "round",
+                digits = n_digits,
+                filename = outname,
+                overwrite = TRUE
+              )
+          }
+          
+          return(NULL)
+        }
+      )
+      
+      stopCluster(cl)
+      foreach::registerDoSEQ()
+      rm(cl)
+      
+      # Texture class for mean texture predictions without SOM removal
+      
+      source("f_classify_soil_JB.R")
+      
+      # Summarize texture classes without SOM removal
+      
+      r_frac_tile_means <- c(
+        paste0(
+          dir_pred_tiles_sum, "/", tilename_x, "/",
+          fraction_names_underscore[frac_ind_mineral],
+          "_", names_somremoval[1], "_mean",
+          ".tif"
+        ),
+        paste0(
+          dir_pred_tiles_sum, "/", tilename_x, "/",
+          fraction_names_underscore[frac_ind_nonmineral], "_mean",
+          ".tif"
+        )
+      ) %>%
         rast()
       
       r_JB_tile_all <- paste0(
-        dir_pred_tiles_depth, "/", boot_all_chr, "/", tilename_x, "/JB.tif") %>%
+        dir_pred_tileboot_standard, "/", boot_all_chr, "/",
+        "/JB_norem.tif") %>%
         rast()
       
       n_JB_lyr <- nlyr(r_JB_tile_all)
       
-      outname_x_JB_mean <- dir_sum_depth_tiles %>%
-        paste0(., "/", tilename_x, "/JB_mean.tif")
-      outname_x_JB_unc <- dir_sum_depth_tiles %>%
-        paste0(., "/", tilename_x, "/JB_unc.tif")
+      outname_x_JB_mean <- dir_pred_tiles_sum %>%
+        paste0(., "/", tilename_x, "/JB_norem_mean.tif")
+      outname_x_JB_unc <- dir_pred_tiles_sum %>%
+        paste0(., "/", tilename_x, "/JB_norem_unc.tif")
       
       tmpfolder <- paste0(dir_dat, "/Temp/")
       
-      terraOptions(memfrac = 0.02, tempdir = tmpfolder)
+      terraOptions(tempdir = tmpfolder)
       
       r_frac_tile_means <- terra::subset(r_frac_tile_means, c(1, 2, 3, 5, 6))
       
@@ -776,7 +744,8 @@ for (j in j_depth) {
       lapp(
         r_frac_tile_means,
         classify_soil_JB,
-        SOM_factor = 1 / 0.587,
+        # SOM_factor = 1 / 0.587,
+        SOM_factor = 0,
         filename = outname_x_JB_mean,
         overwrite = TRUE,
         wopt = list(
@@ -798,31 +767,38 @@ for (j in j_depth) {
           )
         )
       
-      return(NULL)
+      # Summarize differences for texture classes
+      r_JB_diff_all <- paste0(
+        dir_pred_tileboot_standard, "/", boot_all_chr, "/",
+        "/JB_diff.tif") %>%
+        rast()
+      
+      outname_x_JB_diff <- dir_pred_tiles_sum %>%
+        paste0(., "/", tilename_x, "/JB_diff_mean.tif")
+      
+      app(
+        r_JB_diff_all,
+        fun = sum,
+        na.rm = TRUE,
+        filename = outname_x_JB_diff,
+        overwrite = TRUE,
+        wopt = list(
+          datatype = "INT1U",
+          NAflag = 101
+        )
+      )
     }
-  )
-  
-  stopCluster(cl)
-  foreach::registerDoSEQ()
-  rm(cl)
-  
-  # Merge summary rasters
-  
-  outfiles_basenames <- paste0(
-    dir_sum_depth_tiles, "/", tilenames[1], "/") %>%
-    list.files() %>%
-    basename() %>%
-    tools::file_path_sans_ext()
-  
-  dir_merged_depth <- dir_pred_boot %>%
+  }
+  # Merge maps of summarized mineral fractions classes
+  dir_pred_merged_depth <- dir_pred_merged %>%
     paste0(
-      ., "/final_maps/depth_", breaks_j_chr[1], "_", breaks_j_chr[2], "_cm/"
+      ., "/depth_", breaks_j_chr[1], "_", breaks_j_chr[2], "_cm/"
     ) %T>%
     dir.create(showWarnings = FALSE, recursive = TRUE)
   
-  for (i in 1:length(outfiles_basenames)) {
+  for (i in 1:length(names_merge)) {
     summary_tiles_i <- paste0(
-      dir_sum_depth_tiles, "/", tilenames, "/", outfiles_basenames[i], ".tif"
+      dir_pred_tiles_sum, "/", tilenames, "/", names_merge[i]
     )
     tile1_i <- summary_tiles_i[1] %>% rast()
     
@@ -833,7 +809,7 @@ for (j in j_depth) {
     
     merge(
       outtiles_sprc,
-      filename = paste0(dir_merged_depth, "/", outfiles_basenames[i], ".tif"),
+      filename = paste0(dir_pred_merged_depth, "/", names_merge[i]),
       overwrite = TRUE,
       gdal = "TILED=YES",
       datatype = dtyp_i,
@@ -842,133 +818,6 @@ for (j in j_depth) {
     )
   }
 }
-
-# Summarise texture class without JB11
-
-# for (j in j_depth) {
-#   breaks_j <- breaks[j:(j + 1)]
-#   breaks_j_chr <- breaks_chr[j:(j + 1)]
-#   print(paste0("Depth ", paste(breaks_j_chr, collapse = " - "), " cm"))
-#   dir_pred_tiles_depth <- dir_pred_tiles %>%
-#     paste0(
-#       ., "/depth_", breaks_j_chr[1], "_", breaks_j_chr[2], "_cm/"
-#     ) %T>%
-#     dir.create(showWarnings = FALSE, recursive = TRUE)
-#   
-#   dir_sum_depth_tiles <- dir_boot_sum_tiles %>%
-#     paste0(
-#       ., "/depth_", breaks_j_chr[1], "_", breaks_j_chr[2], "_cm/"
-#     )
-#   
-#   # Calculate mean soil class and soil class uncertainties
-#   
-#   print("Summarizing texture classes")
-#   source("f_classify_soil_JB.R")
-#   showConnections()
-#   
-#   cl <- makeCluster(numCores)
-#   
-#   clusterEvalQ(
-#     cl,
-#     {
-#       library(terra)
-#       library(magrittr)
-#       library(dplyr)
-#       library(tools)
-#     }
-#   )
-#   
-#   clusterExport(
-#     cl,
-#     c(
-#       "boot_all_chr",
-#       "subdir_tiles",
-#       "dir_pred_tiles_tmp",
-#       "dir_dat",
-#       "n_digits",
-#       "breaks_j",
-#       "breaks_j_chr",
-#       "dir_sum_depth_tiles",
-#       "fraction_names_underscore",
-#       "nboot",
-#       "dir_pred_tiles_depth",
-#       "classify_soil_JB"
-#     )
-#   )
-#   
-#   parSapplyLB(
-#     cl,
-#     1:length(subdir_tiles),
-#     function(x) {
-#       tilename_x <- basename(subdir_tiles[x])
-#       
-#       r_frac_tile_means <- paste0(
-#         dir_sum_depth_tiles, "/", tilename_x, "/",
-#         fraction_names_underscore, "_mean.tif") %>%
-#         rast()
-# 
-#       outname_x_JB_no11 <- dir_sum_depth_tiles %>%
-#         paste0(., "/", tilename_x, "/JB_no11.tif")
-#       
-#       tmpfolder <- paste0(dir_dat, "/Temp/")
-#       
-#       terraOptions(memfrac = 0.02, tempdir = tmpfolder)
-#       
-#       r_frac_tile_means <- terra::subset(r_frac_tile_means, c(1, 2, 3, 5, 6))
-#       
-#       names(r_frac_tile_means) <- c("clay", "silt", "sand_f", "SOM", "CaCO3")
-#       
-#       # JB texture class for mean texture
-#       lapp(
-#         r_frac_tile_means,
-#         classify_soil_JB,
-#         SOM_factor = 0,  ## NB, no JB11
-#         filename = outname_x_JB_no11,
-#         overwrite = TRUE,
-#         wopt = list(
-#           datatype = "INT1U",
-#           NAflag = 13
-#         )
-#       )
-#       
-#       return(NULL)
-#     }
-#   )
-#   
-#   stopCluster(cl)
-#   foreach::registerDoSEQ()
-#   rm(cl)
-#   
-#   # Merge summary rasters
-#   
-#   dir_merged_depth <- dir_pred_boot %>%
-#     paste0(
-#       ., "/final_maps/depth_", breaks_j_chr[1], "_", breaks_j_chr[2], "_cm/"
-#     ) %T>%
-#     dir.create(showWarnings = FALSE, recursive = TRUE)
-#   
-#   summary_tiles_i <- paste0(
-#     dir_sum_depth_tiles, "/", tilenames, "/JB_no11.tif"
-#   )
-#   tile1_i <- summary_tiles_i[1] %>% rast()
-#   
-#   dtyp_i <- datatype(tile1_i)
-#   naflag_i <- NAflag(tile1_i)
-#   
-#   outtiles_sprc <- summary_tiles_i %>% sprc()
-#   
-#   merge(
-#     outtiles_sprc,
-#     filename = paste0(dir_merged_depth, "/JB_no11.tif"),
-#     overwrite = TRUE,
-#     gdal = "TILED=YES",
-#     datatype = dtyp_i,
-#     NAflag = naflag_i,
-#     names = "JB_no11"
-#   )
-# }
-
-# Finished calculating texture class without JB11
 
 
 # END
