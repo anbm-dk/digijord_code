@@ -1,0 +1,355 @@
+﻿in_stack,name,category,scorpan,coverage,producer,postproc,rounded,note,reference,anbm_use,desc_text,units
+1,bluespot_10m_mean,basic,R,DK,SCALGO,Anders Bjørn Møller,TRUE,Nas filled with max value rounded up,dhm2015,0,The amount of rain  that can fall on the model before the cell is flooded,m
+1,chelsa_bio01_1981_2010_10m,basic,C,DK,CHELSA (Karger et al. -  2021),Sebastian Gutierez,TRUE,Downscaled from the original spatial resolution,Karger et al. (2017),0,Annual mean temperature,Degrees Celsius
+1,chelsa_bio02_1981_2010_10m,basic,C,DK,CHELSA (Karger et al. -  2021),Sebastian Gutierez,TRUE,Downscaled from the original spatial resolution,Karger et al. (2017),0,Annual mean diurnal range,Degrees Celsius
+1,chelsa_bio03_1981_2010_10m,basic,C,DK,CHELSA (Karger et al. -  2021),Sebastian Gutierez,TRUE,Downscaled from the original spatial resolution - small range of variation,Karger et al. (2017),0,Isothermality,Percent
+1,chelsa_bio04_1981_2010_10m,basic,C,DK,CHELSA (Karger et al. -  2021),Sebastian Gutierez,TRUE,Downscaled from the original spatial resolution,Karger et al. (2017),0,Temperature seasonality,Degrees Celsius
+1,chelsa_bio05_1981_2010_10m,basic,C,DK,CHELSA (Karger et al. -  2021),Sebastian Gutierez,TRUE,Downscaled from the original spatial resolution,Karger et al. (2017),0,Max temperature of the warmest month,Degrees Celsius
+1,chelsa_bio06_1981_2010_10m,basic,C,DK,CHELSA (Karger et al. -  2021),Sebastian Gutierez,TRUE,Downscaled from the original spatial resolution,Karger et al. (2017),0,Min temperature of the warmest month,Degrees Celsius
+1,chelsa_bio07_1981_2010_10m,basic,C,DK,CHELSA (Karger et al. -  2021),Sebastian Gutierez,TRUE,Downscaled from the original spatial resolution,Karger et al. (2017),0,Annual temperature range,Degrees Celsius
+1,chelsa_bio08_1981_2010_10m,basic,C,DK,CHELSA (Karger et al. -  2021),Sebastian Gutierez,TRUE,Downscaled from the original spatial resolution - abrupt patterns in some places,Karger et al. (2017),0,Mean temperature of the wettest quarter,Degrees Celsius
+1,chelsa_bio09_1981_2010_10m,basic,C,DK,CHELSA (Karger et al. -  2021),Sebastian Gutierez,TRUE,Downscaled from the original spatial resolution - abrupt patterns in some places,Karger et al. (2017),0,Mean temperature of the driest quarter,Degrees Celsius
+1,chelsa_bio10_1981_2010_10m,basic,C,DK,CHELSA (Karger et al. -  2021),Sebastian Gutierez,TRUE,Downscaled from the original spatial resolution,Karger et al. (2017),0,Mean temperature of warmest quarter,Degrees Celsius
+1,chelsa_bio11_1981_2010_10m,basic,C,DK,CHELSA (Karger et al. -  2021),Sebastian Gutierez,TRUE,Downscaled from the original spatial resolution,Karger et al. (2017),0,Mean temperature of coldest quarter,Degrees Celsius
+1,chelsa_bio12_1981_2010_10m,basic,C,DK,CHELSA (Karger et al. -  2021),Sebastian Gutierez,TRUE,Downscaled from the original spatial resolution,Karger et al. (2017),1,Annual precipitation,mm
+1,chelsa_bio13_1981_2010_10m,basic,C,DK,CHELSA (Karger et al. -  2021),Sebastian Gutierez,TRUE,Downscaled from the original spatial resolution,Karger et al. (2017),0,Precipitation of wettest Month,mm
+1,chelsa_bio14_1981_2010_10m,basic,C,DK,CHELSA (Karger et al. -  2021),Sebastian Gutierez,TRUE,Downscaled from the original spatial resolution,Karger et al. (2017),0,Precipitation of driest Month,mm
+1,chelsa_bio15_1981_2010_10m,basic,C,DK,CHELSA (Karger et al. -  2021),Sebastian Gutierez,TRUE,Downscaled from the original spatial resolution,Karger et al. (2017),1,Precipitation seasonality,Percent
+1,chelsa_bio16_1981_2010_10m,basic,C,DK,CHELSA (Karger et al. -  2021),Sebastian Gutierez,TRUE,Downscaled from the original spatial resolution,Karger et al. (2017),1,Precipitation of wettest quarter,mm
+1,chelsa_bio17_1981_2010_10m,basic,C,DK,CHELSA (Karger et al. -  2021),Sebastian Gutierez,TRUE,Downscaled from the original spatial resolution,Karger et al. (2017),1,Precipitation of driest quarter,mm
+1,chelsa_bio18_1981_2010_10m,basic,C,DK,CHELSA (Karger et al. -  2021),Sebastian Gutierez,TRUE,Downscaled from the original spatial resolution - abrupt patterns in some places,Karger et al. (2017),0,Precipitation of warmest quarter,mm
+1,chelsa_bio19_1981_2010_10m,basic,C,DK,CHELSA (Karger et al. -  2021),Sebastian Gutierez,TRUE,Downscaled from the original spatial resolution - abrupt patterns in some places,Karger et al. (2017),0,Precipitation of coldest quarter,mm
+1,convergence_index,basic,R,DK,Mette Balslev Greve,Anders Bjørn Møller,TRUE,,dhm2015,1,,NA
+1,cos_aspect_radians,basic,R,DK,Mette Balslev Greve,Anders Bjørn Møller,TRUE,,dhm2015,1,Cosine of the aspect,
+1,cost_dist,basic,R,DK,Gasper Sechu,Anders Bjørn Møller,TRUE,,https://doi.org/10.3390/w13060827,0,Cummulative cost distance to rivers -  using slope for cost,
+1,cross_sectional_curvature,basic,R,DK,Mette Balslev Greve,Anders Bjørn Møller,TRUE,,dhm2015,1,,NA
+1,cwl_10m_crisp,basic,RP,DK,Anders Bjørn Møller,Anders Bjørn Møller,FALSE,Resampled from 25 m resolution,https://doi.org/10.1097/SS.0000000000000066,0,Central wetlands with crisp borders,NA
+1,cwl_10m_fuzzy,basic,RP,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,Resampled from 25 m resolution,https://doi.org/10.1097/SS.0000000000000066,1,Central wetlands with fuzzy borders,NA
+1,detrended_3_mean,basic,R,DK,Gasper Sechu,Anders Bjørn Møller,TRUE,,dhm2015,1,Detrended elevation model,m
+1,detrended_3_mean_positive,basic,R,DK,Gasper Sechu,Anders Bjørn Møller,TRUE,,dhm2015,0,Detrended elevation model shifted to a minimum of 0 m,m
+1,dhm2015_terraen_10m,basic,R,DK,Mette Balslev Greve,Anders Bjørn Møller,TRUE,,dhm2015,1,Digital elevation model,m
+1,filled_s1_baresoil_composite_vh_4_days,,S,bare,Anders Bjørn Møller,Anders Bjørn Møller,FALSE,Gaps filled using aggregation and a gaussian smoothing filter,Sentinel-1,0,Radar bare soil composite -  four day window -  vh backscatter -  gaps filled,
+1,filled_s1_baresoil_composite_vh_5_days,,S,bare,Anders Bjørn Møller,Anders Bjørn Møller,FALSE,Gaps filled using aggregation and a gaussian smoothing filter,Sentinel-1,0,Radar bare soil composite -  five day window -  vh backscatter -  gaps filled,
+1,filled_s1_baresoil_composite_vh_6_days,,S,bare,Anders Bjørn Møller,Anders Bjørn Møller,FALSE,Gaps filled using aggregation and a gaussian smoothing filter,Sentinel-1,0,Radar bare soil composite -  six day window -  vh backscatter -  gaps filled,
+1,filled_s1_baresoil_composite_vh_8_days,,S,bare,Anders Bjørn Møller,Anders Bjørn Møller,FALSE,Gaps filled using aggregation and a gaussian smoothing filter,Sentinel-1,1,Radar bare soil composite -  eight day window -  vh backscatter -  gaps filled,
+1,filled_s1_baresoil_composite_vv_4_days,,S,bare,Anders Bjørn Møller,Anders Bjørn Møller,FALSE,Gaps filled using aggregation and a gaussian smoothing filter,Sentinel-1,0,Radar bare soil composite -  four day window -  vv backscatter -  gaps filled,
+1,filled_s1_baresoil_composite_vv_5_days,,S,bare,Anders Bjørn Møller,Anders Bjørn Møller,FALSE,Gaps filled using aggregation and a gaussian smoothing filter,Sentinel-1,0,Radar bare soil composite -  five day window -  vv backscatter -  gaps filled,
+1,filled_s1_baresoil_composite_vv_6_days,,S,bare,Anders Bjørn Møller,Anders Bjørn Møller,FALSE,Gaps filled using aggregation and a gaussian smoothing filter,Sentinel-1,0,Radar bare soil composite -  six day window -  vv backscatter -  gaps filled,
+1,filled_s1_baresoil_composite_vv_8_days,,S,bare,Anders Bjørn Møller,Anders Bjørn Møller,FALSE,Gaps filled using aggregation and a gaussian smoothing filter,Sentinel-1,1,Radar bare soil composite -  eight day window -  vv backscatter -  gaps filled,
+1,filled_s2_geomedian_b11,,S,bare,Anders Bjørn Møller,Anders Bjørn Møller,FALSE,Gaps filled using aggregation and a gaussian smoothing filter,Sentinel-2,1,Sentinel-2 bare soil composite -  gaps filled,reflectance*10000
+1,filled_s2_geomedian_b12,,S,bare,Anders Bjørn Møller,Anders Bjørn Møller,FALSE,Gaps filled using aggregation and a gaussian smoothing filter,Sentinel-2,1,Sentinel-2 bare soil composite -  gaps filled,reflectance*10000
+1,filled_s2_geomedian_b2,,S,bare,Anders Bjørn Møller,Anders Bjørn Møller,FALSE,Gaps filled using aggregation and a gaussian smoothing filter,Sentinel-2,1,Sentinel-2 bare soil composite -  gaps filled,reflectance*10000
+1,filled_s2_geomedian_b3,,S,bare,Anders Bjørn Møller,Anders Bjørn Møller,FALSE,Gaps filled using aggregation and a gaussian smoothing filter,Sentinel-2,1,Sentinel-2 bare soil composite -  gaps filled,reflectance*10000
+1,filled_s2_geomedian_b4,,S,bare,Anders Bjørn Møller,Anders Bjørn Møller,FALSE,Gaps filled using aggregation and a gaussian smoothing filter,Sentinel-2,1,Sentinel-2 bare soil composite -  gaps filled,reflectance*10000
+1,filled_s2_geomedian_b5,,S,bare,Anders Bjørn Møller,Anders Bjørn Møller,FALSE,Gaps filled using aggregation and a gaussian smoothing filter,Sentinel-2,1,Sentinel-2 bare soil composite -  gaps filled,reflectance*10000
+1,filled_s2_geomedian_b6,,S,bare,Anders Bjørn Møller,Anders Bjørn Møller,FALSE,Gaps filled using aggregation and a gaussian smoothing filter,Sentinel-2,1,Sentinel-2 bare soil composite -  gaps filled,reflectance*10000
+1,filled_s2_geomedian_b7,,S,bare,Anders Bjørn Møller,Anders Bjørn Møller,FALSE,Gaps filled using aggregation and a gaussian smoothing filter,Sentinel-2,1,Sentinel-2 bare soil composite -  gaps filled,reflectance*10000
+1,filled_s2_geomedian_b8,,S,bare,Anders Bjørn Møller,Anders Bjørn Møller,FALSE,Gaps filled using aggregation and a gaussian smoothing filter,Sentinel-2,1,Sentinel-2 bare soil composite -  gaps filled,reflectance*10000
+1,filled_s2_geomedian_b8a,,S,bare,Anders Bjørn Møller,Anders Bjørn Møller,FALSE,Gaps filled using aggregation and a gaussian smoothing filter,Sentinel-2,1,Sentinel-2 bare soil composite -  gaps filled,reflectance*10000
+1,flooded_depth_10m_mean,basic,R,DK,SCALGO,Anders Bjørn Møller,TRUE,Nas filled with zero,dhm2015,1,Elevation difference between input model and in the flooded model,m
+1,flow_accumulation,basic,R,DK,Mette Balslev Greve,Anders Bjørn Møller,TRUE,,dhm2015,1,,NA
+1,fuzzy_geology_1,basic,P,DK,Amélie Beucher,Anders Bjørn Møller,TRUE,Fuzzified with gaussian filter with sigma = 10 m,GEUS,1,Aeolian sand - fuzzy boundaries,NA
+1,fuzzy_geology_10,basic,P,DK,Amélie Beucher,Anders Bjørn Møller,TRUE,Fuzzified with gaussian filter with sigma = 10 m,GEUS,1,Glaciofluvial sand - fuzzy boundaries,NA
+1,fuzzy_geology_11,basic,P,DK,Amélie Beucher,Anders Bjørn Møller,TRUE,Fuzzified with gaussian filter with sigma = 10 m,GEUS,1,Other/unknown - fuzzy boundaries,NA
+1,fuzzy_geology_2,basic,P,DK,Amélie Beucher,Anders Bjørn Møller,TRUE,Fuzzified with gaussian filter with sigma = 10 m,GEUS,1,Freshwater clay - fuzzy boundaries,NA
+1,fuzzy_geology_3,basic,P,DK,Amélie Beucher,Anders Bjørn Møller,TRUE,Fuzzified with gaussian filter with sigma = 10 m,GEUS,1,Freshwater sand -fuzzy boundaries,NA
+1,fuzzy_geology_4,basic,P,DK,Amélie Beucher,Anders Bjørn Møller,TRUE,Fuzzified with gaussian filter with sigma = 10 m,GEUS,1,Freshwater peat - fuzzy boundaries,NA
+1,fuzzy_geology_5,basic,P,DK,Amélie Beucher,Anders Bjørn Møller,TRUE,Fuzzified with gaussian filter with sigma = 10 m,GEUS,1,Marine clay - fuzzy boundaries,NA
+1,fuzzy_geology_6,basic,P,DK,Amélie Beucher,Anders Bjørn Møller,TRUE,Fuzzified with gaussian filter with sigma = 10 m,GEUS,1,Marine sand - fuzzy boundaries,NA
+1,fuzzy_geology_7,basic,P,DK,Amélie Beucher,Anders Bjørn Møller,TRUE,Fuzzified with gaussian filter with sigma = 10 m,GEUS,1,Clay till - fuzzy boundaries,NA
+1,fuzzy_geology_8,basic,P,DK,Amélie Beucher,Anders Bjørn Møller,TRUE,Fuzzified with gaussian filter with sigma = 10 m,GEUS,1,Sand till - fuzzy boundaries,NA
+1,fuzzy_geology_9,basic,P,DK,Amélie Beucher,Anders Bjørn Møller,TRUE,Fuzzified with gaussian filter with sigma = 10 m,GEUS,1,Glaciofluvial clay - fuzzy boundaries,NA
+1,fuzzy_georeg_1,basic,P,DK,Amélie Beucher,Anders Bjørn Møller,TRUE,Fuzzified with gaussian filter with sigma = 50 m,Mogens,1,Northwestern Jutland georegion - fuzzy boundaries,NA
+1,fuzzy_georeg_10,basic,P,DK,Amélie Beucher,Anders Bjørn Møller,TRUE,Fuzzified with gaussian filter with sigma = 50 m,Mogens,1,Southern Denmark georegion - fuzzy boundaries,NA
+1,fuzzy_georeg_2,basic,P,DK,Amélie Beucher,Anders Bjørn Møller,TRUE,Fuzzified with gaussian filter with sigma = 50 m,Mogens,1,Northern Jutland georegion - fuzzy boundaries,NA
+1,fuzzy_georeg_3,basic,P,DK,Amélie Beucher,Anders Bjørn Møller,TRUE,Fuzzified with gaussian filter with sigma = 50 m,Mogens,1,Western Jutland georegion - fuzzy boundaries,NA
+1,fuzzy_georeg_4,basic,P,DK,Amélie Beucher,Anders Bjørn Møller,TRUE,Fuzzified with gaussian filter with sigma = 50 m,Mogens,1,Central Jutland georegion - fuzzy boundaries,NA
+1,fuzzy_georeg_6,basic,P,DK,Amélie Beucher,Anders Bjørn Møller,TRUE,Fuzzified with gaussian filter with sigma = 50 m,Mogens,1,North-central Jutland georegion - fuzzy boundaries,NA
+1,fuzzy_georeg_8,basic,P,DK,Amélie Beucher,Anders Bjørn Møller,TRUE,Fuzzified with gaussian filter with sigma = 50 m,Mogens,1,Eastern Denmark georegion - fuzzy boundaries,NA
+1,fuzzy_imk_drain_maybe,basic,O,DK,Sebastian Gutierez,Anders Bjørn Møller,TRUE,Fuzzified with gaussian filter with sigma = 5 m,IMK,1,Years with possibly drainage-dependent crops 2011 - 2020 - fuzzy boundaries,Years
+1,fuzzy_imk_drain_no,basic,O,DK,Sebastian Gutierez,Anders Bjørn Møller,TRUE,Fuzzified with gaussian filter with sigma = 5 m,IMK,1,Years with drainage-independent crops 2011 - 2020 - fuzzy boundaries,Years
+1,fuzzy_imk_drain_yes,basic,O,DK,Sebastian Gutierez,Anders Bjørn Møller,TRUE,Fuzzified with gaussian filter with sigma = 5 m,IMK,1,Years with drainage-dependent crops 2011 - 2020 - fuzzy boundaries,Years
+1,fuzzy_imk_grass,basic,O,DK,Sebastian Gutierez,Anders Bjørn Møller,TRUE,Fuzzified with gaussian filter with sigma = 5 m,IMK,1,Years with grass cover 2011 - 2020 - fuzzy boundaries,Years
+1,fuzzy_imk_nonna_sum,basic,O,DK,Sebastian Gutierez,Anders Bjørn Møller,TRUE,Fuzzified with gaussian filter with sigma = 5 m,IMK,1,Years with field data 2011 - 2020 - fuzzy boundaries,Years
+1,fuzzy_landscape_1,basic,RP,DK,Amélie Beucher,Anders Bjørn Møller,TRUE,Fuzzified with gaussian filter with sigma = 50 m,Breuning-Madsen -  Henrik -  Nørr -  Axel. / The Danish Soil Classification : Atlas over Denmark I. 1992. 56 p.,1,Dune landscape - fuzzy boundaries,NA
+1,fuzzy_landscape_10,basic,RP,DK,Amélie Beucher,Anders Bjørn Møller,TRUE,Fuzzified with gaussian filter with sigma = 50 m,Breuning-Madsen -  Henrik -  Nørr -  Axel. / The Danish Soil Classification : Atlas over Denmark I. 1992. 56 p.,1,Saalian moraine landscape - fuzzy boundaries,NA
+1,fuzzy_landscape_11,basic,RP,DK,Amélie Beucher,Anders Bjørn Møller,TRUE,Fuzzified with gaussian filter with sigma = 50 m,Breuning-Madsen -  Henrik -  Nørr -  Axel. / The Danish Soil Classification : Atlas over Denmark I. 1992. 56 p.,1,Marsh landscape - fuzzy boundaries,NA
+1,fuzzy_landscape_12,basic,RP,DK,Amélie Beucher,Anders Bjørn Møller,TRUE,Fuzzified with gaussian filter with sigma = 50 m,Breuning-Madsen -  Henrik -  Nørr -  Axel. / The Danish Soil Classification : Atlas over Denmark I. 1992. 56 p.,1,Bedrock landscape - fuzzy boundaries,NA
+1,fuzzy_landscape_2,basic,RP,DK,Amélie Beucher,Anders Bjørn Møller,TRUE,Fuzzified with gaussian filter with sigma = 50 m,Breuning-Madsen -  Henrik -  Nørr -  Axel. / The Danish Soil Classification : Atlas over Denmark I. 1992. 56 p.,1,Post-glacial marine landscape - fuzzy boundaries,NA
+1,fuzzy_landscape_3,basic,RP,DK,Amélie Beucher,Anders Bjørn Møller,TRUE,Fuzzified with gaussian filter with sigma = 50 m,Breuning-Madsen -  Henrik -  Nørr -  Axel. / The Danish Soil Classification : Atlas over Denmark I. 1992. 56 p.,1,Reclaimed areas - fuzzy boundaries,NA
+1,fuzzy_landscape_4,basic,RP,DK,Amélie Beucher,Anders Bjørn Møller,TRUE,Fuzzified with gaussian filter with sigma = 50 m,Breuning-Madsen -  Henrik -  Nørr -  Axel. / The Danish Soil Classification : Atlas over Denmark I. 1992. 56 p.,1,Late-glacial marine landscape - fuzzy boundaries,NA
+1,fuzzy_landscape_5,basic,RP,DK,Amélie Beucher,Anders Bjørn Møller,TRUE,Fuzzified with gaussian filter with sigma = 50 m,Breuning-Madsen -  Henrik -  Nørr -  Axel. / The Danish Soil Classification : Atlas over Denmark I. 1992. 56 p.,1,Weichselian terminal moraine - fuzzy boundaries,NA
+1,fuzzy_landscape_6,basic,RP,DK,Amélie Beucher,Anders Bjørn Møller,TRUE,Fuzzified with gaussian filter with sigma = 50 m,Breuning-Madsen -  Henrik -  Nørr -  Axel. / The Danish Soil Classification : Atlas over Denmark I. 1992. 56 p.,1,Weichselian moraine landscape - fuzzy boundaries,NA
+1,fuzzy_landscape_7,basic,RP,DK,Amélie Beucher,Anders Bjørn Møller,TRUE,Fuzzified with gaussian filter with sigma = 50 m,Breuning-Madsen -  Henrik -  Nørr -  Axel. / The Danish Soil Classification : Atlas over Denmark I. 1992. 56 p.,1,Weichselian kettled moraine landscape - fuzzy boundaries,NA
+1,fuzzy_landscape_8,basic,RP,DK,Amélie Beucher,Anders Bjørn Møller,TRUE,Fuzzified with gaussian filter with sigma = 50 m,Breuning-Madsen -  Henrik -  Nørr -  Axel. / The Danish Soil Classification : Atlas over Denmark I. 1992. 56 p.,1,Weichselian subglacial tunnel valley - fuzzy boundaries,NA
+1,fuzzy_landscape_9,basic,RP,DK,Amélie Beucher,Anders Bjørn Møller,TRUE,Fuzzified with gaussian filter with sigma = 50 m,Breuning-Madsen -  Henrik -  Nørr -  Axel. / The Danish Soil Classification : Atlas over Denmark I. 1992. 56 p.,1,Weichselian glacial flood plain - fuzzy boundaries,NA
+1,fuzzy_lu_1,basic,O,DK,Amélie Beucher,Anders Bjørn Møller,TRUE,Fuzzified with gaussian filter with sigma = 5 m,10 m Basemap,1,Urban areas - fuzzy boundaries,NA
+1,fuzzy_lu_2,basic,O,DK,Amélie Beucher,Anders Bjørn Møller,TRUE,Fuzzified with gaussian filter with sigma = 5 m,10 m Basemap,1,Agricultural areas - fuzzy boundaries,NA
+1,fuzzy_lu_3,basic,O,DK,Amélie Beucher,Anders Bjørn Møller,TRUE,Fuzzified with gaussian filter with sigma = 5 m,10 m Basemap,1,Forest/natural areas - fuzzy boundaries,NA
+1,fuzzy_lu_4,basic,O,DK,Amélie Beucher,Anders Bjørn Møller,TRUE,Fuzzified with gaussian filter with sigma = 5 m,10 m Basemap,1,Wetland areas - fuzzy boundaries,NA
+1,fuzzy_lu_5,basic,O,DK,Amélie Beucher,Anders Bjørn Møller,TRUE,Fuzzified with gaussian filter with sigma = 5 m,10 m Basemap,1,Water - fuzzy boundaries,NA
+1,geology_1,basic,P,DK,Amélie Beucher,Anders Bjørn Møller,FALSE,,GEUS,0,Aeolian sand,NA
+1,geology_10,basic,P,DK,Amélie Beucher,Anders Bjørn Møller,FALSE,,GEUS,0,Glaciofluvial sand,NA
+1,geology_11,basic,P,DK,Amélie Beucher,Anders Bjørn Møller,FALSE,,GEUS,0,Other/unknown,NA
+1,geology_2,basic,P,DK,Amélie Beucher,Anders Bjørn Møller,FALSE,,GEUS,0,Freshwater clay,NA
+1,geology_3,basic,P,DK,Amélie Beucher,Anders Bjørn Møller,FALSE,,GEUS,0,Freshwater sand,NA
+1,geology_4,basic,P,DK,Amélie Beucher,Anders Bjørn Møller,FALSE,,GEUS,0,Freshwater peat,NA
+1,geology_5,basic,P,DK,Amélie Beucher,Anders Bjørn Møller,FALSE,,GEUS,0,Marine clay,NA
+1,geology_6,basic,P,DK,Amélie Beucher,Anders Bjørn Møller,FALSE,,GEUS,0,Marine sand,NA
+1,geology_7,basic,P,DK,Amélie Beucher,Anders Bjørn Møller,FALSE,,GEUS,0,Clay till,NA
+1,geology_8,basic,P,DK,Amélie Beucher,Anders Bjørn Møller,FALSE,,GEUS,0,Sand till,NA
+1,geology_9,basic,P,DK,Amélie Beucher,Anders Bjørn Møller,FALSE,,GEUS,0,Glaciofluvial clay,NA
+1,georeg_1,basic,P,DK,Amélie Beucher,Anders Bjørn Møller,FALSE,,Mogens,0,Northwestern Jutland georegion,NA
+1,georeg_10,basic,P,DK,Amélie Beucher,Anders Bjørn Møller,FALSE,,Mogens,0,Southern Denmark georegion,NA
+1,georeg_2,basic,P,DK,Amélie Beucher,Anders Bjørn Møller,FALSE,,Mogens,0,Northern Jutland georegion,NA
+1,georeg_3,basic,P,DK,Amélie Beucher,Anders Bjørn Møller,FALSE,,Mogens,0,Western Jutland georegion,NA
+1,georeg_4,basic,P,DK,Amélie Beucher,Anders Bjørn Møller,FALSE,,Mogens,0,Central Jutland georegion,NA
+1,georeg_6,basic,P,DK,Amélie Beucher,Anders Bjørn Møller,FALSE,,Mogens,0,North-central Jutland georegion,NA
+1,georeg_8,basic,P,DK,Amélie Beucher,Anders Bjørn Møller,FALSE,,Mogens,0,Eastern Denmark georegion,NA
+1,gw_summer_predict,basic,S,DK,Julian Koch,Anders Bjørn Møller,FALSE,Uses clay contents as a covariate,https://doi.org/10.5194/hess-23-4603-2019,0,Summer depth to the upper groundwater table,cm
+1,gw_winter_predict,basic,S,DK,Julian Koch,Anders Bjørn Møller,FALSE,Uses clay contents as a covariate,https://doi.org/10.5194/hess-23-4603-2019,0,Summer depth to the upper groundwater table,cm
+1,hillyness,basic,R,DK,Mette Balslev Greve,Anders Bjørn Møller,FALSE,,dhm2015,0,Elevation difference between 100 m block and 1.5 km circle,m
+1,imk_drain_maybe,basic,O,DK,Sebastian Gutierez,Anders Bjørn Møller,FALSE,,IMK,1,Years with possibly drainage-dependent crops 2011 - 2020,Years
+1,imk_drain_no,basic,O,DK,Sebastian Gutierez,Anders Bjørn Møller,FALSE,,IMK,1,Years with drainage-independent crops 2011 - 2020,Years
+1,imk_drain_yes,basic,O,DK,Sebastian Gutierez,Anders Bjørn Møller,FALSE,,IMK,1,Years with drainage-dependent crops 2011 - 2020,Years
+1,imk_grass,basic,O,DK,Sebastian Gutierez,Anders Bjørn Møller,FALSE,,IMK,1,Years with grass cover 2011 - 2020,Years
+1,imk_nonna_sum,basic,O,DK,Sebastian Gutierez,Anders Bjørn Møller,FALSE,,IMK,1,Years with field data 2011 - 2020,Years
+1,landscape_1,basic,RP,DK,Amélie Beucher,Anders Bjørn Møller,FALSE,,Breuning-Madsen -  Henrik -  Nørr -  Axel. / The Danish Soil Classification : Atlas over Denmark I. 1992. 56 p.,0,Dune landscape,NA
+1,landscape_10,basic,RP,DK,Amélie Beucher,Anders Bjørn Møller,FALSE,,Breuning-Madsen -  Henrik -  Nørr -  Axel. / The Danish Soil Classification : Atlas over Denmark I. 1992. 56 p.,0,Saalian moraine landscape,NA
+1,landscape_11,basic,RP,DK,Amélie Beucher,Anders Bjørn Møller,FALSE,,Breuning-Madsen -  Henrik -  Nørr -  Axel. / The Danish Soil Classification : Atlas over Denmark I. 1992. 56 p.,0,Marsh landscape,NA
+1,landscape_12,basic,RP,DK,Amélie Beucher,Anders Bjørn Møller,FALSE,,Breuning-Madsen -  Henrik -  Nørr -  Axel. / The Danish Soil Classification : Atlas over Denmark I. 1992. 56 p.,0,Bedrock landscape,NA
+1,landscape_2,basic,RP,DK,Amélie Beucher,Anders Bjørn Møller,FALSE,,Breuning-Madsen -  Henrik -  Nørr -  Axel. / The Danish Soil Classification : Atlas over Denmark I. 1992. 56 p.,0,Post-glacial marine landscape,NA
+1,landscape_3,basic,RP,DK,Amélie Beucher,Anders Bjørn Møller,FALSE,,Breuning-Madsen -  Henrik -  Nørr -  Axel. / The Danish Soil Classification : Atlas over Denmark I. 1992. 56 p.,0,Reclaimed areas,NA
+1,landscape_4,basic,RP,DK,Amélie Beucher,Anders Bjørn Møller,FALSE,,Breuning-Madsen -  Henrik -  Nørr -  Axel. / The Danish Soil Classification : Atlas over Denmark I. 1992. 56 p.,0,Late-glacial marine landscape,NA
+1,landscape_5,basic,RP,DK,Amélie Beucher,Anders Bjørn Møller,FALSE,,Breuning-Madsen -  Henrik -  Nørr -  Axel. / The Danish Soil Classification : Atlas over Denmark I. 1992. 56 p.,0,Weichselian terminal moraine,NA
+1,landscape_6,basic,RP,DK,Amélie Beucher,Anders Bjørn Møller,FALSE,,Breuning-Madsen -  Henrik -  Nørr -  Axel. / The Danish Soil Classification : Atlas over Denmark I. 1992. 56 p.,0,Weichselian moraine landscape,NA
+1,landscape_7,basic,RP,DK,Amélie Beucher,Anders Bjørn Møller,FALSE,,Breuning-Madsen -  Henrik -  Nørr -  Axel. / The Danish Soil Classification : Atlas over Denmark I. 1992. 56 p.,0,Weichselian kettled moraine landscape,NA
+1,landscape_8,basic,RP,DK,Amélie Beucher,Anders Bjørn Møller,FALSE,,Breuning-Madsen -  Henrik -  Nørr -  Axel. / The Danish Soil Classification : Atlas over Denmark I. 1992. 56 p.,0,Weichselian subglacial tunnel valley,NA
+1,landscape_9,basic,RP,DK,Amélie Beucher,Anders Bjørn Møller,FALSE,,Breuning-Madsen -  Henrik -  Nørr -  Axel. / The Danish Soil Classification : Atlas over Denmark I. 1992. 56 p.,0,Weichselian glacial flood plain,NA
+1,longitudinal_curvature,basic,R,DK,Mette Balslev Greve,Anders Bjørn Møller,TRUE,,dhm2015,1,,
+1,lu_1,basic,O,DK,Amélie Beucher,Anders Bjørn Møller,FALSE,,10 m Basemap,0,Urban areas,
+1,lu_2,basic,O,DK,Amélie Beucher,Anders Bjørn Møller,FALSE,,10 m Basemap,0,Agricultural areas,
+1,lu_3,basic,O,DK,Amélie Beucher,Anders Bjørn Møller,FALSE,,10 m Basemap,0,Forest/natural areas,
+1,lu_4,basic,O,DK,Amélie Beucher,Anders Bjørn Møller,FALSE,,10 m Basemap,0,Wetland areas,
+1,lu_5,basic,O,DK,Amélie Beucher,Anders Bjørn Møller,FALSE,,10 m Basemap,0,Water,
+1,maximal_curvature,basic,R,DK,Mette Balslev Greve,Anders Bjørn Møller,TRUE,,dhm2015,1,,
+1,mid_slope_positon,basic,R,DK,Mette Balslev Greve,Anders Bjørn Møller,TRUE,,dhm2015,1,Mid-slope position,Index
+1,minimal_curvature,basic,R,DK,Mette Balslev Greve,Anders Bjørn Møller,TRUE,,dhm2015,1,,
+1,normalized_height,basic,R,DK,Mette Balslev Greve,Anders Bjørn Møller,TRUE,,dhm2015,1,Normalized height,Index
+1,ogc_pi000,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi016,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi031,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi047,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi062,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi078,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi094,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi109,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi125,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi141,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi156,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi172,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi188,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi203,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi219,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi234,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi250,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi266,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi281,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi297,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi312,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi328,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi344,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi359,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi375,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi391,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi406,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi422,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi438,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi453,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi469,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi484,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi500,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi516,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi531,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi547,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi562,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi578,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi594,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi609,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi625,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi641,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi656,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi672,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi687,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi703,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi719,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi734,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi750,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi766,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi781,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi797,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi812,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi828,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi844,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi859,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi875,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi891,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi906,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi922,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi937,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi953,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi969,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,ogc_pi984,basic,N,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,,https://doi.org/10.5194/soil-6-269-2020,1,Oblique geographic coordinates (OGCs),m
+1,positive_openness,basic,R,DK,Mette Balslev Greve,Anders Bjørn Møller,TRUE,,dhm2015,1,,
+1,profile_curvature,basic,R,DK,Mette Balslev Greve,Anders Bjørn Møller,TRUE,,dhm2015,1,,
+1,profile_curvature2,basic,R,DK,Mette Balslev Greve,Anders Bjørn Møller,TRUE,,dhm2015,0,,
+1,rvb_bios,basic,R,DK,Gasper Sechu,Anders Bjørn Møller,FALSE,Nas filled with zero,https://doi.org/10.3390/w13060827,1,River valley bottoms using BIOS rivers,NA
+1,rvb_fot,basic,R,DK,Gasper Sechu,Anders Bjørn Møller,FALSE,Nas filled with zero,https://doi.org/10.3390/w13060827,0,River valley bottoms using FOT rivers,NA
+1,s1_2020_1_vh,radar,SO,DK,Sebastian Gutierez,Anders Bjørn Møller,TRUE,,Sentinel-1,0,,
+1,s1_2020_1_vv,radar,SO,DK,Sebastian Gutierez,Anders Bjørn Møller,TRUE,,Sentinel-1,0,,
+1,s1_2020_2_vh,radar,SO,DK,Sebastian Gutierez,Anders Bjørn Møller,TRUE,,Sentinel-1,0,,
+1,s1_2020_2_vv,radar,SO,DK,Sebastian Gutierez,Anders Bjørn Møller,TRUE,,Sentinel-1,0,,
+1,s1_2020_3_vh,radar,SO,DK,Sebastian Gutierez,Anders Bjørn Møller,TRUE,,Sentinel-1,0,,
+1,s1_2020_3_vv,radar,SO,DK,Sebastian Gutierez,Anders Bjørn Møller,TRUE,,Sentinel-1,0,,
+1,s1_2020_4_vh,radar,SO,DK,Sebastian Gutierez,Anders Bjørn Møller,TRUE,,Sentinel-1,0,,
+1,s1_2020_4_vv,radar,SO,DK,Sebastian Gutierez,Anders Bjørn Møller,TRUE,,Sentinel-1,0,,
+1,s1_baresoil_composite_vh_4_days,bare_soil,S,bare,DHI,Anders Bjørn Møller,FALSE,,Sentinel-1,0,Radar bare soil composite -  four day window -  vh backscatter,dB
+1,s1_baresoil_composite_vh_5_days,bare_soil,S,bare,DHI,Anders Bjørn Møller,FALSE,,Sentinel-1,0,Radar bare soil composite -  five day window -  vh backscatter,dB
+1,s1_baresoil_composite_vh_6_days,bare_soil,S,bare,DHI,Anders Bjørn Møller,FALSE,,Sentinel-1,0,Radar bare soil composite -  six day window -  vh backscatter,dB
+1,s1_baresoil_composite_vh_8_days,bare_soil,S,bare,DHI,Anders Bjørn Møller,FALSE,,Sentinel-1,0,Radar bare soil composite -  eight day window -  vh backscatter,dB
+1,s1_baresoil_composite_vv_4_days,bare_soil,S,bare,DHI,Anders Bjørn Møller,FALSE,,Sentinel-1,0,Radar bare soil composite -  four day window -  vv backscatter,dB
+1,s1_baresoil_composite_vv_5_days,bare_soil,S,bare,DHI,Anders Bjørn Møller,FALSE,,Sentinel-1,0,Radar bare soil composite -  five day window -  vv backscatter,dB
+1,s1_baresoil_composite_vv_6_days,bare_soil,S,bare,DHI,Anders Bjørn Møller,FALSE,,Sentinel-1,0,Radar bare soil composite -  six day window -  vv backscatter,dB
+1,s1_baresoil_composite_vv_8_days,bare_soil,S,bare,DHI,Anders Bjørn Møller,FALSE,,Sentinel-1,0,Radar bare soil composite -  eight day window -  vv backscatter,dB
+1,s2_count_max10,bare_soil,O,DK,Anders Bjørn Møller,Anders Bjørn Møller,FALSE,,Sentinel-2,0,Number of images with bare soil capped at n = 10,NA
+1,s2_count_max10_fuzzy,bare_soil,O,DK,Anders Bjørn Møller,Anders Bjørn Møller,TRUE,Fuzzified with gaussian filter with sigma = 5 m,Sentinel-2,1,Number of images with bare soil  capped at n = 10 - fuzzy boundaries,NA
+1,s2_geomedian_20180408_20180515_b11,sentinel_composite,O,DK,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,1,,
+1,s2_geomedian_20180408_20180515_b12,sentinel_composite,O,DK,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,1,,
+1,s2_geomedian_20180408_20180515_b2,sentinel_composite,O,DK,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,1,,
+1,s2_geomedian_20180408_20180515_b3,sentinel_composite,O,DK,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,1,,
+1,s2_geomedian_20180408_20180515_b4,sentinel_composite,O,DK,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,1,,
+1,s2_geomedian_20180408_20180515_b5,sentinel_composite,O,DK,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,1,,
+1,s2_geomedian_20180408_20180515_b6,sentinel_composite,O,DK,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,1,,
+1,s2_geomedian_20180408_20180515_b7,sentinel_composite,O,DK,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,1,,
+1,s2_geomedian_20180408_20180515_b8,sentinel_composite,O,DK,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,1,,
+1,s2_geomedian_20180408_20180515_b8a,sentinel_composite,O,DK,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,1,,
+1,s2_geomedian_20180501_20180731_b11,sentinel_composite,O,agriculture,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,0,,
+1,s2_geomedian_20180501_20180731_b12,sentinel_composite,O,agriculture,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,0,,
+1,s2_geomedian_20180501_20180731_b2,sentinel_composite,O,agriculture,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,0,,
+1,s2_geomedian_20180501_20180731_b4,sentinel_composite,O,agriculture,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,0,,
+1,s2_geomedian_20180501_20180731_b5,sentinel_composite,O,agriculture,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,0,,
+1,s2_geomedian_20180501_20180731_b6,sentinel_composite,O,agriculture,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,0,,
+1,s2_geomedian_20180501_20180731_b7,sentinel_composite,O,agriculture,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,0,,
+1,s2_geomedian_20180501_20180731_b8,sentinel_composite,O,agriculture,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,0,,
+1,s2_geomedian_20180501_20180731_b8a,sentinel_composite,O,agriculture,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,0,,
+1,s2_geomedian_20180521_20180603_b11,sentinel_composite,O,agriculture,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,0,,
+1,s2_geomedian_20180521_20180603_b12,sentinel_composite,O,agriculture,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,0,,
+1,s2_geomedian_20180521_20180603_b2,sentinel_composite,O,agriculture,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,0,,
+1,s2_geomedian_20180521_20180603_b3,sentinel_composite,O,agriculture,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,0,,
+1,s2_geomedian_20180521_20180603_b4,sentinel_composite,O,agriculture,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,0,,
+1,s2_geomedian_20180521_20180603_b5,sentinel_composite,O,agriculture,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,0,,
+1,s2_geomedian_20180521_20180603_b6,sentinel_composite,O,agriculture,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,0,,
+1,s2_geomedian_20180521_20180603_b7,sentinel_composite,O,agriculture,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,0,,
+1,s2_geomedian_20180521_20180603_b8a,sentinel_composite,O,agriculture,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,0,,
+1,s2_geomedian_20180601_20180630_b11,sentinel_composite,O,DK,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,1,,
+1,s2_geomedian_20180601_20180630_b12,sentinel_composite,O,DK,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,1,,
+1,s2_geomedian_20180601_20180630_b2,sentinel_composite,O,DK,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,1,,
+1,s2_geomedian_20180601_20180630_b3,sentinel_composite,O,DK,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,1,,
+1,s2_geomedian_20180601_20180630_b4,sentinel_composite,O,DK,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,1,,
+1,s2_geomedian_20180601_20180630_b5,sentinel_composite,O,DK,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,1,,
+1,s2_geomedian_20180601_20180630_b6,sentinel_composite,O,DK,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,1,,
+1,s2_geomedian_20180601_20180630_b7,sentinel_composite,O,DK,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,1,,
+1,s2_geomedian_20180601_20180630_b8,sentinel_composite,O,DK,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,1,,
+1,s2_geomedian_20180601_20180630_b8a,sentinel_composite,O,DK,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,1,,
+1,s2_geomedian_20180701_20180731_b11,sentinel_composite,O,DK,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,1,,
+1,s2_geomedian_20180701_20180731_b12,sentinel_composite,O,DK,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,1,,
+1,s2_geomedian_20180701_20180731_b2,sentinel_composite,O,DK,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,1,,
+1,s2_geomedian_20180701_20180731_b3,sentinel_composite,O,DK,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,1,,
+1,s2_geomedian_20180701_20180731_b4,sentinel_composite,O,DK,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,1,,
+1,s2_geomedian_20180701_20180731_b5,sentinel_composite,O,DK,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,1,,
+1,s2_geomedian_20180701_20180731_b6,sentinel_composite,O,DK,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,1,,
+1,s2_geomedian_20180701_20180731_b7,sentinel_composite,O,DK,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,1,,
+1,s2_geomedian_20180701_20180731_b8,sentinel_composite,O,DK,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,1,,
+1,s2_geomedian_20180701_20180731_b8a,sentinel_composite,O,DK,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,1,,
+1,s2_geomedian_20180716_20180729_b11,sentinel_composite,O,agriculture,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,0,,
+1,s2_geomedian_20180716_20180729_b12,sentinel_composite,O,agriculture,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,0,,
+1,s2_geomedian_20180716_20180729_b2,sentinel_composite,O,agriculture,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,0,,
+1,s2_geomedian_20180716_20180729_b3,sentinel_composite,O,agriculture,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,0,,
+1,s2_geomedian_20180716_20180729_b4,sentinel_composite,O,agriculture,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,0,,
+1,s2_geomedian_20180716_20180729_b5,sentinel_composite,O,agriculture,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,0,,
+1,s2_geomedian_20180716_20180729_b6,sentinel_composite,O,agriculture,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,0,,
+1,s2_geomedian_20180716_20180729_b7,sentinel_composite,O,agriculture,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,0,,
+1,s2_geomedian_20180716_20180729_b8a,sentinel_composite,O,agriculture,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,0,,
+1,s2_geomedian_20180801_20180831_b11,sentinel_composite,O,DK,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,0,,
+1,s2_geomedian_20180801_20180831_b12,sentinel_composite,O,DK,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,0,,
+1,s2_geomedian_20180801_20180831_b2,sentinel_composite,O,DK,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,0,,
+1,s2_geomedian_20180801_20180831_b3,sentinel_composite,O,DK,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,0,,
+1,s2_geomedian_20180801_20180831_b4,sentinel_composite,O,DK,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,0,,
+1,s2_geomedian_20180801_20180831_b5,sentinel_composite,O,DK,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,0,,
+1,s2_geomedian_20180801_20180831_b6,sentinel_composite,O,DK,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,0,,
+1,s2_geomedian_20180801_20180831_b7,sentinel_composite,O,DK,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,0,,
+1,s2_geomedian_20180801_20180831_b8,sentinel_composite,O,DK,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,0,,
+1,s2_geomedian_20180801_20180831_b8a,sentinel_composite,O,DK,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,0,,
+1,s2_geomedian_b11,bare_soil,S,bare,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,0,Sentinel-2 bare soil composite,reflectance*10000
+1,s2_geomedian_b12,bare_soil,S,bare,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,0,Sentinel-2 bare soil composite,reflectance*10000
+1,s2_geomedian_b2,bare_soil,S,bare,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,0,Sentinel-2 bare soil composite,reflectance*10000
+1,s2_geomedian_b3,bare_soil,S,bare,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,0,Sentinel-2 bare soil composite,reflectance*10000
+1,s2_geomedian_b4,bare_soil,S,bare,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,0,Sentinel-2 bare soil composite,reflectance*10000
+1,s2_geomedian_b5,bare_soil,S,bare,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,0,Sentinel-2 bare soil composite,reflectance*10000
+1,s2_geomedian_b6,bare_soil,S,bare,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,0,Sentinel-2 bare soil composite,reflectance*10000
+1,s2_geomedian_b7,bare_soil,S,bare,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,0,Sentinel-2 bare soil composite,reflectance*10000
+1,s2_geomedian_b8,bare_soil,S,bare,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,0,Sentinel-2 bare soil composite,reflectance*10000
+1,s2_geomedian_b8a,bare_soil,S,bare,DHI,Anders Bjørn Møller,FALSE,,Sentinel-2,0,Sentinel-2 bare soil composite,reflectance*10000
+1,saga_wetness_index,basic,R,DK,Mette Balslev Greve,Anders Bjørn Møller,TRUE,,dhm2015,1,,
+1,sin_aspect_radians,basic,R,DK,Mette Balslev Greve,Anders Bjørn Møller,TRUE,,dhm2015,1,Sine of the surface aspect,
+1,slope,basic,R,DK,Mette Balslev Greve,Anders Bjørn Møller,TRUE,,dhm2015,1,Surface slope,
+1,slope_height,basic,R,DK,Mette Balslev Greve,Anders Bjørn Møller,TRUE,,dhm2015,1,,
+1,standardized_height,basic,R,DK,Mette Balslev Greve,Anders Bjørn Møller,TRUE,,dhm2015,1,,
+1,tangential_curvature,basic,R,DK,Mette Balslev Greve,Anders Bjørn Møller,TRUE,,dhm2015,1,,
+1,terodep10m,basic,OR,agriculture,Sebastian Gutierez,Anders Bjørn Møller,FALSE,Gaps filled with zeroes,Sebastian,1,Tillage erosion and deposition using 10 m DEM,
+1,terodep110m,basic,OR,agriculture,Sebastian Gutierez,Anders Bjørn Møller,FALSE,Gaps filled with zeroes,Sebastian,0,Tillage erosion and deposition using smoothed DEM,
+1,terodep150m,basic,OR,agriculture,Sebastian Gutierez,Anders Bjørn Møller,FALSE,Gaps filled with zeroes,Sebastian,0,Tillage erosion and deposition using smoothed DEM,
+1,terodep210m,basic,OR,agriculture,Sebastian Gutierez,Anders Bjørn Møller,FALSE,Gaps filled with zeroes,Sebastian,0,Tillage erosion and deposition using smoothed DEM,
+1,terodep30m,basic,OR,agriculture,Sebastian Gutierez,Anders Bjørn Møller,FALSE,Gaps filled with zeroes,Sebastian,0,Tillage erosion and deposition using smoothed DEM,
+1,terodep50m,basic,OR,agriculture,Sebastian Gutierez,Anders Bjørn Møller,FALSE,Gaps filled with zeroes,Sebastian,0,Tillage erosion and deposition using smoothed DEM,
+1,terodep70m,basic,OR,agriculture,Sebastian Gutierez,Anders Bjørn Møller,FALSE,Gaps filled with zeroes,Sebastian,0,Tillage erosion and deposition using smoothed DEM,
+1,total_curvature,basic,R,DK,Mette Balslev Greve,Anders Bjørn Møller,TRUE,,dhm2015,0,,
+1,valley_depth,basic,R,DK,Mette Balslev Greve,Anders Bjørn Møller,TRUE,,dhm2015,1,,
+1,vdtochn,basic,R,DK,Mette Balslev Greve,Anders Bjørn Møller,TRUE,,dhm2015,1,Vertical distance to channel,m
+1,vdtochngt0,basic,R,DK,Mette Balslev Greve,Anders Bjørn Møller,TRUE,,dhm2015,0,Vertical distance to channel -  no negative values,m
+1,volume_10m_mean,basic,R,DK,SCALGO,Anders Bjørn Møller,TRUE,NAs filled with max value rounded up,SCALGO,0,The volume of the sub-basin delimited by the cell,m^3
+1,wetlands_10m,basic,R,DK,Amélie Beucher,Anders Bjørn Møller,TRUE,,NA,0,Wetland extent,NA
+1,wetlands_10m_fuzzy,basic,R,DK,Amélie Beucher,Anders Bjørn Møller,TRUE,Fuzzified with gaussian filter with sigma = 10 m,NA,1,Wetland extent - fuzzy boundary,NA
+1,wi_values_wetness,basic,R,DK,Mette Balslev Greve,Anders Bjørn Møller,TRUE,,dhm2015,1,,NA
+0,area_solar_radiationspecialdays4hour_arcgispro,basic,CR,dkminusbornholm,Mette Balslev Greve,Anders Bjørn Møller,TRUE,Three layers,dhm2015,0,,
+0,area_solar_radiationspecialdays4hour_arcgispro_1,basic,CR,dkminusbornholm,Mette Balslev Greve,Anders Bjørn Møller,TRUE,Bornholm missing,dhm2015,0,,
+0,area_solar_radiationspecialdays4hour_arcgispro_2,basic,CR,dkminusbornholm,Mette Balslev Greve,Anders Bjørn Møller,TRUE,Bornholm missing,dhm2015,0,,
+0,area_solar_radiationspecialdays4hour_arcgispro_3,basic,CR,dkminusbornholm,Mette Balslev Greve,Anders Bjørn Møller,TRUE,Bornholm missing,SCALGO,0,,
+0,flow_accumulation_arcgispro,basic,R,DK,Mette Balslev Greve,Anders Bjørn Møller,TRUE,Dotted patterns in filled sinks,dhm2015,0,,
+0,flow_accumulation_arcgispro_planchon_darboux,basic,R,DK,Mette Balslev Greve,Anders Bjørn Møller,TRUE,Dotted patterns in filled sinks,dhm2015,0,,
+0,flow_accumulation_top_down,basic,R,DK,Mette Balslev Greve,Anders Bjørn Møller,TRUE,Angular flow lines in filled sinks,dhm2015,0,,
+0,flow_direction_arcgispro,basic,R,DK,Mette Balslev Greve,Anders Bjørn Møller,TRUE,Not useful,dhm2015,0,,
+0,flow_direction_arcgispro_planchon_darboux,basic,R,DK,Mette Balslev Greve,Anders Bjørn Møller,TRUE,Not useful,dhm2015,0,,
+0,flow_line_curvature,basic,R,DK,Mette Balslev Greve,Anders Bjørn Møller,TRUE,Nearly no variation,dhm2015,0,,
+0,general_curvature,basic,R,DK,Mette Balslev Greve,Anders Bjørn Møller,TRUE,Nearly no variation,dhm2015,0,,
+0,ln_flow_accumulation_arcgispro_planchon_darboux,basic,R,DK,Mette Balslev Greve,Anders Bjørn Møller,FALSE,Dotted patterns in filled sinks,dhm2015,0,,
+0,lngte8timesdem1_flow_accumulation_arcgispro,basic,R,DK,Mette Balslev Greve,Anders Bjørn Møller,FALSE,Not useful,dhm2015,0,,
+0,lngte8timesdem1nibble_flow_accumulation_arcgispro,basic,R,DK,Mette Balslev Greve,Anders Bjørn Møller,FALSE,Not useful,dhm2015,0,,
+0,lngte8timesdem1nibblegte0_flow_accumulation_arcgispro,basic,R,DK,Mette Balslev Greve,Anders Bjørn Møller,FALSE,Not useful,dhm2015,0,,
+0,lngte9timesdem0_flow_accumulation_arcgispro_planchon_darboux,basic,R,DK,Mette Balslev Greve,Anders Bjørn Møller,FALSE,Not useful,dhm2015,0,,
+0,lngte9timesdem1nibble_flow_accumulation_arcgispro_planchon_darboux,basic,R,DK,Mette Balslev Greve,Anders Bjørn Møller,FALSE,Not useful,dhm2015,0,,
+0,lngte9timesdem1nibblegte0_flow_accumulation_arcgispro_planchon_darboux,basic,R,DK,Mette Balslev Greve,Anders Bjørn Møller,FALSE,Not useful,dhm2015,0,,
+0,mrrtf,basic,R,DK,Mette Balslev Greve,Anders Bjørn Møller,TRUE,Rectangular artefacts,dhm2015,0,,
+0,mrvbf,basic,R,DK,Mette Balslev Greve,Anders Bjørn Møller,TRUE,Rectangular artefacts,dhm2015,0,,
+0,negative_openness,basic,R,DK,Mette Balslev Greve,Anders Bjørn Møller,TRUE,Angular artefacts,dhm2015,0,,
+0,s2_geomedian_20180501_20180731_b3,sentinel_composite,O,agriculture,DHI,Anders Bjørn Møller,FALSE,Southern half of Denmark is missing?,Sentinel-2,0,,
+0,s2_geomedian_20210501_20210731_b11,sentinel_composite,O,agriculture,DHI,Anders Bjørn Møller,FALSE,Big NA wedge,Sentinel-2,0,,
+0,s2_geomedian_20210501_20210731_b12,sentinel_composite,O,agriculture,DHI,Anders Bjørn Møller,FALSE,Big NA wedge,Sentinel-2,0,,
+0,s2_geomedian_20210501_20210731_b2,sentinel_composite,O,agriculture,DHI,Anders Bjørn Møller,FALSE,Big NA wedge,Sentinel-2,0,,
+0,s2_geomedian_20210501_20210731_b3,sentinel_composite,O,agriculture,DHI,Anders Bjørn Møller,FALSE,Big NA wedge,Sentinel-2,0,,
+0,s2_geomedian_20210501_20210731_b4,sentinel_composite,O,agriculture,DHI,Anders Bjørn Møller,FALSE,Big NA wedge,Sentinel-2,0,,
+0,s2_geomedian_20210501_20210731_b5,sentinel_composite,O,agriculture,DHI,Anders Bjørn Møller,FALSE,Flat zero,Sentinel-2,0,,
+0,s2_geomedian_20210501_20210731_b6,sentinel_composite,O,agriculture,DHI,Anders Bjørn Møller,FALSE,Big NA wedge,Sentinel-2,0,,
+0,s2_geomedian_20210501_20210731_b7,sentinel_composite,O,agriculture,DHI,Anders Bjørn Møller,FALSE,Big NA wedge,Sentinel-2,0,,
+0,s2_geomedian_20210501_20210731_b8,sentinel_composite,O,agriculture,DHI,Anders Bjørn Møller,FALSE,Big NA wedge,Sentinel-2,0,,
+0,s2_geomedian_20210501_20210731_b8a,sentinel_composite,O,agriculture,DHI,Anders Bjørn Møller,FALSE,Big NA wedge,Sentinel-2,0,,

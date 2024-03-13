@@ -17,7 +17,6 @@
 ### Summarize differences for texture classes (save)
 ## Merge maps of summarized mineral fractions classes (save)
 
-
 library(parallel)
 library(caret)
 library(terra)
@@ -114,8 +113,8 @@ nboot <- lapply(
 
 nboot_final <- 100
 
-nboot_max <- 19
-# nboot_max <- 100
+# nboot_max <- 19
+nboot_max <- 100
 
 nboot <- min(c(nboot, nboot_max))
 
@@ -142,12 +141,38 @@ subdir_tiles <- dir_tiles %>%
 
 tilenames <- basename(subdir_tiles)
 
-n_tiles_use <- 3
-# n_tiles_use <- length(subdir_tiles)
+# Check number of files for each tile
+
+subdir_tiles %>%
+  sapply(
+    function(x) {
+      out <- list.files(x) %>%
+        length()
+    }
+  ) %>%
+  unname() %>%
+  plot()
+
+# Drop files that are not geotiffs:
+# aux.xml
+
+dir_tiles %>%
+  list.files(
+    pattern = "aux.xml",
+    recursive = TRUE,
+    full.names = TRUE
+  ) %>%
+  file.remove()
+
+# n_tiles_use <- 3
+n_tiles_use <- length(subdir_tiles)
 
 if (n_tiles_use < length(subdir_tiles)) {
   tilenames <- tilenames[1:n_tiles_use]
 }
+
+# Folder for temporary files
+tmpfolder <- paste0(dir_dat, "/Temp/")
 
 # Directory for saving bootstrap predictions
 dir_pred_diff <- dir_boot %>%
@@ -176,18 +201,6 @@ dir_pred_tileboot_raw_subdirs <- dir_pred_tileboot_raw %>%
     }
   )
 
-# Subfolders for bootstrap predictions
-dir_pred_tileboot_raw_subdirs %>%
-  sapply(., function(x2) {
-    paste0(x2, "/", boot_all_chr) %>%
-      sapply(
-        function(x) {
-          dir.create(x, showWarnings = FALSE, recursive = TRUE)
-        }
-      )
-  }
-  )
-
 dir_pred_tex100 <- dir_pred_tileboot_tmp %>%
   paste0(., "/tex100/") %T>%
   dir.create(showWarnings = FALSE, recursive = TRUE)
@@ -207,15 +220,6 @@ dir_pred_tex100 <- dir_pred_tileboot_tmp %>%
 dir_pred_tileboot_standard <- dir_pred_tileboot_tmp %>%
   paste0(., "/standardized/") %T>%
   dir.create(showWarnings = FALSE, recursive = TRUE)
-
-# Subfolders for bootstrap predictions
-dir_pred_tileboot_standard %>%
-  paste0(., "/", boot_all_chr) %>%
-  sapply(
-    function(x) {
-      dir.create(x, showWarnings = FALSE, recursive = TRUE)
-    }
-  )
 
 # Folder for tile summaries
 dir_pred_tiles_sum <- dir_pred_diff %>%
@@ -296,6 +300,8 @@ if (only_top) {
   j_depth <- j_all_depths
 }
 
+paste0(dir_dat, "/Temp/") %>% dir.create(showWarnings = FALSE)
+
 # Execute loop for predicting each soil depth
 for (j in j_depth) {
   breaks_j <- breaks[j:(j + 1)]
@@ -304,6 +310,22 @@ for (j in j_depth) {
   
   # Loop for predicting tiles
   for (x in 1:length(tilenames)) {
+    # Clean up before start
+    # Empty tmp folder
+    tmpfolder %>% paste0(., "*") %>% unlink(recursive = TRUE)
+    # Empty folders for raw predictions
+    dir_pred_tileboot_raw_subdirs[1] %>%
+      paste0(., "*") %>%
+      unlink(recursive = TRUE)
+    dir_pred_tileboot_raw_subdirs[2] %>%
+      paste0(., "*") %>%
+      unlink(recursive = TRUE)
+    # Empty folder for standardized predictions
+    dir_pred_tileboot_standard %>% paste0(., "*") %>% unlink(recursive = TRUE)
+    # Empty folder for texture sums
+    dir_pred_tex100 %>% paste0(., "*") %>% unlink(recursive = TRUE)
+    
+    # Predict for tile
     tilename_x <- basename(subdir_tiles[x])
     
     print(paste0("Mapping ", tilename_x))
@@ -311,13 +333,13 @@ for (j in j_depth) {
     n_outfiles_missing <- dir_pred_tiles_sum %>%
       paste0(., "/", tilename_x, "/") %>%
       rep(., each = length(names_summary)) %>%
-      paste0(., names_summary, ".tif") %>%
+      paste0(., names_summary) %>%
       file.exists() %>%
       not() %>%
       sum()
     
     if (n_outfiles_missing > 0) {
-# Function for parallel bootstrap prediction
+      # Function for parallel bootstrap prediction
       cl <- makeCluster(numCores)
       
       clusterEvalQ(
@@ -366,6 +388,13 @@ for (j in j_depth) {
         1:length(boot_all_chr),
         function(bootr) {
           name_bootr <- boot_all_chr[bootr]
+          
+          dir_pred_tileboot_raw_subdirs[1] %>%
+            paste0(., "/", name_bootr, "/") %>%
+            dir.create(showWarnings = FALSE)
+          dir_pred_tileboot_raw_subdirs[2] %>%
+            paste0(., "/", name_bootr, "/") %>%
+            dir.create(showWarnings = FALSE)
           
           tmpfolder <- paste0(dir_dat, "/Temp/")
           
@@ -422,6 +451,9 @@ for (j in j_depth) {
           # standardize mineral fractions
           # - norem
           # - somrem
+          dir_pred_tileboot_standard %>%
+            paste0(., "/", name_bootr, "/") %>%
+            dir.create(showWarnings = FALSE)
           for (m in 1:length(names_somremoval)) {
             tmp_files_bootr <- dir_pred_tileboot_raw_subdirs[m] %>%
               paste0(., "/", name_bootr, "/") %>% 
@@ -812,9 +844,13 @@ for (j in j_depth) {
     
     outfile_basename <- names_merge[i] %>% file_path_sans_ext()
     
+    outfile_name <- names_merge[i] %>%
+      file_path_sans_ext() %>%
+      paste0(., "_", paste0(breaks_j_chr, collapse = "_"), "_cm")
+    
     merge(
       outtiles_sprc,
-      filename = paste0(dir_pred_merged_depth, "/", names_merge[i]),
+      filename = paste0(dir_pred_merged_depth, "/", outfile_name, ".tif"),
       overwrite = TRUE,
       gdal = "TILED=YES",
       datatype = dtyp_i,
