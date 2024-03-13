@@ -2,7 +2,6 @@
 
 # 1: Start up
 
-# library(Cubist)
 library(terra)
 library(magrittr)
 library(tools)
