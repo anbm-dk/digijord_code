@@ -226,7 +226,124 @@ df_val_all %>%
   arrange(db, fraction)
 
 
+# 3: Uncertainty vs accuracy for texture classes
 
-plot(extract_2014$aclaynor, texture_validation_obs$clay)
+source("f_classify_soil_JB.R")
+
+JB_observed <- classify_soil_JB(
+  clay = obs_texture$clay,
+  silt = obs_texture$silt,
+  sand_f = obs_texture$fine_sand,
+  SOM = obs_texture$SOC / 0.6,
+  CaCO3 = obs_texture$CaCO3
+)
+
+JB_predicted <- classify_soil_JB(
+  clay = boot_predictions_mean[, 1],
+  silt = boot_predictions_mean[, 2],
+  sand_f = boot_predictions_mean[, 3],
+  SOM = boot_predictions_mean[, 5] / 0.6,
+  CaCO3 = boot_predictions_mean[, 6]
+)
+
+mean_weights <- models_weights %>% 
+  bind_cols() %>%
+  apply(., 1, function(x) { mean(x, na.rm = TRUE) })
+
+# Load bootstrap predictions
+
+models_boot_predictions <- list()
+
+for (i in 1:length(fractions)) {
+  frac <- fractions[i]
+  models_boot_predictions[[i]] <- dir_boot %>%
+    paste0(., "/models_boot_predictions_", frac, ".rds") %>%
+    readRDS()
+}
+
+Mode <- function(x) {
+  ux <- unique(x)
+  ux[which.max(tabulate(match(x, ux)))]
+}
+
+JB_boot_unc <- lapply(
+  1:100,
+  function(x) {
+    JB <- classify_soil_JB(
+      clay = models_boot_predictions[[1]][, x],
+      silt = models_boot_predictions[[2]][, x],
+      sand_f = models_boot_predictions[[3]][, x],
+      SOM = models_boot_predictions[[5]][, x] / 0.6,
+      CaCO3 = models_boot_predictions[[6]][, x]
+    )
+    return(JB)
+  }
+) %>%
+  bind_cols() %>%
+  as.matrix() %>%
+  apply(
+    .,
+    1,
+    function(x2) {
+      out <- sum(x2 != Mode(x2))
+      return(out)
+    }
+    )
+
+# Load table with numeric texture class differences
+
+Texture_class_num_diff <- dir_dat %>%
+  paste0(., "/Texture_class_num_diff.csv") %>%
+  read.table(
+    header = TRUE,
+    sep = ";"
+  ) %>%
+  as.matrix()
+
+Texture_class_num_diff <- Texture_class_num_diff[, -1]
+
+JB_correct <- JB_predicted == JB_observed
+
+JB_dev <- sapply(
+  1:length(JB_predicted),
+  function(x) {
+    out <- Texture_class_num_diff[JB_predicted[x], JB_observed[x]]
+    return(out)
+  }
+  ) %>%
+  unname()
+  
+
+JB_unc_df <- data.frame(
+  predicted = JB_predicted,
+  observed = JB_observed,
+  w = mean_weights,
+  correct = JB_correct,
+  dev = JB_dev,
+  unc = JB_boot_unc
+) %>%
+  mutate(
+    unc_int = cut(unc, breaks = c(0:9)*10 - 0.5) %>% as.numeric()
+  )
+
+# Percent correct by uncertainty interval
+
+JB_unc_df %>%
+  group_by(unc_int) %>%
+  summarise(
+    acc_w = weighted.mean(correct, w, na.rm = TRUE),
+    mean_dev_w = weighted.mean(dev, w, na.rm = TRUE)
+  )
+
+JB_unc_df %>%
+  group_by(dev, unc_int) %>%
+  summarise(
+    sum_w = sum(w)
+  ) %>%
+  pivot_wider(
+    id_cols = unc_int,
+    names_from = dev,
+    values_from = sum_w
+  )
 
 # END
