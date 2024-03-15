@@ -185,7 +185,8 @@ j_only_top <- 1
 #   j_depth <- j_all_depths
 # }
 
-j_depth <- 2 # Predict second layer
+# j_depth <- 2 # Predict second layer
+j_depth <- 3 # Predict third layer
 
 # Delete texture class predictions (force recalculation)
 
@@ -715,7 +716,8 @@ for (j in j_depth) {
       lapp(
         r_frac_tile_means,
         classify_soil_JB,
-        SOM_factor = 1 / 0.587,
+        # SOM_factor = 1 / 0.587,
+        SOM_factor = 1 / 0.6,
         filename = outname_x_JB_mean,
         overwrite = TRUE,
         wopt = list(

@@ -320,7 +320,8 @@ JB_unc_df <- data.frame(
   w = mean_weights,
   correct = JB_correct,
   dev = JB_dev,
-  unc = JB_boot_unc
+  unc = JB_boot_unc,
+  dataset = obs_texture$fold == 10
 ) %>%
   mutate(
     unc_int = cut(unc, breaks = c(0:9)*10 - 0.5) %>% as.numeric()
@@ -329,19 +330,19 @@ JB_unc_df <- data.frame(
 # Percent correct by uncertainty interval
 
 JB_unc_df %>%
-  group_by(unc_int) %>%
+  group_by(dataset, unc_int) %>%
   summarise(
     acc_w = weighted.mean(correct, w, na.rm = TRUE),
     mean_dev_w = weighted.mean(dev, w, na.rm = TRUE)
   )
 
 JB_unc_df %>%
-  group_by(dev, unc_int) %>%
+  group_by(dataset, dev, unc_int) %>%
   summarise(
-    sum_w = sum(w)
+    sum_w = sum(w, na.rm = TRUE)
   ) %>%
   pivot_wider(
-    id_cols = unc_int,
+    id_cols = c(dataset, unc_int),
     names_from = dev,
     values_from = sum_w
   )
