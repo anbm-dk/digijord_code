@@ -186,7 +186,8 @@ j_only_top <- 1
 # }
 
 # j_depth <- 2 # Predict second layer
-j_depth <- 3 # Predict third layer
+# j_depth <- 3 # Predict third layer
+j_depth <- 4 # Predict fourth layer
 
 # Delete texture class predictions (force recalculation)
 
