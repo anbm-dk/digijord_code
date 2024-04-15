@@ -171,7 +171,137 @@ ggplot(
 
 try(dev.off())
 
+# Tørv2022
 
+kulstof_combo <- paste0(
+  root,
+  "/Texture_maps_10m/depth_000_030_cm/",
+  "Kulstof2022_000_030_cm/Kulstof_arealkombination.tif"
+) %>%
+  rast() %>%
+  crop(my_ext_figure)
+
+peat2022_full <- paste0(
+  "O:/Tech_AGRO/Jord/ambe/sinks/feb_2024_full_maps/",
+  "cubist_pred_soc_all_final_feb2024.tif"
+) %>%
+  rast()
+
+peat2022_small <- crop(
+  peat2022_full,
+  my_ext_figure
+  ) %>%
+  mask(
+    kulstof_combo,
+    maskvalue = 1,
+    inverse = TRUE
+    )
+
+maxvalueforplot <- peat2022_small %>% as.data.frame() %>% max()
+
+tiff(
+  paste0(dir_results, "/example_maps_1km_peat2022.tiff"),
+  width = 4,
+  height = 4,
+  units = "cm",
+  res = 300
+)
+
+plot(
+  peat2022_small, 
+  range = c(0, maxvalueforplot), 
+  col = cividis(255),
+  axes = FALSE, 
+  box = TRUE, 
+  legend = FALSE,
+  mar = 0.1
+)
+
+try(dev.off())
+
+# Kulstof2022
+
+kulstof2022_full <- paste0(
+  root,
+  "/Texture_maps_10m/depth_000_030_cm/",
+  "Kulstof2022_000_030_cm/Kulstof_kombineret.tif"
+) %>%
+  rast()
+
+kulstof2022_small <- crop(kulstof2022_full, my_ext_figure)
+
+maxvalueforplot <- kulstof2022_small %>% as.data.frame() %>% max()
+
+tiff(
+  paste0(dir_results, "/example_maps_1km_kulstof2022.tiff"),
+  width = 4,
+  height = 4,
+  units = "cm",
+  res = 300
+)
+
+plot(
+  kulstof2022_small, 
+  range = c(0, maxvalueforplot), 
+  col = cividis(255),
+  axes = FALSE, 
+  box = TRUE, 
+  legend = FALSE,
+  mar = 0.1
+)
+
+try(dev.off())
+
+# JB2024
+
+clt <- c(
+  1,255,240,166,
+  2,255,206,181,
+  3,252,187,96,
+  4,250,168,15,
+  5,201,156,87,
+  6,161,106,3,
+  7,130,85,17,
+  8,91,150,54,
+  9,76,99,0,
+  10,74,74,6,
+  11,200,230,80,
+  12,130,130,130
+) %>%
+  matrix(nrow = 4) %>%
+  t() %>%
+  .[, -1] %>%
+  rgb(maxColorValue = 255) %>%
+  data.frame(value = 1:12, color = .)
+
+jb2024_full <- paste0(
+  root,
+  "/Texture_maps_10m/depth_000_030_cm/",
+  "/JB2024_000_030_cm/JB_klasse.tif"
+) %>%
+  rast()
+
+jb2024_small <- crop(jb2024_full, my_ext_figure)
+
+tiff(
+  paste0(dir_results, "/example_maps_1km_jb2024.tiff"),
+  width = 4,
+  height = 4,
+  units = "cm",
+  res = 300
+)
+
+coltab(jb2024_small) <- clt
+
+plot(
+  jb2024_small, 
+  axes = FALSE, 
+  box = TRUE, 
+  legend = FALSE,
+  mar = 0.1
+)
+
+try(dev.off())
 
 
 # END
