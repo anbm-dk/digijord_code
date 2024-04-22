@@ -1,0 +1,103 @@
+# External validation points at field level
+
+library(terra)
+library(magrittr)
+library(stringr)
+library(dplyr)
+
+dir_code <- getwd()
+root <- dirname(dir_code)
+dir_dat <- paste0(root, "/digijord_data/")
+
+testn <- 14
+mycrs <- "EPSG:25832"
+
+fractions_alt <- c("clay", "silt", "fine_sand", "coarse_sand", "SOC", "CaCO3")
+
+fractions <- fractions_alt
+
+fraction_names_underscore <- c(
+  "Clay", "Silt", "Fine_sand", "Coarse_sand", "SOC", "CaCO3"
+)
+
+# Results folder
+
+dir_results <- dir_dat %>%
+  paste0(., "/results_test_", testn, "/")
+
+# Texture prediction maps
+
+dir_pred_all <- dir_results %>%
+  paste0(., "//bootstrap/predictions/final_maps/")
+
+tex_pred <- dir_pred_all %>% list.files(
+  pattern = "_mean.tif",
+  full.names = TRUE,
+  recursive = TRUE
+) %>%
+  grep(".ovr", ., names(cov), value = TRUE, invert = TRUE) %>%
+  grep(".aux.xml", ., names(cov), value = TRUE, invert = TRUE) %>%
+  grep(".vat.cpg", ., names(cov), value = TRUE, invert = TRUE) %>%
+  grep(".vat.dbf", ., names(cov), value = TRUE, invert = TRUE) %>%
+  grep(
+    pattern = paste(fraction_names_underscore, collapse = "|"),
+    .,
+    value = TRUE
+  ) %>%
+  rast()
+
+# Reorder layers
+
+breaks <- c(0, 30, 60, 100, 200)
+
+max_char <- breaks %>%
+  as.character() %>%
+  nchar() %>%
+  max()
+
+breaks_chr <- breaks %>%
+  str_pad(
+    .,
+    max_char,
+    pad = "0"
+  )
+
+tex_lyr_order <- paste0(
+  breaks_chr[1:4], "_", breaks_chr[2:5], "_cm"
+) %>%
+  expand.grid(fraction_names_underscore, .) %>%
+  arrange(Var1) %>%
+  apply(., 1, paste, collapse = "_")
+
+tex_pred %<>% subset(tex_lyr_order)
+
+# Load validation points
+
+val_pts <- dir_dat %>%
+  paste0(
+    ., "observations/validation/Validation_Points_RootZone.csv") %>%
+  read.table(header = TRUE, sep = ";") %>%
+  vect(
+    geom = c("Longitude", "Latitude"),
+    crs = mycrs,
+    keepgeom = TRUE
+  )
+
+# Extract values
+
+val_extr <- terra::extract(
+  tex_pred,
+  val_pts,
+  ID = FALSE,
+  bind = TRUE
+) %>%
+  values()
+
+val_extr %>%
+  write.table(
+    paste0(dir_results, "/validation_point_predictions.csv"),
+    sep = ";",
+    row.names = FALSE
+  )
+
+# END

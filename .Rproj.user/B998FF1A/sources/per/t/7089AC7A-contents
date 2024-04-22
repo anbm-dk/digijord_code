@@ -9,6 +9,7 @@ library(tibble)
 library(tidyr)
 library(xgboost)
 library(stringr)
+library(ggplot2)
 
 dir_code <- getwd()
 root <- dirname(dir_code)
@@ -61,7 +62,9 @@ for (i in 1:length(fractions)) {
 
 # Load combination raster showing parts covered by Tørv2022 and my own map.
 SOC_combination_map <- root %>%
-  paste0(., "/Tekstur2024_kort/Kulstof_arealkombination.tif") %>%
+  paste0(
+    ., "/Texture_maps_10m/depth_000_030_cm/Kulstof2022_000_030_cm/",
+    "Kulstof_arealkombination.tif") %>%
   rast()
 
 # Extract combination
@@ -225,6 +228,83 @@ df_val_all %>%
   ) %>%
   arrange(db, fraction)
 
+# Figure for SEGES samples
+
+library(tune)
+library(ggpubr)
+
+df_val_all %>%
+  drop_na() %>%
+  mutate(fraction = factor(fraction, fractions, fractions)) %>%
+  filter(db == "SEGES") %>%
+  ggplot(
+    aes(
+      x = observed,
+      y = predicted
+      )
+    ) +
+  geom_point() +
+  facet_grid(as.factor(year) ~ fraction) +
+  coord_obs_pred() +
+  stat_regline_equation(label.y = 85) +
+  stat_cor(label.y = 70) +
+  geom_smooth(method='lm')
+
+# Figure for SEGES samples - only clay
+
+tiff(
+  paste0(dir_results, "/Accuracy_SEGES_clay_test_", testn, ".tiff"),
+  width = 16,
+  height = 10,
+  units = "cm",
+  res = 300
+)
+
+df_val_all %>%
+  drop_na() %>%
+  mutate(fraction = factor(fraction, fractions, fractions)) %>%
+  filter(
+    db == "SEGES",
+    is.finite(observed),
+    fraction == "clay"
+    ) %>%
+  ggplot(
+    aes(
+      x = observed,
+      y = predicted
+    )
+  ) +
+  geom_point() +
+  geom_abline(intercept = 0, slope = 1, color = "red") +
+  facet_wrap(~ year) +
+  coord_obs_pred() +
+  stat_regline_equation(label.y = 50) +
+  stat_cor(label.y = 45) +
+  geom_smooth(method ='lm')
+
+try(dev.off())
+
+df_val_all %>%
+  drop_na() %>%
+  mutate(fraction = factor(fraction, fractions, fractions)) %>%
+  filter(
+    db == "SEGES",
+    is.finite(observed),
+    fraction == "clay"
+  ) %>%
+  ggplot(
+    aes(
+      x = observed,
+      y = predicted
+    )
+  ) +
+  geom_point() +
+  geom_abline(intercept = 0, slope = 1, color = "red") +
+  facet_wrap(~ year) +
+  xlim(c(0, 10)) +
+  ylim(c(0, 10)) +
+  coord_obs_pred()
+
 
 # 3: Uncertainty vs accuracy for texture classes
 
@@ -346,5 +426,392 @@ JB_unc_df %>%
     names_from = dev,
     values_from = sum_w
   )
+
+# Accuracies for soil texture classes, based on points from SEGES
+# Compare maps from 2014 and 2024
+
+df_JB_val <- bind_rows(df_val_2014, df_val_2024) %>%
+  filter(db == "SEGES") %>%
+  na.omit() %>%
+  filter(type != "w") %>%
+  mutate(
+    JB = classify_soil_JB(
+      clay = clay,
+      silt = silt,
+      sand_f = fine_sand,
+      SOM = SOC/0.6,
+      CaCO3 = 0
+    )
+  ) %>%
+  arrange(ID_new) %>%
+  select(c(ID_new, type, year, JB)) %>%
+  pivot_wider(
+    values_from = JB,
+    names_from = type
+  ) %>%
+  na.omit()
+
+df_JB_val_no11 <- bind_rows(df_val_2014, df_val_2024) %>%
+  filter(db == "SEGES") %>%
+  na.omit() %>%
+  filter(type != "w") %>%
+  mutate(
+    JB = classify_soil_JB(
+      clay = clay,
+      silt = silt,
+      sand_f = fine_sand,
+      SOM = SOC/0.6,
+      CaCO3 = 0
+    )
+  ) %>%
+  filter(JB != 11) %>%
+  arrange(ID_new) %>%
+  select(c(ID_new, type, year, JB)) %>%
+  pivot_wider(
+    values_from = JB,
+    names_from = c(type, year)
+  ) %>%
+  na.omit() %>%
+  pivot_longer(
+    c(predicted_2014, predicted_2024, observed_2014, observed_2024),
+    names_sep = "_",
+    names_to = c("type", "year")
+  ) %>%
+  pivot_wider(
+    names_from = type,
+  )
+
+df_JB_val_no11 %>%
+  group_by(year) %>%
+  summarise(acc = mean(observed == predicted))
+
+df_JB_val_no11 %>%
+  mutate(
+    predicted = factor(predicted, 1:12, 1:12),
+    observed = factor(observed, 1:12, 1:12),
+  ) %>%
+ggplot(aes(x = observed, y = predicted)) +
+  geom_bin2d() +
+  facet_wrap(~ as.factor(year))
+  stat_density_2d(
+    aes(
+      fill = after_stat(density)),
+    geom = "raster",
+    contour = FALSE
+  )
+
+df_JB_val_no11 %>%
+  pivot_longer(
+    c(predicted, observed),
+    names_to = "type"
+  ) %>%
+  pivot_wider(
+    names_from = c(type, year)
+  ) %>%
+  mutate(
+    observed = observed_2024
+  ) %>%
+  select(ID_new, predicted_2014, predicted_2024, observed) %>%
+  pivot_longer(
+    col = -ID_new,
+    values_to = "JB"
+    ) %>%
+  mutate(
+    JB = factor(JB, 1:12, 1:12)
+  ) %>%
+  ggplot(aes(x = JB, fill = name)) +
+  geom_bar(position=position_dodge())
+
+# Clay interval
+
+clay_breaks <- c(0, 5, 10, 15, 25, 45, 100)
+
+df_clay_interval_val <- bind_rows(df_val_2014, df_val_2024) %>%
+  filter(db == "SEGES") %>%
+  filter(
+    type != "w",
+    is.finite(clay)
+    ) %>%
+  mutate(
+    interval = cut(clay, breaks = clay_breaks)
+  ) %>%
+  arrange(ID_new) %>%
+  select(c(ID_new, type, year, interval)) %>%
+  pivot_wider(
+    values_from = interval,
+    names_from = type
+  ) %>%
+  na.omit()
+
+tiff(
+  paste0(dir_results, "/SEGES_clay_confusion_test_", testn, ".tiff"),
+  width = 20,
+  height = 10,
+  units = "cm",
+  res = 300
+)
+
+df_clay_interval_val %>%
+  ggplot(aes(x = observed, y = predicted)) +
+  geom_bin2d() +
+  facet_wrap(~ as.factor(year)) +
+  coord_equal() +
+  stat_bin2d(geom = "text", aes(label = after_stat(count))) +
+  scale_fill_gradient(low = "snow3", high = "red")
+
+try(dev.off())
+
+df_clay_interval_val %>%
+  group_by(year) %>%
+  summarise(acc = mean(observed == predicted))
+
+tiff(
+  paste0(dir_results, "/SEGES_clay_bars_test_", testn, ".tiff"),
+  width = 16,
+  height = 10,
+  units = "cm",
+  res = 300
+)
+
+df_clay_interval_val %>%
+  pivot_longer(
+    c(predicted, observed),
+    names_to = "type"
+  ) %>%
+  pivot_wider(
+    names_from = c(type, year)
+  ) %>%
+  mutate(
+    observed = observed_2024
+  ) %>%
+  select(ID_new, predicted_2014, predicted_2024, observed) %>%
+  pivot_longer(
+    col = -ID_new,
+    values_to = "interval"
+  ) %>%
+  ggplot(aes(x = interval, fill = name)) +
+  geom_bar(position=position_dodge())
+
+try(dev.off())
+
+# Mean clay content for the predicted interval
+
+bind_rows(df_val_2014, df_val_2024) %>%
+  filter(db == "SEGES") %>%
+  filter(
+    type != "w",
+    is.finite(clay)
+  ) %>%
+  select(c(ID_new, db, clay, type, year)) %>%
+  pivot_wider(values_from = clay, names_from = type) %>%
+  filter(is.finite(observed)) %>%
+  arrange(ID_new) %>%
+  mutate(
+    predicted_interval = cut(predicted, breaks = clay_breaks)
+  ) %>%
+  group_by(year, predicted_interval) %>%
+  summarise(observed_mean = mean(observed)) %>%
+  pivot_wider(names_from = year, values_from = observed_mean)
+
+library(ggridges)
+
+clay_breaks2 <- c(5, 10, 15, 25, 45)
+
+tiff(
+  paste0(dir_results, "/Ridges_SEGES_clay_test_", testn, ".tiff"),
+  width = 16,
+  height = 10,
+  units = "cm",
+  res = 300
+)
+
+bind_rows(df_val_2014, df_val_2024) %>%
+  filter(db == "SEGES") %>%
+  filter(
+    type != "w",
+    is.finite(clay)
+  ) %>%
+  select(c(ID_new, db, clay, type, year)) %>%
+  pivot_wider(values_from = clay, names_from = type) %>%
+  filter(
+    is.finite(observed),
+    predicted <= 25
+    ) %>%
+  arrange(ID_new) %>%
+  mutate(
+    clay_predicted_interval = cut(predicted, breaks = clay_breaks),
+    observed_interval = cut(observed, breaks = clay_breaks),
+    clay_observed = observed
+  ) %>%
+  ggplot(
+    aes(
+      y = clay_predicted_interval,
+      x = clay_observed,
+      fill = stat(x)
+    )
+  ) +
+  geom_density_ridges_gradient(
+    rel_min_height = 0.001,
+    scale = 0.95,
+    panel_scaling = FALSE,
+    bandwidth = 1
+    ) +
+  scale_fill_viridis_b(breaks = clay_breaks2) +
+  facet_wrap(~ year) +
+  scale_x_continuous(limits = c(0, NA), expand = c(0, 0)) +
+  scale_y_discrete(expand = expansion(add = c(0.1, 1))) +
+  coord_flip()
+
+try(dev.off())
+
+bind_rows(df_val_2014, df_val_2024) %>%
+  filter(db == "SEGES") %>%
+  filter(
+    type != "w",
+    is.finite(clay)
+  ) %>%
+  select(c(ID_new, clay, type, year)) %>%
+  pivot_wider(values_from = clay, names_from = type) %>%
+  filter(is.finite(observed)) %>%
+  arrange(ID_new) %>%
+  mutate(
+    predicted_interval = cut(predicted, breaks = clay_breaks)
+  ) %>%
+  pivot_wider(
+    values_from = c(observed, predicted, predicted_interval),
+    names_from = year
+  ) %>%
+  mutate(
+    observed = observed_2014,
+    observed_interval = cut(observed, breaks = clay_breaks),
+    ) %>%
+  select(-observed_2014, -observed_2024) %>%
+  mutate(
+    true_2014 = predicted_interval_2014 == observed_interval,
+    true_2024 = predicted_interval_2024 == observed_interval
+  ) %>%
+  group_by(predicted_interval_2014, predicted_interval_2024) %>%
+  summarise(
+    mean_obs = mean(observed),
+    mean_2014 = mean(predicted_2014),
+    mean_2024 = mean(predicted_2024),
+    rmse_2014 = rmse(observed, predicted_2014),
+    rmse_2024 = rmse(observed, predicted_2024),
+    acc_2014 = mean(true_2014),
+    acc_2024 = mean(true_2024),
+    n = n()
+  ) %>%
+  as.data.frame()
+
+# Mean clay contents for observed intervals
+
+bind_rows(df_val_2014, df_val_2024) %>%
+  filter(db == "SEGES") %>%
+  filter(
+    type != "w",
+    is.finite(clay)
+  ) %>%
+  select(c(ID_new, clay, type, year)) %>%
+  pivot_wider(values_from = clay, names_from = type) %>%
+  filter(is.finite(observed)) %>%
+  arrange(ID_new) %>%
+  mutate(
+    predicted_interval = cut(predicted, breaks = clay_breaks)
+    ) %>%
+  pivot_wider(
+    values_from = c(observed, predicted, predicted_interval),
+    names_from = year
+  ) %>%
+  mutate(
+    observed = observed_2014,
+    observed_interval = cut(observed, breaks = clay_breaks),
+    true_2014 = predicted_interval_2014 == observed_interval,
+    true_2024 = predicted_interval_2024 == observed_interval
+  ) %>%
+  select(-observed_2014, -observed_2024) %>%
+  group_by(observed_interval) %>%
+  summarise(
+    mean_obs = mean(observed),
+    mean_2014 = mean(predicted_2014),
+    mean_2024 = mean(predicted_2024),
+    rmse_2014 = rmse(observed, predicted_2014),
+    rmse_2024 = rmse(observed, predicted_2024),
+    acc_2014 = mean(true_2014),
+    acc_2024 = mean(true_2024),
+    n = n()
+  )
+
+# Compare distrubutions
+
+bind_rows(df_val_2014, df_val_2024) %>%
+  filter(db == "SEGES") %>%
+  filter(
+    type != "w",
+    is.finite(clay)
+  ) %>%
+  select(c(ID_new, clay, type, year)) %>%
+  pivot_wider(values_from = clay, names_from = type) %>%
+  filter(is.finite(observed)) %>%
+  arrange(ID_new) %>%
+  pivot_wider(
+    values_from = c(observed, predicted),
+    names_from = year
+  ) %>%
+  mutate(
+    observed = observed_2014,
+  ) %>%
+  select(-observed_2014, -observed_2024) %>%
+  pivot_longer(
+    cols = c(predicted_2014, predicted_2024, observed)
+  ) %>%
+  group_by(name) %>%
+  summarise(
+    mean = mean(value),
+    sd = sd(value)
+  )
+
+tiff(
+  paste0(dir_results, "/Ridges_SEGES_clay_all_test_", testn, ".tiff"),
+  width = 16,
+  height = 10,
+  units = "cm",
+  res = 300
+)
+
+bind_rows(df_val_2014, df_val_2024) %>%
+  filter(db == "SEGES") %>%
+  filter(
+    type != "w",
+    is.finite(clay)
+  ) %>%
+  select(c(ID_new, clay, type, year)) %>%
+  pivot_wider(values_from = clay, names_from = type) %>%
+  filter(is.finite(observed)) %>%
+  arrange(ID_new) %>%
+  pivot_wider(
+    values_from = c(observed, predicted),
+    names_from = year
+  ) %>%
+  mutate(
+    observed = observed_2014,
+  ) %>%
+  select(-observed_2014, -observed_2024) %>%
+  pivot_longer(
+    cols = c(predicted_2014, predicted_2024, observed)
+  ) %>%
+  ggplot(aes(x = value,
+             y = name,
+             fill = stat(x))) +
+  geom_density_ridges_gradient(
+    rel_min_height = 0.001,
+    scale = 0.95,
+    panel_scaling = FALSE,
+    bandwidth = 1
+  ) +
+  scale_fill_viridis_b(breaks = clay_breaks2) +
+  scale_x_continuous(limits = c(0, NA), expand = c(0, 0)) +
+  scale_y_discrete(expand = expansion(add = c(0.1, 1)), limits = rev)
+
+try(dev.off())
 
 # END

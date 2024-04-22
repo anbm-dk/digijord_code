@@ -9,7 +9,7 @@ dir_code <- getwd()
 root <- dirname(dir_code)
 dir_dat <- paste0(root, "/digijord_data/")
 
-testn <- 13
+testn <- 14
 mycrs <- "EPSG:25832"
 
 fractions_alt <- c("clay", "silt", "fine_sand", "coarse_sand", "SOC", "CaCO3")
@@ -28,11 +28,12 @@ dir_results <- dir_dat %>%
 # Texture prediction maps
 
 dir_pred_all <- dir_results %>%
-  paste0(., "/predictions/")
+  paste0(., "//bootstrap/predictions/final_maps/")
 
 tex_pred <- dir_pred_all %>% list.files(
-  pattern = ".tif",
-  full.names = TRUE
+  pattern = "_mean.tif",
+  full.names = TRUE,
+  recursive = TRUE
 ) %>%
   grep(".ovr", ., names(cov), value = TRUE, invert = TRUE) %>%
   grep(".aux.xml", ., names(cov), value = TRUE, invert = TRUE) %>%

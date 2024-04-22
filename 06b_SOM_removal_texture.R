@@ -415,6 +415,44 @@ allpairs %<>%
     clay_norem < 20
   )
 
+tiff(
+  paste0(dir_fig, "clay_pointpairs.tiff"),
+  width = 10,
+  height = 10,
+  units = "cm",
+  res = 300
+)
+
+ggplot(allpairs, aes(x = clay_norem, y = clay_rem)) +
+  geom_point() +
+  geom_smooth(method="loess") +
+  coord_equal() +
+  geom_abline() +
+  scale_x_continuous(limits = c(0, max(allpairs$clay_rem))) +
+  scale_y_continuous(limits = c(0, max(allpairs$clay_rem)))
+
+try(dev.off())
+
+tiff(
+  paste0(dir_fig, "clay_pointpairs_difference.tiff"),
+  width = 10,
+  height = 10,
+  units = "cm",
+  res = 300
+)
+
+ggplot(allpairs, aes(x = clay_norem, y = clay_dif)) +
+  geom_point() +
+  geom_smooth(method="loess") +
+  coord_equal() +
+  scale_x_continuous(
+    limits = c(0, max(allpairs$clay_rem)),
+    breaks = seq(-100, 100, by = 5)
+    ) +
+  scale_y_continuous(breaks = seq(-100, 100, by = 5))
+
+try(dev.off())
+
 ggplot(allpairs, aes(x = clay_norem, y = clay_rem, col = SOM_cat)) +
   geom_point() +
   geom_smooth(method=lm) +
@@ -703,6 +741,7 @@ tiff(
   units = "cm",
   res = 300
 )
+
 plot(
   x = seq(0, 2, by = 0.01),
   y = classchange*100,
@@ -710,7 +749,54 @@ plot(
   ylab = "Changed JB class (%)",
   type = "l"
 )
+
 dev.off()
 
+# Ridgeplot for dsc points
+
+library(ggridges)
+
+clay_breaks2 <- c(5, 10, 15, 25, 45)
+
+tiff(
+  paste0(dir_fig, "dsc_distribution.tiff"),
+  width = 16,
+  height = 10,
+  units = "cm",
+  res = 300
+)
+
+ggplot(
+  dsc_analysis,
+  aes(
+    y = db,
+    x = clay,
+    fill = stat(x)
+  )
+) +
+  geom_density_ridges_gradient(
+    rel_min_height = 0.001,
+    scale = 0.95,
+    panel_scaling = FALSE,
+    bandwidth = 1
+  ) +
+  scale_fill_viridis_b(breaks = clay_breaks2) +
+  scale_x_continuous(limits = c(0, NA), expand = c(0, 0)) +
+  scale_y_discrete(expand = expansion(add = c(0, 0.11))) +
+  theme(
+    axis.title.y = element_blank(),
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank()
+    ) +
+  ggtitle("Distribution of clay contents in the Danish Soil Classification")
+
+try(dev.off())
+
+# Modal value
+# [1] 4.096095
+
+library(modeest)
+
+mlv(dsc_analysis$clay, method = "meanshift")
 
 # END

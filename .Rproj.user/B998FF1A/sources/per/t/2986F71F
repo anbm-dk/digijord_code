@@ -3,7 +3,7 @@
     "path": "C:/Users/au542768/digijord/digijord_code/06b_SOM_removal_texture.R",
     "project_path": "06b_SOM_removal_texture.R",
     "type": "r_source",
-    "hash": "3591566211",
+    "hash": "39483488",
     "contents": "",
     "dirty": false,
     "created": 1701074009933.0,
@@ -13,15 +13,15 @@
         "tempName": "Untitled1",
         "source_window_id": "",
         "Source": "Source",
-        "cursorPosition": "620,24",
-        "scrollLine": "0"
+        "cursorPosition": "759,0",
+        "scrollLine": "750"
     },
     "folds": "",
-    "lastKnownWriteTime": 1701265122,
+    "lastKnownWriteTime": 1713782319,
     "encoding": "UTF-8",
     "collab_server": "",
     "source_window": "",
-    "last_content_update": 1701265122718,
+    "last_content_update": 1713782319471,
     "read_only": false,
     "read_only_alternatives": []
 }
