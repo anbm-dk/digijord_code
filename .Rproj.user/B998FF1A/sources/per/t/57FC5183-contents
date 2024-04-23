@@ -10,6 +10,8 @@ dir_code <- getwd()
 root <- dirname(dir_code)
 dir_dat <- paste0(root, "/digijord_data/")
 
+dir_fig <- dir_dat %>% paste0(., "/figures/") %T>% dir.create()
+
 testn <- 14
 mycrs <- "EPSG:25832"
 
@@ -48,6 +50,8 @@ names(clay_noSOMremoval) <- "clay_noremoval"
 
 # Extract points
 
+set.seed(1)
+
 pts <- c(
   clay_SOMremoved,
   clay_noSOMremoval,
@@ -55,8 +59,11 @@ pts <- c(
 ) %>%
   spatSample(
     size = 15000,
-    na.rm = TRUE
+    na.rm = TRUE,
+    xy = TRUE
   )
+
+set.seed(1)
 
 pts_10k <- pts %>%
   filter(
@@ -186,7 +193,6 @@ pts_10k %>%
 
 # Clay difference vs clay
 
-
 pts_10k %>%
   ggplot(aes(x = clay_noremoval, y = clay_dif)) +
   geom_hex(
@@ -260,20 +266,24 @@ pts_10k %>%
   scale_y_continuous(expand = c(0, 0)) +
   geom_smooth()
 
-
 pts_10k %>%
   ggplot(
     aes(
       x = SOC / (SOC + clay_SOMremoved),
-      y = clay_dif / clay_SOMremoved
+      # x = log(SOC / clay_SOMremoved),
+      # x = SOC / clay_SOMremoved,
+      # x = log(SOC) / clay_SOMremoved,
+      # y = clay_dif / clay_SOMremoved
+      # y = clay_noremoval / clay_SOMremoved
+      y = SOC / clay_SOMremoved - SOC / clay_noremoval
+      # y = log(clay_noremoval) - log(clay_SOMremoved)
     )
   ) +
   geom_hex(
     aes(
       alpha = after_stat(ndensity),
       fill = after_stat(ndensity)
-    ),
-    bins = 30
+    )
   ) +
   scale_fill_gradientn(
     colours = mycolorgradient,
@@ -298,6 +308,83 @@ pts_10k %>%
   scale_x_continuous(expand = c(0, 0)) +
   scale_y_continuous(expand = c(0, 0)) +
   geom_smooth(method = "lm")
+
+# Load raster with 2014 clay contents
+
+texture_2014_clay <- paste0(
+  "O:/AUIT_Geodata/Denmark/Natural_ressources/Soil_geology/Texture3D_2014/",
+  "geotiffs/aclaynor.tif"
+) %>%
+  rast()
+
+pts_15k_v <- vect(
+  pts,
+  geom = c("x", "y"),
+  crs = mycrs
+)
+
+pts_15k_2014extr <- terra::extract(
+  texture_2014_clay,
+  pts_15k_v
+)
+
+# Plot distributions
+
+library(ggridges)
+
+clay_breaks2 <- c(5, 10, 15, 25, 45)
+
+set.seed(1)
+
+df_3maps <- pts_15k_v %>%
+  values() %>%
+  bind_cols(pts_15k_2014extr) %>%
+  mutate(
+    clay_2014 = aclaynor
+  ) %>%
+  select(
+    clay_SOMremoved, clay_noremoval, clay_2014
+  ) %>%
+  drop_na() %>%
+  sample_n(10000) %>%
+  pivot_longer(
+    cols = c(clay_SOMremoved, clay_noremoval, clay_2014)
+  ) 
+
+tiff(
+  paste0(dir_fig, "/Clay_2014_2024_", testn, ".tiff"),
+  width = 16,
+  height = 10,
+  units = "cm",
+  res = 300
+)
+df_3maps %>%
+  ggplot(aes(x = value,
+             y = name,
+             fill = stat(x))) +
+  geom_density_ridges_gradient(
+    rel_min_height = 0.001,
+    scale = 0.95,
+    panel_scaling = FALSE,
+    bandwidth = 1
+  ) +
+  scale_fill_viridis_b(breaks = clay_breaks2) +
+  scale_x_continuous(limits = c(0, NA), expand = c(0, 0)) +
+  scale_y_discrete(expand = expansion(add = c(0.1, 1)), limits = rev)
+
+try(dev.off())
+
+library(modeest)
+
+df_3maps %>%
+  group_by(name) %>% summarise(
+    mode = mlv(value, method = "meanshift")
+  )
+
+# Modes
+# 1 clay_2014        3.60
+# 3 clay_noremoval   4.56
+# 2 clay_SOMremoved  6.41
 
 
 # END
