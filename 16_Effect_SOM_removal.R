@@ -359,9 +359,13 @@ tiff(
   res = 300
 )
 df_3maps %>%
-  ggplot(aes(x = value,
-             y = name,
-             fill = stat(x))) +
+  ggplot(
+    aes(
+      x = value,
+      y = name,
+      fill = stat(x)
+    )
+  ) +
   geom_density_ridges_gradient(
     rel_min_height = 0.001,
     scale = 0.95,
@@ -378,7 +382,7 @@ library(modeest)
 
 df_3maps %>%
   group_by(name) %>% summarise(
-    mode = mlv(value, method = "meanshift")
+    mode = mlv(value, method = "meanshift"),
   )
 
 # Modes
@@ -386,5 +390,187 @@ df_3maps %>%
 # 3 clay_noremoval   4.56
 # 2 clay_SOMremoved  6.41
 
+# Example for DSC points
+
+
+dir_obs_proc <- dir_dat %>%
+  paste0(., "/observations/processed/")
+
+dsc <- dir_obs_proc %>%
+  paste0(., "dsc.csv") %>%
+  read.table(
+    header = TRUE,
+    sep = ";"
+  ) %>%
+  vect(
+    geom = c("UTMX", "UTMY"),
+    crs = mycrs,
+    keepgeom = TRUE
+  )
+
+dir_folds <- dir_dat %>%
+  paste0(., "/folds/")
+
+dsc_folds <- dir_folds %>%
+  paste0(., "dsc_folds.csv") %>%
+  read.table(
+    header = TRUE,
+    sep = ";"
+  )
+
+library(tidyterra)
+
+dsc_top_f10 <- dsc %>%
+  filter(dsc_folds$lyr.1 == 10) %>%
+  tidyterra::filter(
+    upper == 0,
+    is.finite(clay)
+    )
+
+dsc_top_clay <- dsc %>%
+  tidyterra::filter(
+    upper == 0,
+    is.finite(clay)
+  )
+
+# Extract predicted values for DSC points
+
+rasters_10m <- c(
+  clay_noSOMremoval,
+  clay_SOMremoved,
+  SOC_predicted
+)
+
+names(rasters_10m)[3] <- "SOC_predicted"
+names(texture_2014_clay) <- "clay_2014"
+
+dsc_pred_extr_top <- dsc_top_clay %>%
+  terra::extract(
+    x = rasters_10m,
+    y = .,
+    bind = TRUE
+  ) %>%
+  terra::extract(
+    x = texture_2014_clay,
+    y = .,
+    bind = TRUE
+  ) %>%
+  filter(
+    is.finite(clay_noremoval),
+    is.finite(clay_SOMremoved),
+    is.finite(SOC_predicted),
+    is.finite(clay_2014)
+  )
+
+library(ggridges)
+clay_breaks2 <- c(5, 10, 15, 25, 45)
+
+tiff(
+  paste0(dir_fig, "/Clay_DSC_2014_2024_", testn, ".tiff"),
+  width = 16,
+  height = 10,
+  units = "cm",
+  res = 300
+)
+
+values(dsc_pred_extr_top) %>%
+  mutate(
+    clay_dsc = clay
+  ) %>%
+  select(
+    clay_dsc,
+    SOC,
+    clay_noremoval,
+    clay_SOMremoved,
+    SOC_predicted,
+    clay_2014
+  ) %>%
+  pivot_longer(
+    cols = c(clay_dsc, clay_noremoval, clay_SOMremoved, clay_2014),
+    names_to = "Source",
+    values_to = "clay"
+  ) %>%
+  mutate(
+    Source = factor(
+      Source,
+      levels = c("clay_dsc", "clay_2014", "clay_noremoval", "clay_SOMremoved"),
+      labels = c(
+        "Danish Soil Classification",
+        "Tekstur2014",
+        "T2024 - no removal",
+        "T2024 - SOM removed")
+  )
+  ) %>%
+  ggplot(
+    aes(
+      x = clay,
+      y = Source,
+      fill = stat(x)
+    )
+  ) +
+  geom_density_ridges_gradient(
+    rel_min_height = 0.001,
+    scale = 0.95,
+    panel_scaling = FALSE,
+    bandwidth = 1
+  ) +
+  scale_fill_viridis_b(breaks = clay_breaks2) +
+  scale_x_continuous(limits = c(0, NA), expand = c(0, 0)) +
+  scale_y_discrete(expand = expansion(add = c(0.005, 0.14)), limits = rev) +
+  facet_wrap(~ Source, scales = "free_y", dir = "v") +
+  theme(
+    axis.title.y = element_blank(),
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank()
+  )
+
+try(dev.off())
+
+# Calculate statistics
+
+library(modeest)
+
+values(dsc_pred_extr_top) %>%
+  mutate(
+    clay_dsc = clay
+  ) %>%
+  select(
+    clay_dsc,
+    SOC,
+    clay_noremoval,
+    clay_SOMremoved,
+    SOC_predicted,
+    clay_2014
+  ) %>%
+  pivot_longer(
+    cols = c(clay_dsc, clay_noremoval, clay_SOMremoved, clay_2014),
+    names_to = "Source",
+    values_to = "clay"
+  ) %>%
+  mutate(
+    Source = factor(
+      Source,
+      levels = c("clay_dsc", "clay_2014", "clay_noremoval", "clay_SOMremoved"),
+      labels = c(
+        "Danish Soil Classification",
+        "Tekstur2014",
+        "T2024 - no removal",
+        "T2024 - SOM removed")
+    )
+  ) %>%
+  group_by(Source) %>%
+  summarise(
+    mean = mean(clay),
+    sd = sd(clay),
+    mode = mlv(clay, method = "meanshift"),
+  )
+
+# Source                        mean    sd  mode
+# 1 Danish Soil Classification  8.33  5.28  4.12
+# 2 Tekstur2014                 8.31  5.03  3.67
+# 3 T2024 - no removal          8.42  4.03  4.79
+# 4 T2024 - SOM removed         9.24  3.50  6.57
+
+# 36375 points
 
 # END

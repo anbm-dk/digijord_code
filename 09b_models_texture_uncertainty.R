@@ -547,7 +547,6 @@ bounds <- list(
 xgb_opt_stepwise <- FALSE
 
 
-
 # 9: Train models
 
 if (train_models) {
@@ -1088,7 +1087,7 @@ varImp_boot_mean <- lapply(
  out <- lapply(
    models_boot_files[[x]],
    function(x2) {
-     model_x <-  x2 %>% readRDS()
+     model_x <- x2 %>% readRDS()
      out2 <- varImp(model_x)$importance %>%
        t() %>%
        unlist() %>%
@@ -1127,6 +1126,51 @@ varImp_boot_mean %>%
     row.names = FALSE
   )
 
+# Get covariate importance for all repetitions
+
+boot_imp_all <- lapply(
+  1:length(fractions),
+  function(x) {
+    out <- lapply(
+      models_boot_files[[x]],
+      # models_boot_files[[x]][1:2],
+      function(x2) {
+        model_x <- x2 %>% readRDS()
+        out2 <- varImp(model_x, scale = FALSE)$importance %>%
+          t() %>%
+          unlist() %>%
+          .[1, ]
+        return(out2)
+      }
+    )
+    
+    out %<>%
+      bind_rows()
+    
+    out$fraction <- fractions[x]
+    out$rep <- c(1:nrow(out))
+    return(out)
+  }
+) %>%
+  bind_rows() %>%
+  pivot_longer(
+    cols = -c(rep, fraction),
+    values_to = "Importance",
+    names_to = "Covariate"
+  ) %>%
+  pivot_wider(
+    values_from = Importance,
+    names_from = rep,
+    names_prefix = "rep"
+  ) %>%
+  replace(is.na(.), 0)
+
+saveRDS(
+  boot_imp_all,
+  paste0(dir_boot, "/models_boot_importance_all.rds")
+)
+
+as.data.frame(boot_imp_all)
 
 # Covariate importance
 
@@ -1495,7 +1539,7 @@ write.table(
 
 # Accuracy for soils with less than 6% SOC
 
-get_acc_lowsoc<- function(i2) {
+get_acc_lowsoc <- function(i2) {
   lookup <- c(obs = fractions[i2])
   out <- obs %>%
     mutate(
@@ -1617,7 +1661,7 @@ get_acc_bare <- function(i2) {
       imputed == FALSE
     )
   }
-  out <- dat_i %>% group_by(indices, depth) %>%
+  out <- dat_i %>% group_by(indices, depth, bare) %>%
     summarise(
       r2 = round(get_R2w(cbind(pred, obs), weights), digits = 3),
       rmse = round(get_RMSEw(cbind(pred, obs), weights), digits = 3)
