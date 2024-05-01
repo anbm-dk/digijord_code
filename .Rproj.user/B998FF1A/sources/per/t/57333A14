@@ -3,7 +3,7 @@
     "path": "C:/Users/au542768/digijord/digijord_code/17_texture_boot_varImp.R",
     "project_path": "17_texture_boot_varImp.R",
     "type": "r_source",
-    "hash": "2128475772",
+    "hash": "3489282364",
     "contents": "",
     "dirty": false,
     "created": 1714380315413.0,
@@ -13,15 +13,15 @@
         "tempName": "Untitled1",
         "source_window_id": "",
         "Source": "Source",
-        "cursorPosition": "191,0",
-        "scrollLine": "157"
+        "cursorPosition": "278,14",
+        "scrollLine": "241"
     },
     "folds": "",
-    "lastKnownWriteTime": 1714398676,
+    "lastKnownWriteTime": 1714563898,
     "encoding": "UTF-8",
     "collab_server": "",
     "source_window": "",
-    "last_content_update": 1714398676198,
+    "last_content_update": 1714563898399,
     "read_only": false,
     "read_only_alternatives": []
 }

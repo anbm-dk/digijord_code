@@ -192,4 +192,90 @@ l %>%
 
 try(dev.off())
 
+# Plot importance for OGCs
+
+ndir_plot <- 64
+
+imp_ogc <- varImp_boot_mean %>%
+  select(-mean_imp) %>%
+  pivot_longer(
+    cols = -covariate,
+    names_to = "target",
+    values_to = "Overall"
+  ) %>%
+  filter(covariate %in% grep('ogc_pi', colnames(obs), value = TRUE)) %>%
+  group_by(target) %>%
+  mutate(Overall = Overall*100/max(Overall)) %>%
+  arrange(covariate) %>%
+  mutate(
+    dir = substr(
+      covariate,
+      nchar(covariate) - 2,
+      nchar(covariate)
+    ) %>%
+      as.numeric() %>%
+      "*" (ndir_plot) %>%
+      "/" (1000) %>%
+      "+" (1) %>%
+      round(digits = 0)
+  ) %>%
+  filter(is.finite(Overall))
+
+imp_ogc2 <- imp_ogc %>%
+  mutate(dir = dir + ndir_plot)
+
+imp_ogc %<>% bind_rows(., imp_ogc2)
+
+# imp_ogc %<>% mutate(dir = row_number())
+
+imp_ogc %<>% mutate(
+  target = factor(
+    target,
+    levels = fractions,
+    labels = fraction_names
+  )
+)
+
+brks <- seq(
+  from = min(imp_ogc$dir),
+  by = (max(imp_ogc$dir) + 1 - min(imp_ogc$dir))/4,
+  length.out = 4
+)
+
+tiff(
+  paste0(dir_results, "/boot_importance_ogc_test", testn, ".tiff"),
+  width = 40,
+  height = 20,
+  units = "cm",
+  res = 300
+)
+
+ggplot(imp_ogc, aes(x = dir, y = Overall)) +
+  coord_polar(
+    start = - pi/2 - pi/(ndir_plot*2),
+    direction = -1) +
+  geom_polygon(colour = 'black', fill = rgb(0,2/3,2/3,1/2)) + 
+  # geom_col(width = 1, colour = 'black', fill = rgb(0,2/3,2/3,1/2)) +
+  facet_wrap(
+    ~ target,
+    ncol = 3
+  ) +
+  scale_x_continuous(
+    breaks = brks,
+    labels = c('E', 'N', 'W', 'S')
+  ) +
+  scale_y_continuous(limits = c(0, 100), expand = c(0, 0)) +
+  ylab('Covariate importance') +
+  theme_bw() +
+  theme(axis.text.x = element_text(
+    colour = 'black'),
+    axis.title.x = element_blank(),
+    axis.text.y = element_text(colour = 'black'),
+    panel.grid.major = element_line(color = 'grey'),
+    panel.grid.minor = element_blank(),
+    panel.border = element_rect(linewidth = 1)
+  )
+
+try(dev.off())
+
 # END

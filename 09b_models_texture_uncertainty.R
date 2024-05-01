@@ -1081,96 +1081,96 @@ bind_cols(
 
 # Covariate importance
 
-varImp_boot_mean <- lapply(
-  1:length(fractions),
-  function(x) {
- out <- lapply(
-   models_boot_files[[x]],
-   function(x2) {
-     model_x <- x2 %>% readRDS()
-     out2 <- varImp(model_x)$importance %>%
-       t() %>%
-       unlist() %>%
-       .[1, ]
-     return(out2)
-   }
- )
- 
- out %<>%
-   bind_rows() %>%
-   replace_na() %>%
-   summarise(across(where(is.numeric), ~ mean(.x, na.rm = TRUE)))
- 
- out$fraction <- fractions[x]
- return(out)
-}
-) %>%
-  bind_rows() %>% pivot_longer(
-  -fraction,
-  names_to = "covariate"
-) %>%
-  pivot_wider(
-    id_cols = covariate,
-    names_from = fraction,
-    values_from = value
-) %>%
-  replace(is.na(.), 0) %>%
-  rowwise() %>%
-  mutate(mean_imp = mean(c_across(-covariate))) %>%
-  arrange(-mean_imp)
-
-varImp_boot_mean %>%
-  write.table(
-    file = paste0(dir_results, "/var_imp_boot_mean.csv"),
-    sep = ";",
-    row.names = FALSE
-  )
+# varImp_boot_mean <- lapply(
+#   1:length(fractions),
+#   function(x) {
+#  out <- lapply(
+#    models_boot_files[[x]],
+#    function(x2) {
+#      model_x <- x2 %>% readRDS()
+#      out2 <- varImp(model_x)$importance %>%
+#        t() %>%
+#        unlist() %>%
+#        .[1, ]
+#      return(out2)
+#    }
+#  )
+#  
+#  out %<>%
+#    bind_rows() %>%
+#    replace_na() %>%
+#    summarise(across(where(is.numeric), ~ mean(.x, na.rm = TRUE)))
+#  
+#  out$fraction <- fractions[x]
+#  return(out)
+# }
+# ) %>%
+#   bind_rows() %>% pivot_longer(
+#   -fraction,
+#   names_to = "covariate"
+# ) %>%
+#   pivot_wider(
+#     id_cols = covariate,
+#     names_from = fraction,
+#     values_from = value
+# ) %>%
+#   replace(is.na(.), 0) %>%
+#   rowwise() %>%
+#   mutate(mean_imp = mean(c_across(-covariate))) %>%
+#   arrange(-mean_imp)
+# 
+# varImp_boot_mean %>%
+#   write.table(
+#     file = paste0(dir_results, "/var_imp_boot_mean.csv"),
+#     sep = ";",
+#     row.names = FALSE
+#   )
 
 # Get covariate importance for all repetitions
 
-boot_imp_all <- lapply(
-  1:length(fractions),
-  function(x) {
-    out <- lapply(
-      models_boot_files[[x]],
-      # models_boot_files[[x]][1:2],
-      function(x2) {
-        model_x <- x2 %>% readRDS()
-        out2 <- varImp(model_x, scale = FALSE)$importance %>%
-          t() %>%
-          unlist() %>%
-          .[1, ]
-        return(out2)
-      }
-    )
-    
-    out %<>%
-      bind_rows()
-    
-    out$fraction <- fractions[x]
-    out$rep <- c(1:nrow(out))
-    return(out)
-  }
-) %>%
-  bind_rows() %>%
-  pivot_longer(
-    cols = -c(rep, fraction),
-    values_to = "Importance",
-    names_to = "Covariate"
-  ) %>%
-  pivot_wider(
-    values_from = Importance,
-    names_from = rep,
-    names_prefix = "rep"
-  ) %>%
-  replace(is.na(.), 0)
-
-saveRDS(
-  boot_imp_all,
-  paste0(dir_boot, "/models_boot_importance_all.rds")
-)
-
-as.data.frame(boot_imp_all)
+# boot_imp_all <- lapply(
+#   1:length(fractions),
+#   function(x) {
+#     out <- lapply(
+#       models_boot_files[[x]],
+#       # models_boot_files[[x]][1:2],
+#       function(x2) {
+#         model_x <- x2 %>% readRDS()
+#         out2 <- varImp(model_x, scale = FALSE)$importance %>%
+#           t() %>%
+#           unlist() %>%
+#           .[1, ]
+#         return(out2)
+#       }
+#     )
+#     
+#     out %<>%
+#       bind_rows()
+#     
+#     out$fraction <- fractions[x]
+#     out$rep <- c(1:nrow(out))
+#     return(out)
+#   }
+# ) %>%
+#   bind_rows() %>%
+#   pivot_longer(
+#     cols = -c(rep, fraction),
+#     values_to = "Importance",
+#     names_to = "Covariate"
+#   ) %>%
+#   pivot_wider(
+#     values_from = Importance,
+#     names_from = rep,
+#     names_prefix = "rep"
+#   ) %>%
+#   replace(is.na(.), 0)
+# 
+# saveRDS(
+#   boot_imp_all,
+#   paste0(dir_boot, "/models_boot_importance_all.rds")
+# )
+# 
+# as.data.frame(boot_imp_all)
 
 # Covariate importance
 
@@ -1198,198 +1198,198 @@ ntop <- 20
 # 
 # l %<>% bind_rows()
 
-l <- varImp_boot_mean %>%
-  select(-mean_imp) %>%
-  pivot_longer(
-    cols = -covariate,
-    names_to = "target",
-    values_to = "Overall"
-  ) %>%
-  filter(!(covariate %in% grep('ogc_pi', colnames(obs), value = TRUE))) %>%
-  group_by(target) %>%
-  mutate(Overall = Overall*100/max(Overall)) %>%
-  arrange(-Overall) %>%
-  slice_head(n = ntop) %>%
-  arrange(-Overall) %>%
-  mutate(
-    target = factor(
-      target,
-      levels = fractions
-    )
-  )
-
-l_cat <- cov_cats %>%
-  mutate(
-    covariate = name,
-    category = case_when(
-      category == "basic" ~ scorpan,
-      category == "WATEM" ~ "OR",
-      category == "sentinel_composite" ~ "S2 time series",
-      category == "bare_soil" ~ "Bare soil",
-      desc_text %in% grep(
-        "bare soil",
-        cov_cats$desc_text,
-        value = TRUE
-      ) ~ "Bare soil", 
-      .default = "Other"
-    )
-  )
-
-l %<>%
-  left_join(l_cat)
-
-l %<>%
-  ungroup() %>%
-  arrange(target, Overall) %>%
-  mutate(order = row_number())
-
-l %<>% mutate(
-  category = case_when(
-    covariate == "upper" ~ "Depth",
-    covariate == "lower" ~ "Depth",
-    covariate == "year" ~ "Time",
-    category == "N" ~ "Spatial position",
-    category == "R" ~ "Topography",
-    category == "C" ~ "Climate",
-    category == "C " ~ "Climate",
-    category == "P" ~ "Parent materials",
-    category == "S" ~ "Soil",
-    category == "SO" ~ "Soil and organisms",
-    category == "CR" ~ "Climate and topography",
-    category == "OR" ~ "Organisms and topography",
-    category == "O" ~ "Organisms",
-    category == "RP" ~ "Parent materials",
-    .default = category
-  )
-)
-
-l$category %<>% as.factor()
-
-catcolors <- l$category %>%
-  levels() %>%
-  length() %>%
-  carto_pal(., "Safe")
-names(catcolors) <- levels(l$category)
-colScale <- scale_fill_manual(name = "category", values = catcolors)
+# l <- varImp_boot_mean %>%
+#   select(-mean_imp) %>%
+#   pivot_longer(
+#     cols = -covariate,
+#     names_to = "target",
+#     values_to = "Overall"
+#   ) %>%
+#   filter(!(covariate %in% grep('ogc_pi', colnames(obs), value = TRUE))) %>%
+#   group_by(target) %>%
+#   mutate(Overall = Overall*100/max(Overall)) %>%
+#   arrange(-Overall) %>%
+#   slice_head(n = ntop) %>%
+#   arrange(-Overall) %>%
+#   mutate(
+#     target = factor(
+#       target,
+#       levels = fractions
+#     )
+#   )
+# 
+# l_cat <- cov_cats %>%
+#   mutate(
+#     covariate = name,
+#     category = case_when(
+#       category == "basic" ~ scorpan,
+#       category == "WATEM" ~ "OR",
+#       category == "sentinel_composite" ~ "S2 time series",
+#       category == "bare_soil" ~ "Bare soil",
+#       desc_text %in% grep(
+#         "bare soil",
+#         cov_cats$desc_text,
+#         value = TRUE
+#       ) ~ "Bare soil", 
+#       .default = "Other"
+#     )
+#   )
+# 
+# l %<>%
+#   left_join(l_cat)
+# 
+# l %<>%
+#   ungroup() %>%
+#   arrange(target, Overall) %>%
+#   mutate(order = row_number())
+# 
+# l %<>% mutate(
+#   category = case_when(
+#     covariate == "upper" ~ "Depth",
+#     covariate == "lower" ~ "Depth",
+#     covariate == "year" ~ "Time",
+#     category == "N" ~ "Spatial position",
+#     category == "R" ~ "Topography",
+#     category == "C" ~ "Climate",
+#     category == "C " ~ "Climate",
+#     category == "P" ~ "Parent materials",
+#     category == "S" ~ "Soil",
+#     category == "SO" ~ "Soil and organisms",
+#     category == "CR" ~ "Climate and topography",
+#     category == "OR" ~ "Organisms and topography",
+#     category == "O" ~ "Organisms",
+#     category == "RP" ~ "Parent materials",
+#     .default = category
+#   )
+# )
+# 
+# l$category %<>% as.factor()
+# 
+# catcolors <- l$category %>%
+#   levels() %>%
+#   length() %>%
+#   carto_pal(., "Safe")
+# names(catcolors) <- levels(l$category)
+# colScale <- scale_fill_manual(name = "category", values = catcolors)
 
 
 
 # Plot covariate importance
 
-tiff(
-  paste0(dir_results, "/boot_importance_test", testn, ".tiff"),
-  width = 40,
-  height = 20,
-  units = "cm",
-  res = 300
-)
+# tiff(
+#   paste0(dir_results, "/boot_importance_test", testn, ".tiff"),
+#   width = 40,
+#   height = 20,
+#   units = "cm",
+#   res = 300
+# )
+# 
+# l %>%
+#   ggplot(aes(x = order, y = Overall, bg = category)) +
+#   geom_col() +
+#   facet_wrap(
+#     ~target,
+#     ncol = 3,
+#     scales = "free"
+#   ) +
+#   # xlim(1, ntop) +
+#   ylim(0, NA) +
+#   coord_flip() +
+#   scale_x_continuous(
+#     breaks = l$order,
+#     labels = l$covariate,
+#     expand = c(0, 0)
+#   ) +
+#   colScale
+# 
+# try(dev.off())
 
-l %>%
-  ggplot(aes(x = order, y = Overall, bg = category)) +
-  geom_col() +
-  facet_wrap(
-    ~target,
-    ncol = 3,
-    scales = "free"
-  ) +
-  # xlim(1, ntop) +
-  ylim(0, NA) +
-  coord_flip() +
-  scale_x_continuous(
-    breaks = l$order,
-    labels = l$covariate,
-    expand = c(0, 0)
-  ) +
-  colScale
 
-try(dev.off())
-
-
-# Plot importance for OGCs
-
-ndir_plot <- 64
-
-imp_ogc <- varImp_boot_mean %>%
-  select(-mean_imp) %>%
-  pivot_longer(
-    cols = -covariate,
-    names_to = "target",
-    values_to = "Overall"
-  ) %>%
-  filter(covariate %in% grep('ogc_pi', colnames(obs), value = TRUE)) %>%
-  group_by(target) %>%
-  mutate(Overall = Overall*100/max(Overall)) %>%
-  arrange(covariate) %>%
-  mutate(
-    dir = substr(
-      covariate,
-      nchar(covariate) - 2,
-      nchar(covariate)
-    ) %>%
-      as.numeric() %>%
-      "*" (ndir_plot) %>%
-      "/" (1000) %>%
-      "+" (1) %>%
-      round(digits = 0)
-  ) %>%
-  filter(is.finite(Overall))
-
-imp_ogc2 <- imp_ogc %>%
-  mutate(dir = dir + ndir_plot)
-
-imp_ogc %<>% bind_rows(., imp_ogc2)
-
-# imp_ogc %<>% mutate(dir = row_number())
-
-imp_ogc %<>% mutate(
-  target = factor(
-    target,
-    levels = fractions,
-    labels = fraction_names
-  )
-)
-
-brks <- seq(
-  from = min(imp_ogc$dir),
-  by = (max(imp_ogc$dir) + 1 - min(imp_ogc$dir))/4,
-  length.out = 4
-)
-
-tiff(
-  paste0(dir_results, "/boot_importance_ogc_test", testn, ".tiff"),
-  width = 40,
-  height = 20,
-  units = "cm",
-  res = 300
-)
-
-ggplot(imp_ogc, aes(x = dir, y = Overall)) +
-  coord_polar(
-    start = - pi/2 - pi/(ndir_plot*2),
-    direction = -1) +
-  geom_polygon(colour = 'black', fill = rgb(0,2/3,2/3,1/2)) + 
-  # geom_col(width = 1, colour = 'black', fill = rgb(0,2/3,2/3,1/2)) +
-  facet_wrap(
-    ~ target,
-    ncol = 3
-  ) +
-  scale_x_continuous(
-    breaks = brks,
-    labels = c('E', 'N', 'W', 'S')
-  ) +
-  scale_y_continuous(limits = c(0, 100), expand = c(0, 0)) +
-  ylab('Covariate importance') +
-  theme_bw() +
-  theme(axis.text.x = element_text(
-    colour = 'black'),
-    axis.title.x = element_blank(),
-    axis.text.y = element_text(colour = 'black'),
-    panel.grid.major = element_line(color = 'grey'),
-    panel.grid.minor = element_blank(),
-    panel.border = element_rect(linewidth = 1)
-  )
-
-try(dev.off())
+# # Plot importance for OGCs
+# 
+# ndir_plot <- 64
+# 
+# imp_ogc <- varImp_boot_mean %>%
+#   select(-mean_imp) %>%
+#   pivot_longer(
+#     cols = -covariate,
+#     names_to = "target",
+#     values_to = "Overall"
+#   ) %>%
+#   filter(covariate %in% grep('ogc_pi', colnames(obs), value = TRUE)) %>%
+#   group_by(target) %>%
+#   mutate(Overall = Overall*100/max(Overall)) %>%
+#   arrange(covariate) %>%
+#   mutate(
+#     dir = substr(
+#       covariate,
+#       nchar(covariate) - 2,
+#       nchar(covariate)
+#     ) %>%
+#       as.numeric() %>%
+#       "*" (ndir_plot) %>%
+#       "/" (1000) %>%
+#       "+" (1) %>%
+#       round(digits = 0)
+#   ) %>%
+#   filter(is.finite(Overall))
+# 
+# imp_ogc2 <- imp_ogc %>%
+#   mutate(dir = dir + ndir_plot)
+# 
+# imp_ogc %<>% bind_rows(., imp_ogc2)
+# 
+# # imp_ogc %<>% mutate(dir = row_number())
+# 
+# imp_ogc %<>% mutate(
+#   target = factor(
+#     target,
+#     levels = fractions,
+#     labels = fraction_names
+#   )
+# )
+# 
+# brks <- seq(
+#   from = min(imp_ogc$dir),
+#   by = (max(imp_ogc$dir) + 1 - min(imp_ogc$dir))/4,
+#   length.out = 4
+# )
+# 
+# tiff(
+#   paste0(dir_results, "/boot_importance_ogc_test", testn, ".tiff"),
+#   width = 40,
+#   height = 20,
+#   units = "cm",
+#   res = 300
+# )
+# 
+# ggplot(imp_ogc, aes(x = dir, y = Overall)) +
+#   coord_polar(
+#     start = - pi/2 - pi/(ndir_plot*2),
+#     direction = -1) +
+#   geom_polygon(colour = 'black', fill = rgb(0,2/3,2/3,1/2)) + 
+#   # geom_col(width = 1, colour = 'black', fill = rgb(0,2/3,2/3,1/2)) +
+#   facet_wrap(
+#     ~ target,
+#     ncol = 3
+#   ) +
+#   scale_x_continuous(
+#     breaks = brks,
+#     labels = c('E', 'N', 'W', 'S')
+#   ) +
+#   scale_y_continuous(limits = c(0, 100), expand = c(0, 0)) +
+#   ylab('Covariate importance') +
+#   theme_bw() +
+#   theme(axis.text.x = element_text(
+#     colour = 'black'),
+#     axis.title.x = element_blank(),
+#     axis.text.y = element_text(colour = 'black'),
+#     panel.grid.major = element_line(color = 'grey'),
+#     panel.grid.minor = element_blank(),
+#     panel.border = element_rect(linewidth = 1)
+#   )
+# 
+# try(dev.off())
 
 
 # Standardize and transform predictions
@@ -1444,6 +1444,92 @@ saveRDS(
 )
 
 # Inspect predictions
+
+obs_long <- obs %>%
+  select(any_of(fractions)) %>%
+  pivot_longer(
+    everything(),
+    names_to = "fraction",
+    values_to = "observed"
+  )
+pred_long <- boot_mean_predictions %>%
+  as.data.frame() %>%
+  pivot_longer(
+    everything(),
+    names_to = "fraction",
+    values_to = "predicted"
+  )
+weights_long <- models_weights %>%
+  bind_rows() %>%
+  pivot_longer(
+    everything(),
+    names_to = "fraction",
+    values_to = "w"
+  )
+
+df_acc_all <- obs_long %>%
+  mutate(
+    predicted = pred_long$predicted,
+    w = weights_long$w,
+    fold = rep(obs$fold, 6)
+  )
+
+df_acc_all %>%
+  drop_na() %>%
+  filter(fold == 10) %>%
+  group_by(fraction) %>%
+  summarise(
+    r2w = round(get_R2w(cbind(predicted, observed), w), digits = 3),
+    rmsew = round(get_RMSEw(cbind(predicted, observed), w), digits = 3)
+  ) %>%
+  mutate(
+    fraction = factor(fraction, fractions)
+  ) %>%
+  arrange(fraction)
+
+# Accuracy for SOC with log transformation
+
+df_acc_all %>%
+  drop_na() %>%
+  filter(
+    fold == 10,
+    fraction == "SOC"
+    ) %>%
+  mutate(
+    predicted = log(predicted),
+    observed = log(observed)
+  ) %>%
+  filter(
+    is.finite(observed),
+    is.finite(predicted)
+  ) %>%
+  summarise(
+    r2w = round(get_R2w(cbind(predicted, observed), w), digits = 3),
+    rmsew = round(get_RMSEw(cbind(predicted, observed), w), digits = 3)
+  )
+
+# Accuracy for sqrt transformed CaCO3
+
+df_acc_all %>%
+  drop_na() %>%
+  filter(
+    fold == 10,
+    fraction == "CaCO3"
+  ) %>%
+  mutate(
+    predicted = sqrt(predicted),
+    observed = sqrt(observed)
+  ) %>%
+  filter(
+    is.finite(observed),
+    is.finite(predicted)
+  ) %>%
+  summarise(
+    r2w = round(get_R2w(cbind(predicted, observed), w), digits = 3),
+    rmsew = round(get_RMSEw(cbind(predicted, observed), w), digits = 3)
+  )
+
+# Accuracies for different depths
 
 breaks <- c(0, 30, 60, 100, 200)
 
