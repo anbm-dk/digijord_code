@@ -1,27 +1,27 @@
 {
-    "id": "57333A14",
-    "path": "C:/Users/au542768/digijord/digijord_code/17_texture_boot_varImp.R",
-    "project_path": "17_texture_boot_varImp.R",
+    "id": "009D3E2F",
+    "path": "C:/Users/au542768/digijord/digijord_code/18_plot_texture_observations.R",
+    "project_path": "18_plot_texture_observations.R",
     "type": "r_source",
-    "hash": "3489282364",
+    "hash": "863248195",
     "contents": "",
     "dirty": false,
-    "created": 1714380315413.0,
+    "created": 1714638726287.0,
     "source_on_save": false,
     "relative_order": 23,
     "properties": {
         "tempName": "Untitled1",
         "source_window_id": "",
         "Source": "Source",
-        "cursorPosition": "168,0",
-        "scrollLine": "150"
+        "cursorPosition": "389,5",
+        "scrollLine": "12"
     },
     "folds": "",
-    "lastKnownWriteTime": 1714563898,
+    "lastKnownWriteTime": 1714655633,
     "encoding": "UTF-8",
     "collab_server": "",
     "source_window": "",
-    "last_content_update": 1714563898399,
+    "last_content_update": 1714655633533,
     "read_only": false,
     "read_only_alternatives": []
 }
