@@ -289,7 +289,7 @@ for (i in 1:nrow(combination_grid)) {
       ) %>%
     filter(count > 0) %>%
     vect(geom = c("x", "y"), crs = mycrs, keepgeom = TRUE) %>%
-    select(count, Type, Depth)
+    select(count, Type, Depth, x, y)
 }
 
 obs_dens_combinations %<>% vect()
@@ -297,12 +297,15 @@ obs_dens_combinations %<>% vect()
 obs_dens_combinations
 
 obs_dens_combinations %<>% mutate(
-  dens = count / area_ratio_hex
+  # dens = count / area_ratio_hex
+  dens = count
 )
+
+n_categories <- 5
 
 get_unique_quantiles <- function(
   x = NULL,
-  n = 8,
+  n = n_categories + 1,
   max_n = 20
 ) {
   test_n <- c(3:max_n)
@@ -327,64 +330,103 @@ get_unique_quantiles <- function(
 
 myquantiles <- get_unique_quantiles(
   obs_dens_combinations$dens,
-  8
+  n_categories + 1
 )
 
 obs_dens_combinations %<>% mutate(
   cat = cut(dens, myquantiles, include.lowest = TRUE)
+) %>%
+  arrange(x - y)
+
+levels(obs_dens_combinations$Type) <- c(
+  expression("Texture"),
+  expression("SOC"),
+  expression("CaCO"[3])
 )
+
+levels(obs_dens_combinations$Depth) %<>% sapply(deparse) %>% unname()
 
 # Maps for fractions and depths
 
-size_mult <- 0.2
+size_mult <- 0.4
+
+point_sizes <- c(0.3, 1, 1.25, 1.5, 2, 2.5, 3.5) %>%
+  rev() %>%
+  magrittr::extract(1:n_categories) %>%
+  rev() %>%
+  "*"(size_mult)
 
 # base_gg <- ggplot() +
 #   geom_sf(data = coastline, fill = "grey", linewidth = 0, color = NA)
 
+# base_gg <- ggplot() +
+#   geom_sf(
+#     data = coastline,
+#     fill = NA,
+#     linewidth = 0.5*size_mult,
+#     color = "black"
+#   )
+
 base_gg <- ggplot() +
   geom_sf(
     data = coastline,
-    fill = NA,
-    linewidth = 0.5*size_mult,
-    color = "black"
+    fill = "white",
+    color = NA
   )
 
-tiff(
-  paste0(dir_results, "/texture_obs_density_hex_depth_test_", testn, ".tiff"),
-  width = 16,
-  height = 10,
-  units = "cm",
-  res = 600
-)
-
-base_gg +
+myplot <- base_gg +
   # Layer, this object is a SpatVector instead of sf object
   geom_spatvector(
     obs_dens_combinations,
     mapping = aes(size = cat),
     # Use a point with a border AND a fill
-    pch = 21, color = "white", fill = "black", linewidth = 0.005*size_mult
+    pch = 21, color = "white", fill = "black", stroke = 1*size_mult
   ) +
   scale_size_manual(
-    values = c(0.3, 1, 1.25, 1.5, 2, 2.5, 3.5)*size_mult
+    values = point_sizes
   ) +
   labs(
-    size = "Observations per km^2"
+    size = "Observations (n)"
   ) +
   theme_void() +
   theme(
-    panel.border = element_rect(
-      color = "grey",
-      fill = NA,
-      linewidth =  0.5
-    ),
-    panel.spacing.x = unit(0, "lines"),
-    panel.spacing.y = unit(0,"lines")
+    panel.spacing.x = unit(0.05, "lines"),
+    panel.spacing.y = unit(0.05 ,"lines"),
+    panel.background = element_rect(fill = "grey80", color = NA),
+    strip.text.y.left = element_text(
+      angle = 90,
+      margin = unit(rep(3, 4), "pt")),
+    strip.text.x.top = element_text(margin = unit(rep(3, 4), "pt")),
+    axis.title.y = element_text(angle = 90)
   ) +
-  facet_grid(Depth ~ Type) +
-  scale_x_continuous(expand = c(0, 0)) +
-  scale_y_continuous(expand = c(0, 0))
+  facet_grid(Depth ~ Type, switch = "y", , labeller = label_parsed) +
+  scale_x_continuous(expand = expansion(mult = 0.02)) +
+  scale_y_continuous(
+    expand = expansion(mult = 0.02)
+  ) +
+  labs(y = "Depth (cm)")
 
+tiff(
+  paste0(dir_results, "/texture_obs_density_hex_depth_test_", testn, ".tiff"),
+  width = 16,
+  height = 13,
+  units = "cm",
+  res = 600
+)
+
+print(myplot)
+
+try(dev.off())
+
+pdf(
+  paste0(dir_results, "/texture_obs_density_hex_depth_test_", testn, ".pdf"),
+    width = 16/2.54,
+    height = 13/2.54
+  )
+
+print(myplot)
+
+try(dev.off())
 try(dev.off())
 
 # END

@@ -3,7 +3,7 @@
     "path": "C:/Users/au542768/digijord/digijord_code/18_plot_texture_observations.R",
     "project_path": "18_plot_texture_observations.R",
     "type": "r_source",
-    "hash": "863248195",
+    "hash": "257776683",
     "contents": "",
     "dirty": false,
     "created": 1714638726287.0,
@@ -13,15 +13,15 @@
         "tempName": "Untitled1",
         "source_window_id": "",
         "Source": "Source",
-        "cursorPosition": "389,5",
-        "scrollLine": "12"
+        "cursorPosition": "40,0",
+        "scrollLine": "23"
     },
     "folds": "",
-    "lastKnownWriteTime": 1714655633,
+    "lastKnownWriteTime": 1714741428,
     "encoding": "UTF-8",
     "collab_server": "",
     "source_window": "",
-    "last_content_update": 1714655633533,
+    "last_content_update": 1714741428945,
     "read_only": false,
     "read_only_alternatives": []
 }

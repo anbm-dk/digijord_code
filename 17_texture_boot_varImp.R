@@ -182,7 +182,6 @@ l %>%
   group_by(category, fraction) %>%
   mutate(mean = mean(Importance)) %>%
   ggplot(aes(x = category, y = Importance, fill = category)) +
-  # geom_boxplot(outlier.shape = NA) +
   geom_violin(scale = "width") +
   facet_wrap(~ fraction, labeller = label_parsed) +
   coord_flip() +
@@ -196,22 +195,15 @@ try(dev.off())
 
 ndir_plot <- 64
 
-imp_ogc <- varImp_boot_mean %>%
-  select(-mean_imp) %>%
-  pivot_longer(
-    cols = -covariate,
-    names_to = "target",
-    values_to = "Overall"
-  ) %>%
-  filter(covariate %in% grep('ogc_pi', colnames(obs), value = TRUE)) %>%
-  group_by(target) %>%
-  mutate(Overall = Overall*100/max(Overall)) %>%
-  arrange(covariate) %>%
+imp_ogc <- l %>%
+  select(fraction, Covariate, rep, Importance) %>%
+  filter(Covariate %in% grep('ogc_pi', Covariate, value = TRUE)) %>%
+  arrange(Covariate) %>%
   mutate(
     dir = substr(
-      covariate,
-      nchar(covariate) - 2,
-      nchar(covariate)
+      Covariate,
+      nchar(Covariate) - 2,
+      nchar(Covariate)
     ) %>%
       as.numeric() %>%
       "*" (ndir_plot) %>%
@@ -219,22 +211,19 @@ imp_ogc <- varImp_boot_mean %>%
       "+" (1) %>%
       round(digits = 0)
   ) %>%
-  filter(is.finite(Overall))
+  group_by(fraction, rep) %>%
+  mutate(
+    Importance = Importance/sum(Importance),
+    Importance = case_when(
+      !is.finite(Importance) ~ 0,
+      .default = Importance
+    )
+  )
 
 imp_ogc2 <- imp_ogc %>%
   mutate(dir = dir + ndir_plot)
 
 imp_ogc %<>% bind_rows(., imp_ogc2)
-
-# imp_ogc %<>% mutate(dir = row_number())
-
-imp_ogc %<>% mutate(
-  target = factor(
-    target,
-    levels = fractions,
-    labels = fraction_names
-  )
-)
 
 brks <- seq(
   from = min(imp_ogc$dir),
@@ -242,40 +231,142 @@ brks <- seq(
   length.out = 4
 )
 
-tiff(
-  paste0(dir_results, "/boot_importance_ogc_test", testn, ".tiff"),
-  width = 40,
-  height = 20,
-  units = "cm",
-  res = 300
-)
-
-ggplot(imp_ogc, aes(x = dir, y = Overall)) +
+imp_ogc %>%
+  ggplot(aes(x = dir, y = Importance)) +
   coord_polar(
     start = - pi/2 - pi/(ndir_plot*2),
     direction = -1) +
-  geom_polygon(colour = 'black', fill = rgb(0,2/3,2/3,1/2)) + 
-  # geom_col(width = 1, colour = 'black', fill = rgb(0,2/3,2/3,1/2)) +
+  geom_point() +
   facet_wrap(
-    ~ target,
+    ~ fraction,
     ncol = 3
   ) +
   scale_x_continuous(
     breaks = brks,
     labels = c('E', 'N', 'W', 'S')
   ) +
-  scale_y_continuous(limits = c(0, 100), expand = c(0, 0)) +
   ylab('Covariate importance') +
-  theme_bw() +
-  theme(axis.text.x = element_text(
-    colour = 'black'),
-    axis.title.x = element_blank(),
-    axis.text.y = element_text(colour = 'black'),
-    panel.grid.major = element_line(color = 'grey'),
-    panel.grid.minor = element_blank(),
-    panel.border = element_rect(linewidth = 1)
+  theme(
+    axis.title.x = element_blank()
+  )
+
+tiff(
+  paste0(dir_results, "/boot_importance_ogc_new_test", testn, ".tiff"),
+  width = 16,
+  height = 10,
+  units = "cm",
+  res = 600
+)
+
+imp_ogc %>%
+  ungroup() %>%
+  group_by(fraction, dir) %>%
+  summarise(
+    mean = mean(Importance),
+    q = quantile(Importance, probs = 0.75)
+  ) %>%
+  ggplot(aes(x = dir, y = mean)) +
+  coord_polar(
+    start = - pi/2 - pi/(ndir_plot*2),
+    direction = -1) +
+  geom_linerange(aes(ymax = mean, ymin = 0), lineend = "round") +
+  facet_wrap(
+    ~ fraction,
+    ncol = 3,
+    labeller = label_parsed
+  ) +
+  scale_x_continuous(
+    breaks = brks,
+    labels = c('E', 'N', 'W', 'S')
+  ) +
+  ylab('Covariate importance') +
+  theme(
+    axis.title.x = element_blank()
   )
 
 try(dev.off())
+
+# Top 3 most important covariates in each category, across all fractions
+
+l %>%
+  select(fraction, Covariate, rep, Importance, category) %>%
+  filter(
+    !(Covariate %in% grep('ogc_pi', Covariate, value = TRUE)),
+    !(Covariate %in% c("upper", "lower", "SOM_removed"))
+  ) %>%
+  group_by(Covariate, category) %>%
+  summarise(mean = mean(Importance)) %>%
+  ungroup() %>%
+  group_by(category) %>%
+  arrange(-mean) %>%
+  slice_head(n = 3)
+
+# Top 10 covariates overall
+
+l %>%
+  select(fraction, Covariate, rep, Importance, category) %>%
+  filter(
+    !(Covariate %in% grep('ogc_pi', Covariate, value = TRUE)),
+    !(Covariate %in% c("upper", "lower", "SOM_removed"))
+  ) %>%
+  group_by(Covariate) %>%
+  summarise(mean = mean(Importance)) %>%
+  ungroup() %>%
+  arrange(-mean) %>%
+  slice_head(n = 10)
+
+# Top 3 most important per fraction
+
+l %>%
+  select(fraction, Covariate, rep, Importance, category) %>%
+  filter(
+    !(Covariate %in% grep('ogc_pi', Covariate, value = TRUE)),
+    !(Covariate %in% c("upper", "lower", "SOM_removed"))
+  ) %>%
+  group_by(Covariate, fraction) %>%
+  summarise(mean = mean(Importance)) %>%
+  ungroup() %>%
+  group_by(fraction) %>%
+  arrange(-mean) %>%
+  slice_head(n = 3)
+
+# Top 2 per fraction + category
+
+l %>%
+  select(fraction, Covariate, rep, Importance, category) %>%
+  filter(
+    !(Covariate %in% grep('ogc_pi', Covariate, value = TRUE)),
+    !(Covariate %in% c("upper", "lower", "SOM_removed"))
+  ) %>%
+  group_by(Covariate, fraction, category) %>%
+  summarise(mean = mean(Importance)) %>%
+  ungroup() %>%
+  group_by(fraction, category) %>%
+  arrange(-mean) %>%
+  slice_head(n = 2) %>%
+  mutate(
+    fraction = make.names(fraction),
+    category = make.names(category)
+    ) %>%
+  print(n = 100)
+
+# Top 10 most important per fraction
+
+l %>%
+  select(fraction, Covariate, rep, Importance, category) %>%
+  filter(
+    !(Covariate %in% grep('ogc_pi', Covariate, value = TRUE)),
+    !(Covariate %in% c("upper", "lower", "SOM_removed"))
+  ) %>%
+  group_by(Covariate, fraction) %>%
+  summarise(mean = mean(Importance)) %>%
+  ungroup() %>%
+  group_by(fraction) %>%
+  arrange(-mean) %>%
+  slice_head(n = 10) %>%
+  mutate(
+    fraction = make.names(fraction)
+  ) %>%
+  print(n = 100)
 
 # END
