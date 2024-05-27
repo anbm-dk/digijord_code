@@ -301,13 +301,14 @@ l %>%
   arrange(-mean) %>%
   slice_head(n = 3)
 
-# Top 10 covariates overall
+# Top 10 environmental covariates overall
 
 l %>%
   select(fraction, Covariate, rep, Importance, category) %>%
   filter(
     !(Covariate %in% grep('ogc_pi', Covariate, value = TRUE)),
-    !(Covariate %in% c("upper", "lower", "SOM_removed"))
+    !(Covariate %in% c("upper", "lower", "SOM_removed")),
+    fraction != "Fine~sand"
   ) %>%
   group_by(Covariate) %>%
   summarise(mean = mean(Importance)) %>%
@@ -368,5 +369,89 @@ l %>%
     fraction = make.names(fraction)
   ) %>%
   print(n = 100)
+
+
+# Covariate importance for time series
+
+s2_bandnames <- c("b2", "b3", "b4", "b5", "b6", "b7", "b8", "b8a", "b11", "b12")
+s2_bandlabels <- c("2", "3", "4", "5", "6", "7", "8", "8a", "11", "12")
+
+s2_time_imp <- l %>%
+  filter(
+    category == "S2 time series",
+    fraction != "Fine~sand"
+    ) %>%
+  group_by(fraction, Covariate) %>%
+  summarise(Importance = sum(Importance)/100) %>%
+  mutate(
+    Band = substr(
+      Covariate,
+      32,
+      nchar(Covariate)
+    ),
+    Band = factor(
+      Band,
+      levels = s2_bandnames,
+      labels = s2_bandlabels
+      ),
+    Time = substr(
+      Covariate,
+      14,
+      21
+    ),
+    Time = factor(Time, labels = c("Spring", "June", "July"))
+  ) %>%
+  group_by(fraction) %>%
+  mutate(Importance = Importance/sum(Importance)) %>%
+  ungroup()
+
+tiff(
+  paste0(dir_results, "/boot_importance_s2_test", testn, ".tiff"),
+  width = 16,
+  height = 10,
+  units = "cm",
+  res = 600
+)
+
+s2_time_imp %>%
+  ggplot(
+    aes(
+      x = Importance,
+      y = Band,
+      colour = Time,
+      shape = Time,
+      group = Time,
+      linetype = Time
+      )
+    ) +
+  geom_point() +
+  geom_line(orientation = "y") +
+  facet_wrap(
+    ~ fraction,
+    nrow = 1,
+    labeller = label_parsed) +
+  scale_y_discrete(limits = rev)
+
+try(dev.off())
+
+# General covariate importance table
+
+l %>%
+  mutate(fraction = factor(fraction, labels = fraction_names)) %>%
+  filter(fraction != "Fine sand") %>%
+  select(fraction, Covariate, Importance) %>%
+  group_by(fraction, Covariate) %>%
+  summarise(
+    Importance = sum(Importance)/100
+  ) %>%
+  filter(Importance > 0) %>%
+  group_by(fraction) %>%
+  arrange(-Importance) %>%
+  slice_head(n = 20) %>%
+  write.table(
+    paste0(dir_results, "/varImp_top20.csv"),
+    sep = ";",
+    row.names = FALSE
+  )
 
 # END
