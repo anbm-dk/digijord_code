@@ -454,4 +454,30 @@ l %>%
     row.names = FALSE
   )
 
+# Mean importance for all covariates
+
+l %>%
+  mutate(fraction = factor(fraction, labels = fraction_names)) %>%
+  filter(fraction != "Fine sand") %>%
+  select(fraction, Covariate, Importance) %>%
+  group_by(fraction, Covariate) %>%
+  summarise(
+    Importance = sum(Importance)/100
+  ) %>%
+  filter(Importance > 0) %>%
+  group_by(fraction) %>%
+  arrange(-Importance) %>%
+  pivot_wider(
+    values_from = Importance,
+    names_from = fraction
+    ) %>%
+  mutate(mean = rowMeans(pick(where(is.numeric)))) %>%
+  arrange(-mean) %>%
+  as.data.frame() %>%
+  write.table(
+    paste0(dir_results, "/varImp_all.csv"),
+    sep = ";",
+    row.names = FALSE
+  )
+
 # END
