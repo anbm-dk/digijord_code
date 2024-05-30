@@ -814,4 +814,45 @@ bind_rows(df_val_2014, df_val_2024) %>%
 
 try(dev.off())
 
+# Table for Sarem
+
+predictions_df <- boot_predictions_mean %>%
+  as.data.frame() %>%
+  mutate(rown = row_number()) %>%
+  pivot_longer(cols = !rown) %>%
+  mutate(name = paste0(name, "_predicted")) %>%
+  pivot_wider() %>%
+  select(-rown)
+
+fractions_alt  <- c("clay", "silt", "fine_sand", "coarse_sand", "SOC", "CaCO3")
+fractions      <- fractions_alt
+
+columns <- c(
+  "ID_new",	"db", "ID_old",	"date", "UTMX",	"UTMY", "upper", "lower", "clay",
+  "silt", "fine_sand",	"coarse_sand", "SOC",	"CaCO3", "SOM_removed",
+  "PROFILNR",	"year", "fold", "imputed"
+)
+
+texture_obs_pred <- obs_texture %>%
+  select(any_of(columns)) %>%
+  rename_with(~ str_c(., "_observed"), .cols = any_of(fractions)) %>%
+  bind_cols(., predictions_df)
+
+texture_obs_pred_profiles <- texture_obs_pred %>%
+  filter(is.finite(PROFILNR))
+
+write.table(
+  texture_obs_pred,
+  paste0(dir_results, "/texture_obs_pred.csv"),
+  sep = ";",
+  row.names = FALSE
+)
+
+write.table(
+  texture_obs_pred_profiles,
+  paste0(dir_results, "/texture_obs_pred_profiles.csv"),
+  sep = ";",
+  row.names = FALSE
+)
+
 # END
