@@ -441,12 +441,14 @@ nboot_max <- 100
 
 nboot <- min(c(nboot_final, nboot_max))
 
-boot_all_chr <- c(1:nboot) %>%
+boot_number_chr <- c(1:nboot) %>%
   str_pad(
     .,
     nchar(nboot_final),
     pad = "0"
-  ) %>%
+  )
+
+boot_all_chr <- boot_number_chr %>%
   paste0("boot_", .)
 
 # pdp_outlist <- list()
@@ -486,8 +488,7 @@ boot_all_chr <- c(1:nboot) %>%
 
 pdp_df_raw <- readRDS(paste0(dir_results, "/pdp_df_raw.rds"))
 
-pdp_df <- pdp_outlist %>%
-  bind_rows() %>%
+pdp_df <- pdp_df_raw %>%
   group_by(Fraction, Covariate, x) %>%
   summarise(
     mean = mean(yhat),
@@ -538,6 +539,35 @@ pdp_df %>%
   facet_grid(Fraction ~ Covariate, scales = "free")
 
 try(dev.off())
+
+# Save models
+
+library(xgboost)
+
+dir_boot_models_raw <- dir_boot %>%
+  paste0(., "/models_raw/") %T>%
+  dir.create()
+
+for (i in 1:length(fractions)) {
+  print(fractions[i])
+  dir_boot_models_raw_i <- dir_boot_models_raw %>%
+    paste0(., fractions[i], "/") %T>%
+    dir.create()
+  for (bootr in 1:nboot) {
+    print(bootr)
+    
+    model_i <- models_boot_files[[i]][bootr] %>% readRDS()
+    
+    xgb_i <- xgb.Booster.complete(model_i$finalModel)
+    
+    outname_i <- paste0(
+      dir_boot_models_raw_i,
+      "/xgbmodel_", fractions[i], "_", boot_number_chr[bootr], ".model"
+    )
+    
+    xgb.save(xgb_i, outname_i)
+  }
+}
 
 # Other potential covariates (for individual fractions)
 
