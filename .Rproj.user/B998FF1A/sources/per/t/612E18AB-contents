@@ -386,7 +386,7 @@ obs %>%
   geom_smooth() +
   facet_grid(fraction ~ Covariate, scales = "free")
 
-# Other variablespd
+# Other variables
 
 obs %>%
   select(any_of(c(fractions, for_plot_other))) %>%
@@ -496,6 +496,25 @@ pdp_df <- pdp_df_raw %>%
     high = stats::quantile(yhat, probs = 0.75)
     )
 
+frac_labels <- c(
+  "Clay",
+  "Silt",
+  "Fine sand",
+  "Coarse<br>sand",
+  "SOC",
+  "CaCO<sub>*3*</sub>"
+)
+
+bare_soil_labels <- c(
+  "S1 VH - Bare",  # "filled_s1_baresoil_composite_vh_8_days"
+  "S1 VV - Bare",  # "filled_s1_baresoil_composite_vv_8_days"
+  "S2 B3 - Bare",  # "filled_s2_geomedian_b3"                 
+  "S2 B11 - Bare",  # "filled_s2_geomedian_b11"               
+  "S2 B12 - Bare"  # "filled_s2_geomedian_b12"  
+)
+
+library(ggtext)
+
 tiff(
   paste0(dir_results, "/pdp_texture_bare_test_", testn, ".tiff"),
   width = 16,
@@ -506,17 +525,51 @@ tiff(
 
 pdp_df %>%
   filter(Covariate %in% for_plot_bare_soil) %>%
-  mutate(Fraction = factor(Fraction, levels = fractions)) %>%
+  mutate(
+    Fraction = factor(
+      Fraction,
+      levels = fractions,
+      labels = frac_labels
+      ),
+    Covariate = factor(
+      Covariate,
+      levels = for_plot_bare_soil,
+      labels = bare_soil_labels
+    ),
+    x = x / 10^4
+    ) %>%
   ggplot(
     aes(x = x, y = mean)
   ) +
-  geom_line(aes(x = x, y = low), colour = "grey70") +
-  geom_line(aes(x = x, y = high), colour = "grey70") +
-  geom_ribbon(aes(ymin = low, ymax = high), fill = "grey70") +
+  geom_line(aes(x = x, y = low), colour = "cadetblue") +
+  geom_line(aes(x = x, y = high), colour = "cadetblue") +
+  geom_ribbon(aes(ymin = low, ymax = high), fill = "cadetblue") +
   geom_line() +
-  facet_grid(Fraction ~ Covariate, scales = "free")
+  facet_grid(
+    Fraction ~ Covariate, scales = "free"
+    ) +
+  theme(
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank(),
+    axis.text.x = element_text(angle = 270, vjust = 0.5, hjust=1),
+    strip.text.y = element_markdown(size = 9, lineheight = 1),
+    strip.text.x = element_markdown(size = 9, lineheight = 1)
+  ) +
+  scale_x_continuous(
+    expand = c(0, 0),
+    n.breaks = 4
+  ) +
+  scale_y_continuous(n.breaks = 4)
 
 try(dev.off())
+
+other_plot_labels <- c(
+  "Elevation (m)",   # "dhm2015_terraen_10m"              
+  "OGC 0.438π (km)",    # "ogc_pi438"                        
+  "OGC 0.906π (km)",     # "ogc_pi906"                        
+  "S2 B3 - Spring",  # "s2_geomedian_20180408_20180515_b3"
+  "S2 B4 - July"    # "s2_geomedian_20180701_20180731_b4"
+)
 
 tiff(
   paste0(dir_results, "/pdp_texture_other_test_", testn, ".tiff"),
@@ -528,46 +581,75 @@ tiff(
 
 pdp_df %>%
   filter(Covariate %in% for_plot_other) %>%
-  mutate(Fraction = factor(Fraction, levels = fractions)) %>%
+  mutate(Fraction = factor(
+    Fraction,
+    levels = fractions,
+    labels = frac_labels
+  ),
+  Covariate = factor(
+    Covariate,
+    levels = for_plot_other,
+    labels = other_plot_labels
+  ),
+  x = case_when(
+    Covariate == "OGC 0.438π (km)" ~ x / 10^3,
+    Covariate == "OGC 0.906π (km)" ~ x / 10^3,
+    Covariate == "S2 B3 - Spring" ~ x / 10^4,
+    Covariate == "S2 B4 - July" ~ x / 10^4,
+    .default = x
+  )
+  ) %>%
   ggplot(
     aes(x = x, y = mean)
   ) +
-  geom_line(aes(x = x, y = low), colour = "grey70") +
-  geom_line(aes(x = x, y = high), colour = "grey70") +
-  geom_ribbon(aes(ymin = low, ymax = high), fill = "grey70") +
+  geom_line(aes(x = x, y = low), colour = "cadetblue") +
+  geom_line(aes(x = x, y = high), colour = "cadetblue") +
+  geom_ribbon(aes(ymin = low, ymax = high), fill = "cadetblue") +
   geom_line() +
-  facet_grid(Fraction ~ Covariate, scales = "free")
+  facet_grid(Fraction ~ Covariate, scales = "free") +
+  theme(
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank(),
+    axis.text.x = element_text(angle = 270, vjust = 0.5, hjust=1),
+    strip.text.y = element_markdown(size = 9, lineheight = 1),
+    strip.text.x = element_markdown(size = 9, lineheight = 1)
+  ) +
+  scale_x_continuous(
+    expand = c(0, 0),
+    n.breaks = 4
+  ) +
+  scale_y_continuous(n.breaks = 4)
 
 try(dev.off())
 
 # Save models
 
-library(xgboost)
-
-dir_boot_models_raw <- dir_boot %>%
-  paste0(., "/models_raw/") %T>%
-  dir.create()
-
-for (i in 1:length(fractions)) {
-  print(fractions[i])
-  dir_boot_models_raw_i <- dir_boot_models_raw %>%
-    paste0(., fractions[i], "/") %T>%
-    dir.create()
-  for (bootr in 1:nboot) {
-    print(bootr)
-    
-    model_i <- models_boot_files[[i]][bootr] %>% readRDS()
-    
-    xgb_i <- xgb.Booster.complete(model_i$finalModel)
-    
-    outname_i <- paste0(
-      dir_boot_models_raw_i,
-      "/xgbmodel_", fractions[i], "_", boot_number_chr[bootr], ".model"
-    )
-    
-    xgb.save(xgb_i, outname_i)
-  }
-}
+# library(xgboost)
+# 
+# dir_boot_models_raw <- dir_boot %>%
+#   paste0(., "/models_raw/") %T>%
+#   dir.create()
+# 
+# for (i in 1:length(fractions)) {
+#   print(fractions[i])
+#   dir_boot_models_raw_i <- dir_boot_models_raw %>%
+#     paste0(., fractions[i], "/") %T>%
+#     dir.create()
+#   for (bootr in 1:nboot) {
+#     print(bootr)
+#     
+#     model_i <- models_boot_files[[i]][bootr] %>% readRDS()
+#     
+#     xgb_i <- xgb.Booster.complete(model_i$finalModel)
+#     
+#     outname_i <- paste0(
+#       dir_boot_models_raw_i,
+#       "/xgbmodel_", fractions[i], "_", boot_number_chr[bootr], ".model"
+#     )
+#     
+#     xgb.save(xgb_i, outname_i)
+#   }
+# }
 
 # Other potential covariates (for individual fractions)
 
