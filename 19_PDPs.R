@@ -651,6 +651,110 @@ try(dev.off())
 #   }
 # }
 
+# Plots with depth
+
+library(xgboost)
+library(pdp)
+library(tibble)
+
+dir_boot_models_raw <- dir_boot %>%
+  paste0(., "/models_raw/")
+
+xvalues <- seq(
+  from = quantile(
+    obs$filled_s1_baresoil_composite_vh_8_days,
+    probs = 0.01, na.rm = TRUE, names = FALSE),
+  to = quantile(
+    obs$filled_s1_baresoil_composite_vh_8_days,
+    probs = 0.99, na.rm = TRUE, names = FALSE),
+  length.out = 32
+)
+
+pgrid <- expand.grid(
+  upper = seq(0, 190, 10),
+  filled_s1_baresoil_composite_vh_8_days = xvalues
+) %>%
+  mutate(lower = upper + 10)
+
+predvars_full <- c("upper", "lower", "filled_s1_baresoil_composite_vh_8_days")
+
+plotratio <- ((max(pgrid[, 2]) - min(pgrid[, 2])) / 200) * (20 / 32)
+
+pdp_outlist_depth <- list()
+
+for (i in frac_ind_predict) {
+  for (bootr in 1:nboot) {
+    
+    model_ib <- models_boot_files[[i]][bootr] %>% readRDS()
+    
+    names_model_i <- varImp(model_ib)$importance %>% rownames()
+    
+    print(paste(fractions[i], "model", bootr))
+    
+    ok1 <- c("upper", "lower") %>%
+      is_in(names_model_i) %>%
+      sum() %>%
+      is_greater_than(0)
+    ok2 <- "filled_s1_baresoil_composite_vh_8_days" %>%
+      is_in(names_model_i) %>%
+      add(ok1) %>%
+      is_greater_than(1)
+    
+    if (ok2) {    
+      predvars_ib <- predvars_full %>%
+        magrittr::extract(. %in% names_model_i)
+      
+      pgrid_ib <- pgrid %>% select(any_of(predvars_ib))
+    
+      p1xv <- pdp::partial(
+        model_ib,
+        pred.var = predvars_ib,
+        pred.grid = pgrid_ib,
+        type = "regression"
+      )
+      
+      p1xv %<>%
+        add_column(
+          !!!pgrid[setdiff(names(pgrid), names(.))]
+        ) %>%
+        mutate(
+          Depth = (upper + lower)/2,
+          Fraction = fractions[i]
+          )
+        
+      pdp_outlist_depth[[length(pdp_outlist_depth) + 1]] <- p1xv
+    }
+  }
+}
+
+pdp_depth_raw <- pdp_outlist_depth %>%
+  bind_rows()
+
+saveRDS(
+  pdp_depth_raw,
+  file = paste0(dir_results, "/pdp_depth_raw.rds")
+  )
+
+pdp_depth_mean <- pdp_depth_raw %>%
+  group_by(Depth, filled_s1_baresoil_composite_vh_8_days, Fraction) %>%
+  summarise(yhat = mean(yhat, na.rm = TRUE))
+
+pdp_depth_mean %<>%
+  arrange(filled_s1_baresoil_composite_vh_8_days)
+
+pdp_depth_mean$filled_s1_baresoil_composite_vh_8_days <- pgrid$filled_s1_baresoil_composite_vh_8_days
+
+pdp_depth_mean %>%
+  mutate(
+    S1_VH_spring = filled_s1_baresoil_composite_vh_8_days/10^4
+    ) %>%
+  filter(Fraction == "clay") %>%
+  ggplot() +
+  geom_raster(aes(x = S1_VH_spring, y = Depth, fill = yhat)) +
+  scale_fill_viridis_c() +
+  coord_fixed(ratio = plotratio/10^4, expand = FALSE) +
+  scale_y_reverse()
+
 # Other potential covariates (for individual fractions)
 
 # Selected:
