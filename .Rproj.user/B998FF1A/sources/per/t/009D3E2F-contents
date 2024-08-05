@@ -94,6 +94,7 @@ base_gg +
   ) +
   theme_void() +
   theme(
+    text = element_text(family = "serif"),
     plot.background = element_rect(fill = "white", color = NA),
     legend.position = "bottom",
     legend.margin = margin(r = 20, unit = "pt"),
@@ -191,6 +192,7 @@ base_gg +
   ) +
   theme_void() +
   theme(
+    text = element_text(family = "serif"),
     plot.background = element_rect(fill = "white", color = NA),
     legend.position = "bottom",
     legend.margin = margin(r = 20, unit = "pt"),
@@ -390,13 +392,19 @@ myplot <- base_gg +
   ) +
   theme_void() +
   theme(
+    text = element_text(family = "serif", size = 12),
     panel.spacing.x = unit(0.05, "lines"),
     panel.spacing.y = unit(0.05 ,"lines"),
     panel.background = element_rect(fill = "grey80", color = NA),
     strip.text.y.left = element_text(
       angle = 90,
-      margin = unit(rep(3, 4), "pt")),
-    strip.text.x.top = element_text(margin = unit(rep(3, 4), "pt")),
+      margin = unit(rep(3, 4), "pt"),
+      size = 12
+      ),
+    strip.text.x.top = element_text(
+      margin = unit(rep(3, 4), "pt"),
+      size = 12
+      ),
     axis.title.y = element_text(angle = 90)
   ) +
   facet_grid(Depth ~ Type, switch = "y", , labeller = label_parsed) +

@@ -186,7 +186,10 @@ l %>%
   facet_wrap(~ fraction, labeller = label_parsed) +
   coord_flip() +
   geom_point(aes(x = category, y = mean, fill = category)) +
-  theme(legend.position = "none") +
+  theme(
+    text = element_text(family = "serif"),
+    legend.position = "none"
+    ) +
   xlab("Category")
 
 try(dev.off())
@@ -281,6 +284,7 @@ imp_ogc %>%
   ) +
   ylab('Covariate importance') +
   theme(
+    text = element_text(family = "serif"),
     axis.title.x = element_blank()
   )
 
@@ -430,7 +434,10 @@ s2_time_imp %>%
     ~ fraction,
     nrow = 1,
     labeller = label_parsed) +
-  scale_y_discrete(limits = rev)
+  scale_y_discrete(limits = rev) +
+  theme(
+    text = element_text(family = "serif")
+  )
 
 try(dev.off())
 
