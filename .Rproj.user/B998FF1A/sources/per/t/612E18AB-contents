@@ -548,37 +548,6 @@ equal_breaks2 <- function(n = 3, s = 0.1, ...) {
   }
 }
 
-equal_breaks2_test <- function(n = 3, s = 0.1, x) {
-  diff(range(x))
-  lowest <- min(x) + diff(range(x))*s
-  highest <- max(x) - diff(range(x))*s
-  round1 <- -floor(log10(abs(highest - lowest)))
-  lowest2 <- ceiling(lowest*10^round1) / 10^round1
-  highest2 <- floor(highest*10^round1) / 10^round1
-  if (highest2 == lowest2) {
-    round1 <- round1 + 1
-    lowest2 <- ceiling(lowest*10^round1) / 10^round1
-    highest2 <- floor(highest*10^round1) / 10^round1
-  }
-  if (n > 2) {
-    seq1 <- seq(lowest2, highest2, length = n)
-    intermediates <- seq1[-c(1, length(seq1))]
-    intermediates <- round(intermediates, round1 + 1)
-    seq1 <- c(lowest2, intermediates, highest2)
-  } else {
-    seq1 <- c(lowest2, highest2)
-  }
-  seq1
-}
-
-equal_breaks2_test(n = 4, s = 0, x = c(11, 150))
-
-pdp_combo_i$x %>%
-  max() %>%
-  multiply_by(10^xlab_digits[i]) %>%
-  floor() %>%
-  divide_by(10^xlab_digits[i])
-
 library(ggtext)
 library(extrafont)
 font_import()
@@ -633,9 +602,9 @@ pdp_df %>%
   scale_x_continuous(
     expand = c(0, 0),
     # n.breaks = 4,
-    breaks = equal_breaks2(n = 2, s = 0.17)
+    breaks = equal_breaks2(n = 2, s = 0.1)
   ) +
-  scale_y_continuous(breaks = equal_breaks2(n = 2, s = 0.17))
+  scale_y_continuous(breaks = equal_breaks2(n = 2, s = 0.1))
 
 try(dev.off())
 
