@@ -515,6 +515,70 @@ bare_soil_labels <- c(
   "S2 B12 - Bare"  # "filled_s2_geomedian_b12"  
 )
 
+equal_breaks <- function(n = 3, s = 0.1, ...){
+  function(x){
+    d <- s * diff(range(x)) / (1 + 2*s)
+    seq = seq(min(x) + d, max(x) - d, length = n)
+    round(seq, -floor(log10(abs(seq[2] - seq[1]))))
+  }
+}
+
+equal_breaks2 <- function(n = 3, s = 0.1, ...) {
+  function(x){
+    diff(range(x))
+    lowest <- min(x) + diff(range(x))*s
+    highest <- max(x) - diff(range(x))*s
+    round1 <- -floor(log10(abs(highest - lowest)))
+    lowest2 <- ceiling(lowest*10^round1) / 10^round1
+    highest2 <- floor(highest*10^round1) / 10^round1
+    if (highest2 == lowest2) {
+      round1 <- round1 + 1
+      lowest2 <- ceiling(lowest*10^round1) / 10^round1
+      highest2 <- floor(highest*10^round1) / 10^round1
+    }
+    if (n > 2) {
+      seq1 <- seq(lowest2, highest2, length = n)
+      intermediates <- seq1[-c(1, length(seq1))]
+      intermediates <- round(intermediates, round1 + 1)
+      seq1 <- c(lowest2, intermediates, highest2)
+    } else {
+      seq1 <- c(lowest2, highest2)
+    }
+    seq1
+  }
+}
+
+equal_breaks2_test <- function(n = 3, s = 0.1, x) {
+  diff(range(x))
+  lowest <- min(x) + diff(range(x))*s
+  highest <- max(x) - diff(range(x))*s
+  round1 <- -floor(log10(abs(highest - lowest)))
+  lowest2 <- ceiling(lowest*10^round1) / 10^round1
+  highest2 <- floor(highest*10^round1) / 10^round1
+  if (highest2 == lowest2) {
+    round1 <- round1 + 1
+    lowest2 <- ceiling(lowest*10^round1) / 10^round1
+    highest2 <- floor(highest*10^round1) / 10^round1
+  }
+  if (n > 2) {
+    seq1 <- seq(lowest2, highest2, length = n)
+    intermediates <- seq1[-c(1, length(seq1))]
+    intermediates <- round(intermediates, round1 + 1)
+    seq1 <- c(lowest2, intermediates, highest2)
+  } else {
+    seq1 <- c(lowest2, highest2)
+  }
+  seq1
+}
+
+equal_breaks2_test(n = 4, s = 0, x = c(11, 150))
+
+pdp_combo_i$x %>%
+  max() %>%
+  multiply_by(10^xlab_digits[i]) %>%
+  floor() %>%
+  divide_by(10^xlab_digits[i])
+
 library(ggtext)
 library(extrafont)
 font_import()
@@ -560,7 +624,7 @@ pdp_df %>%
     text = element_text(family = "serif"),
     axis.title.x = element_blank(),
     axis.title.y = element_markdown(size = 9),
-    axis.text.x = element_markdown(angle = 270, size = 9, vjust = 0.5, hjust = 1),
+    axis.text.x = element_markdown(size = 9),
     axis.text.y = element_markdown(size = 9),
     strip.text.y = element_markdown(size = 9, lineheight = 1),
     strip.text.x = element_markdown(size = 9, lineheight = 1)
@@ -568,9 +632,10 @@ pdp_df %>%
   ylab("ŷ (%)") +
   scale_x_continuous(
     expand = c(0, 0),
-    n.breaks = 4
+    # n.breaks = 4,
+    breaks = equal_breaks2(n = 2, s = 0.17)
   ) +
-  scale_y_continuous(n.breaks = 4)
+  scale_y_continuous(breaks = equal_breaks2(n = 2, s = 0.17))
 
 try(dev.off())
 
@@ -622,7 +687,8 @@ pdp_df %>%
     text = element_text(family = "serif"),
     axis.title.x = element_blank(),
     axis.title.y = element_markdown(size = 9),
-    axis.text.x = element_markdown(angle = 270, size = 9, vjust = 0.5, hjust = 1),
+    axis.text.x = element_markdown(size = 9),
+    # axis.text.x = element_markdown(angle = 270, size = 9, vjust = 0.5, hjust = 1),
     axis.text.y = element_markdown(size = 9),
     strip.text.y = element_markdown(size = 9, lineheight = 1),
     strip.text.x = element_markdown(size = 9, lineheight = 1)
@@ -630,9 +696,9 @@ pdp_df %>%
   ylab("ŷ (%)") +
   scale_x_continuous(
     expand = c(0, 0),
-    n.breaks = 4
+    breaks = equal_breaks2(n = 2, s = 0.10)
   ) +
-  scale_y_continuous(n.breaks = 4)
+  scale_y_continuous(breaks = equal_breaks2(n = 2, s = 0.10))
 
 try(dev.off())
 
@@ -785,14 +851,22 @@ for (i in 1:length(frac_ind_predict)) {
     filter(Fraction == fractions[frac_ind_predict[i]]) %>%
     ggplot() +
     geom_raster(aes(x = S1_VH_spring, y = Depth, fill = yhat)) +
-    scale_fill_viridis_c(name = "ŷ") +
+    scale_fill_viridis_c(name = "ŷ", breaks = equal_breaks2(n = 2, s = 0.10)) +
     coord_fixed(ratio = plotratio/100, expand = FALSE) +
-    scale_y_reverse() +
+    scale_y_reverse(breaks = c(0, 100, 200)) +
+    scale_x_continuous(breaks = equal_breaks2(n = 2, s = 0.10)) +
     labs(title = paste0(LETTERS[i], ": ", frac_labels2[frac_ind_predict[i]])) +
     theme(
       text = element_text(family = "serif"),
-      plot.title = element_markdown(),
-      legend.title = ggtext::element_markdown()
+      plot.title = element_markdown(margin = unit(c(0, 0, -0.05, 0), "cm")),
+      legend.title = ggtext::element_markdown(),
+      legend.key.size = unit(0.5, "line"),
+      legend.box.spacing = unit(1, "line"),
+      legend.justification = "left",
+      legend.margin = margin(0, 0, 0, 0),
+      legend.box.margin = margin(-10, -10, -10, -10),
+      plot.background = element_rect(fill = 'transparent', color = NA),
+      plot.margin = margin(0, 0, 0, 0, "cm")
       ) +
     guides(col = guide_colourbar(title = "ŷ"))
 }
@@ -801,25 +875,29 @@ library(grid)
 library(ggpubr)
 
 figure <- ggarrange(
-    pdp_plotlist1[[1]] + rremove("ylab") + rremove("xlab"),
-    pdp_plotlist1[[2]] + rremove("ylab") + rremove("xlab"),
-    pdp_plotlist1[[3]] + rremove("ylab") + rremove("xlab"),
+    pdp_plotlist1[[1]] + rremove("ylab") + rremove("xlab") + rremove("x.text"),
+    pdp_plotlist1[[2]] +
+      rremove("ylab") +
+      rremove("xlab") + 
+      rremove("x.text") + 
+      rremove("y.text"),
+    pdp_plotlist1[[3]] + rremove("ylab") + rremove("xlab") + rremove("y.text"),
     pdp_plotlist1[[4]] + rremove("ylab") + rremove("xlab"),
-    pdp_plotlist1[[5]] + rremove("ylab") + rremove("xlab"),
+    pdp_plotlist1[[5]] + rremove("ylab") + rremove("xlab") + rremove("y.text"),
     align = "hv",
-    nrow = 3,
-    ncol = 2
+    nrow = 2,
+    ncol = 3
     # ,
     # labels = fractions[frac_ind_predict]
 ) +
-  theme(plot.margin = margin(0.1,0.1, 0.1,0.1, "cm")) 
+  theme(plot.margin = margin(0.1, 0.5, 0, 0.25, "cm")) 
 
 figure
 
 tiff(
   paste0(dir_results, "/pdp_texture_depth_VH_test_", testn, ".tiff"),
   width = 16,
-  height = 14,
+  height = 6.7,
   units = "cm",
   res = 600
 )
@@ -904,123 +982,110 @@ cov_pts_q2 <- cov_pts %>%
   ) %>%
   bind_cols()
 
-pdp_outlist_combo <- list()
-
-# loop
-for (j in 1:nrow(combinations_pdp)) {
-  i <- which(fractions %in% combinations_pdp$fraction[j])
-  
-  predvars_full_j <- c("upper", "lower", combinations_pdp$covaritate[j])
-  
-  pgrid_j <- expand.grid(
-    upper = seq(0, 190, 10),
-    x = cov_pts_q2 %>%
-      select(any_of(combinations_pdp$covaritate[j])) %>%
-      unlist() %>%
-      unname()
-  ) %>%
-    mutate(lower = upper + 10) %>%
-    rename_with(~ combinations_pdp$covaritate[j], x)
-  
-  plotratio_j <- ((max(pgrid_j[, 2]) - min(pgrid_j[, 2])) / 200) * (20 / 32)
-  
-  pdp_outlist_j <- list()
-  
-  for (bootr in 1:nboot) {
-    
-    model_ib <- models_boot_files[[i]][bootr] %>% readRDS()
-    
-    names_model_i <- varImp(model_ib)$importance %>% rownames()
-    
-    
-    
-    ok1 <- c("upper", "lower") %>%
-      is_in(names_model_i) %>%
-      sum() %>%
-      is_greater_than(0)
-    ok2 <- combinations_pdp$covaritate[j] %>%
-      is_in(names_model_i) %>%
-      add(ok1) %>%
-      is_greater_than(1)
-    
-    if (ok2) {
-      print(
-        paste(
-          fractions[i], combinations_pdp$covaritate[j], "model", bootr,
-          "processing")
-      )
-      
-      predvars_ib <- predvars_full_j %>%
-        magrittr::extract(. %in% names_model_i)
-      
-      pgrid_ib <- pgrid_j %>% select(any_of(predvars_ib))
-      
-      p1xv <- pdp::partial(
-        model_ib,
-        pred.var = predvars_ib,
-        pred.grid = pgrid_ib,
-        type = "regression"
-      )
-      
-      p1xv %<>%
-        add_column(
-          !!!pgrid[setdiff(names(pgrid), names(.))]
-        ) %>%
-        mutate(
-          Depth = (upper + lower)/2
-        )
-      
-      pdp_outlist_j[[length(pdp_outlist_j) + 1]] <- p1xv
-    } else {
-      print(
-        paste(
-          fractions[i], combinations_pdp$covaritate[j], "model", bootr,
-          "dropped")
-      )
-    }
-  }
-  
-  if (length(pdp_outlist_j) > 0) {
-    pdp_depth_mean_j <- pdp_outlist_j %>%
-      bind_rows() %>%
-      group_by(Depth, .data[[combinations_pdp$covaritate[j]]]) %>%
-      summarise(yhat = mean(yhat, na.rm = TRUE)) %>%
-      ungroup() %>%
-      arrange(.data[[combinations_pdp$covaritate[j]]])
-    
-    pdp_depth_mean_j$x <- pgrid_j[, 2]
-    
-    pdp_depth_mean_j %<>%
-      mutate(
-        Fraction = fractions[i],
-        covariate = combinations_pdp$covaritate[j],
-        plotratio = plotratio_j
-      ) %>%
-      select(Fraction, covariate, Depth, x, plotratio, yhat)
-    
-    pdp_outlist_combo[[length(pdp_outlist_combo) + 1]] <- pdp_depth_mean_j
-  } else {
-    pdp_outlist_combo[[length(pdp_outlist_combo) + 1]] <- "no results"
-  }
-}
+# pdp_outlist_combo <- list()
+# 
+# # loop
+# for (j in 1:nrow(combinations_pdp)) {
+#   i <- which(fractions %in% combinations_pdp$fraction[j])
+#   
+#   predvars_full_j <- c("upper", "lower", combinations_pdp$covaritate[j])
+#   
+#   pgrid_j <- expand.grid(
+#     upper = seq(0, 190, 10),
+#     x = cov_pts_q2 %>%
+#       select(any_of(combinations_pdp$covaritate[j])) %>%
+#       unlist() %>%
+#       unname()
+#   ) %>%
+#     mutate(lower = upper + 10) %>%
+#     rename_with(~ combinations_pdp$covaritate[j], x)
+#   
+#   plotratio_j <- ((max(pgrid_j[, 2]) - min(pgrid_j[, 2])) / 200) * (20 / 32)
+#   
+#   pdp_outlist_j <- list()
+#   
+#   for (bootr in 1:nboot) {
+#     
+#     model_ib <- models_boot_files[[i]][bootr] %>% readRDS()
+#     
+#     names_model_i <- varImp(model_ib)$importance %>% rownames()
+#     
+#     ok1 <- c("upper", "lower") %>%
+#       is_in(names_model_i) %>%
+#       sum() %>%
+#       is_greater_than(0)
+#     ok2 <- combinations_pdp$covaritate[j] %>%
+#       is_in(names_model_i) %>%
+#       add(ok1) %>%
+#       is_greater_than(1)
+#     
+#     if (ok2) {
+#       print(
+#         paste(
+#           fractions[i], combinations_pdp$covaritate[j], "model", bootr,
+#           "processing")
+#       )
+#       
+#       predvars_ib <- predvars_full_j %>%
+#         magrittr::extract(. %in% names_model_i)
+#       
+#       pgrid_ib <- pgrid_j %>% select(any_of(predvars_ib))
+#       
+#       p1xv <- pdp::partial(
+#         model_ib,
+#         pred.var = predvars_ib,
+#         pred.grid = pgrid_ib,
+#         type = "regression"
+#       )
+#       
+#       p1xv %<>%
+#         add_column(
+#           !!!pgrid[setdiff(names(pgrid), names(.))]
+#         ) %>%
+#         mutate(
+#           Depth = (upper + lower)/2
+#         )
+#       
+#       pdp_outlist_j[[length(pdp_outlist_j) + 1]] <- p1xv
+#     } else {
+#       print(
+#         paste(
+#           fractions[i], combinations_pdp$covaritate[j], "model", bootr,
+#           "dropped")
+#       )
+#     }
+#   }
+#   
+#   if (length(pdp_outlist_j) > 0) {
+#     pdp_depth_mean_j <- pdp_outlist_j %>%
+#       bind_rows() %>%
+#       group_by(Depth, .data[[combinations_pdp$covaritate[j]]]) %>%
+#       summarise(yhat = mean(yhat, na.rm = TRUE)) %>%
+#       ungroup() %>%
+#       arrange(.data[[combinations_pdp$covaritate[j]]])
+#     
+#     pdp_depth_mean_j$x <- pgrid_j[, 2]
+#     
+#     pdp_depth_mean_j %<>%
+#       mutate(
+#         Fraction = fractions[i],
+#         covariate = combinations_pdp$covaritate[j],
+#         plotratio = plotratio_j
+#       ) %>%
+#       select(Fraction, covariate, Depth, x, plotratio, yhat)
+#     
+#     pdp_outlist_combo[[length(pdp_outlist_combo) + 1]] <- pdp_depth_mean_j
+#   } else {
+#     pdp_outlist_combo[[length(pdp_outlist_combo) + 1]] <- "no results"
+#   }
+# }
 
 # saveRDS(
 #   pdp_outlist_combo,
 #   file = paste0(dir_results, "/pdp_outlist_combo.rds")
 #   )
 
-j <- 1
-
-pdp_depth_mean_j <- pdp_outlist_combo[[j]]
-
-pdp_depth_mean_j %>%
-  ggplot() +
-  geom_raster(aes(x = x, y = Depth, fill = yhat)) +
-  scale_fill_viridis_c() +
-  coord_fixed(ratio = pdp_depth_mean_j$plotratio[1], expand = FALSE) +
-  scale_y_reverse() +
-  ggtitle(pdp_depth_mean_j$Fraction[1]) +
-  xlab(pdp_depth_mean_j$covariate[1])
+pdp_outlist_combo <- readRDS(paste0(dir_results, "/pdp_outlist_combo.rds"))
 
 frac_labels3 <- c(
   "A: Clay (%)",
@@ -1084,18 +1149,21 @@ for (i in 1:nrow(combinations_pdp)) {
       expand = c(0, 0),
       breaks = x_breaks
     ) +
-    scale_fill_viridis_c(name = "ŷ", n.breaks = 4) +
+    scale_fill_viridis_c(name = "ŷ", breaks = equal_breaks2(n = 2, s = 0.10)) +
     ggtitle(frac_labels3[i]) +
     xlab(cov_labels[i]) +
     theme(
       text = element_text(family = "serif"),
-      plot.title = element_markdown(),
+      plot.title = element_markdown(margin = unit(c(0, 0, 0, 0), "cm")),
       legend.title = ggtext::element_markdown(),
       legend.key.size = unit(0.5, "line"),
-      legend.box.spacing = unit(1.5, "line"),
+      legend.box.spacing = unit(1, "line"),
       legend.justification = "left",
       legend.margin = margin(0, 0, 0, 0),
-      legend.box.margin = margin(-10, -10, -10, -10)
+      legend.box.margin = margin(-10, -10, -10, -10),
+      plot.background = element_rect(fill = 'transparent', color = NA),
+      plot.margin = margin(0, 0, 0, 0.1, "cm"),
+      axis.title.x = element_text(vjust = +5)
     ) +
     guides(col = guide_colourbar(title = "ŷ"))
 }
@@ -1105,26 +1173,26 @@ library(ggpubr)
 
 figure2 <- ggarrange(
   pdp_plotlist2[[1]] + rremove("ylab"),
-  pdp_plotlist2[[2]] + rremove("ylab"),
-  pdp_plotlist2[[3]] + rremove("ylab"),
+  pdp_plotlist2[[2]] + rremove("ylab") + rremove("y.text"),
+  pdp_plotlist2[[3]] + rremove("ylab") + rremove("y.text"),
   pdp_plotlist2[[4]] + rremove("ylab"),
-  pdp_plotlist2[[5]] + rremove("ylab"),
-  pdp_plotlist2[[6]] + rremove("ylab"),
+  pdp_plotlist2[[5]] + rremove("ylab") + rremove("y.text"),
+  pdp_plotlist2[[6]] + rremove("ylab") + rremove("y.text"),
   pdp_plotlist2[[7]] + rremove("ylab"),
-  pdp_plotlist2[[8]] + rremove("ylab"),
-  pdp_plotlist2[[9]] + rremove("ylab"),
+  pdp_plotlist2[[8]] + rremove("ylab") + rremove("y.text"),
+  pdp_plotlist2[[9]] + rremove("ylab") + rremove("y.text"),
   align = "hv",
   nrow = 3,
   ncol = 3
 ) +
-  theme(plot.margin = margin(0, 0, 0, 0, "cm")) 
+  theme(plot.margin = margin(0.1, 0.5, 0, 0.25, "cm")) 
 
 # figure2
 
 tiff(
   paste0(dir_results, "/pdp_texture_depth_combo_test_", testn, ".tiff"),
-  width = 14,
-  height = 10,
+  width = 16,
+  height = 11,
   units = "cm",
   res = 600
 )
