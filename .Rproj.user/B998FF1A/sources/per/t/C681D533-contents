@@ -138,7 +138,7 @@ nboot <- lapply(
 
 nboot_final <- 100
 
-nboot_max <- 3
+nboot_max <- 100
 # nboot_max <- 100
 
 nboot <- min(c(nboot, nboot_max))
@@ -151,9 +151,10 @@ boot_all_chr <- c(1:nboot) %>%
   ) %>%
   paste0("boot_", .)
 
-# Force skip predictions
+# Force skip predictions (go to summary)
 
-force_skip_pred <- TRUE
+force_skip_pred <- FALSE
+# force_skip_pred <- TRUE
 
 # Set up loop for predicting each soil depth
 
@@ -238,7 +239,7 @@ for (j in j_depth) {
       not() %>%
       sum()
     
-    if (n_outfiles_missing > 0 | force_skip_pred) {
+    if (n_outfiles_missing > 0 & !force_skip_pred) {
       # for (i in frac_ind_predict) {
       for (i in 5) {  # Only SOC
         frac <- fraction_names_underscore[i]
