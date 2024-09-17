@@ -55,6 +55,7 @@ cov_cats <- dir_code %>%
 
 source("f_predict_passna.R")
 source("f_classify_SOC.R")
+source("f_classify_soil_JB.R")
 
 # SOC classes
 
@@ -150,6 +151,10 @@ boot_all_chr <- c(1:nboot) %>%
   ) %>%
   paste0("boot_", .)
 
+# Force skip predictions
+
+force_skip_pred <- TRUE
+
 # Set up loop for predicting each soil depth
 
 n_digits <- 1
@@ -233,7 +238,7 @@ for (j in j_depth) {
       not() %>%
       sum()
     
-    if (n_outfiles_missing > 0) {
+    if (n_outfiles_missing > 0 | force_skip_pred) {
       # for (i in frac_ind_predict) {
       for (i in 5) {  # Only SOC
         frac <- fraction_names_underscore[i]
