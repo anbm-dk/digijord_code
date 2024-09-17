@@ -56,6 +56,11 @@ cov_cats <- dir_code %>%
 source("f_predict_passna.R")
 source("f_classify_SOC.R")
 
+# SOC classes
+
+SOC_levels <- c(3, 6, 12, 60)
+SOC_labels <- c("00_03", "03_06", "06_12", "12_60")
+
 # Path for loading bootstrap models
 
 dir_boot <- dir_results %>%
@@ -332,7 +337,7 @@ for (j in j_depth) {
                 overwrite = TRUE
               )
               
-              # Calculate SOC class for each bootstrap repetition
+              # Calculate SOC class for the given bootstrap repetition
               
               rs_s2 <- outname_x %>% rast()
               
@@ -362,11 +367,7 @@ for (j in j_depth) {
         rm(cl)
       }
       
-      
-      
-      # Calculate the probability of each SOC class across repetitions
-      
-      # Merge SOC class probability rasters
+
       
       # # Standardize mineral texture predictions
       # print("Standardizing mineral fractions")
@@ -667,6 +668,102 @@ for (j in j_depth) {
   #   foreach::registerDoSEQ()
   #   rm(cl)
   # }
+  
+  # Calculate the probability of each SOC class across repetitions
+  # Separate layers for each SOC class
+  # Merge SOC class probability rasters
+  
+  print("Summarizing SOC classes")
+  showConnections()
+
+  cl <- makeCluster(numCores)
+
+  clusterEvalQ(
+    cl,
+    {
+      library(terra)
+      library(magrittr)
+      library(dplyr)
+      library(tools)
+    }
+  )
+
+  clusterExport(
+    cl,
+    c(
+      "boot_all_chr",
+      "subdir_tiles",
+      "dir_dat",
+      "n_digits",
+      "breaks_j",
+      "breaks_j_chr",
+      "dir_sum_depth_tiles",
+      "fraction_names_underscore",
+      "nboot",
+      "dir_pred_tiles_depth",
+      "classify_soil_JB",
+      "SOC_levels",
+      "SOC_labels"
+    )
+  )
+
+  parSapplyLB(
+    cl,
+    1:length(subdir_tiles),
+    function(x) {
+      tilename_x <- basename(subdir_tiles[x])
+
+      r_SOC_class_tile_all <- paste0(
+        dir_pred_tiles_depth, "/", boot_all_chr, "/", tilename_x,
+        "/SOC_class.tif") %>%
+        rast()
+
+      n_SOC_class_lyr <- nlyr(r_SOC_class_tile_all)
+      
+      outnames_SOC_class_probs <- paste0("/SOC_class_", SOC_labels, "_prob")
+
+      outfiles_SOC_class_probs <- dir_sum_depth_tiles %>%
+        paste0(., "/", tilename_x, "/", outnames_SOC_class_probs, ".tif")
+
+      tmpfolder <- paste0(dir_dat, "/Temp/")
+
+      terraOptions(memfrac = 0.02, tempdir = tmpfolder)
+
+      # Calculate soil class probability
+      SOC_class_prob <- app(
+        r_SOC_class_tile_all,
+        function(x) {
+          if (sum(is.na(x) == 0)) {
+            out <- factor(x, levels = SOC_levels) %>%
+              table() %>%
+              unname() %>%
+              as.numeric()
+          } else {
+            out <- rep_len(NA, length.out = length(SOC_levels))
+          }
+          return(out)
+        }
+      )
+      
+      names(SOC_class_prob) <- outnames_SOC_class_probs
+      
+      for (k in 1:length(SOC_levels)) {
+        writeRaster(
+          SOC_class_prob[[k]],
+          filename = outfiles_SOC_class_probs[k],
+          overwrite = TRUE,
+          datatype = "INT1U",
+          NAflag = 101
+        )
+      }
+
+      return(NULL)
+    }
+  )
+
+  stopCluster(cl)
+  foreach::registerDoSEQ()
+  rm(cl)
   
   # Calculate mean soil class and soil class uncertainties
   
