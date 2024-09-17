@@ -137,7 +137,7 @@ nboot <- lapply(
 
 nboot_final <- 100
 
-nboot_max <- 100
+nboot_max <- 3
 # nboot_max <- 100
 
 nboot <- min(c(nboot, nboot_max))
@@ -171,14 +171,14 @@ breaks_chr <- breaks %>%
 j_all_depths <- 1:(length(breaks) - 1)
 j_only_top <- 1
 
-# only_top <- TRUE
-# # only_top <- FALSE
-# 
-# if (only_top) {
-#   j_depth <- j_only_top
-# } else {
-#   j_depth <- j_all_depths
-# }
+only_top <- TRUE
+# only_top <- FALSE
+
+if (only_top) {
+  j_depth <- j_only_top
+} else {
+  j_depth <- j_all_depths
+}
 
 # j_depth <- 2 # Predict second layer
 # j_depth <- 3 # Predict third layer
@@ -349,7 +349,7 @@ for (j in j_depth) {
               lapp(
                 rs_s2,
                 classify_SOC,
-                filename = outname_x2,
+                filename = outname_x2_SOC_class,
                 overwrite = TRUE,
                 wopt = list(
                   datatype = "INT1U",
@@ -366,8 +366,6 @@ for (j in j_depth) {
         foreach::registerDoSEQ()
         rm(cl)
       }
-      
-
       
       # # Standardize mineral texture predictions
       # print("Standardizing mineral fractions")
