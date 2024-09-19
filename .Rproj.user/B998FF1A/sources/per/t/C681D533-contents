@@ -892,6 +892,8 @@ for (j in j_depth) {
     dtyp_i <- datatype(tile1_i)
     naflag_i <- NAflag(tile1_i)
     
+    if (dtyp_i == "INT1U") { naflag_i <- 101 }
+    
     outtiles_sprc <- summary_tiles_i %>% sprc()
     
     merge(
