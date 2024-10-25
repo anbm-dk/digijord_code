@@ -383,7 +383,9 @@ for (j in j_depth) {
   
   # Loop for predicting maps from bootstrap repetitions
   
-  if (!force_skip_pred) {
+  if (force_skip_pred) {
+    print("Skipping bootstrap model predictions. Going directly to summary.")
+  } else {
     for (bootr in 1:nboot) {
       bootr_chr <- bootr %>%
         str_pad(
@@ -1013,8 +1015,8 @@ for (j in j_depth) {
       for (k in 1:nlyr(my_qs)) {
         outname_base <- paste0("soc_", prob_q_out_chr[k])
         
-        outfile_xk <- outdir_tile_x %>%
-          paste0(., outname_base, ".tif")
+        outfile_xk <- dir_sum_depth_tiles %>%
+          paste0(., "/", tilename_x, "/", outname_base, ".tif")
         
         writeRaster(
           my_qs[[k]],
