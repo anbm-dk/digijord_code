@@ -1,0 +1,837 @@
+#' title: "Mapping SOC with Cubist bootstrap"
+
+## ----Necessary libraries, results="hide", message=FALSE-------------------------------------------------------------
+library(raster)
+library(sp)
+library(rgdal)
+library(Cubist)
+library(caret)
+library(parallel)
+library(doParallel)
+library(viridis)
+library(dplyr)
+library(iterators)
+library(ggplot2)
+
+
+#rm(list=ls()) # clean memory
+
+## ----Read in Data---------------------------------------------------------------------------------------------------
+
+## Define path to folder on Artemis
+path <- "/home/data8T/sinks2/modelisation/data_from_2009_2010_2020_2021/"
+path_input <- "/home/data8T/denmark/"
+## Define the path to folder on Atlas
+# path <- "/data/sinks2/modelisation/data_from_2009_2010_2020_2021/"
+# path_input <- "/data/denmark/"
+## Define the path to folder on laptop
+# path <- "C:/Users/au549861/Documents_C/sinks2/modelisation/data_from_2009_2010_2020_2021/"
+# path_input <- "C:/Users/au549861/Documents_C/denmark/"
+
+## Load the point data
+all_points <- read.table(paste0(path, "nirs/sinks_modelled_2020_2021_2022_sept23_bis_C_not_nirs.txt"),
+                         sep = "\t",
+                         header = TRUE, stringsAsFactors = TRUE)
+
+## Check your file
+head(all_points)
+
+
+## Getting rid of useless columns
+# all_points <- all_points[,c(1,2,7,14)]
+all_points <- all_points[,(6:8)]
+
+# List rasters in the appropriate folder
+all_predictors <- list.files(paste0(path_input, "covariates_10m/stack_wetlands/"), 
+                             pattern = "tiff$|tif$", 
+                             full.names = TRUE
+)
+
+# Create a raster stack 
+all_predictors_stack <- stack(all_predictors)
+# Remove the reference layer from the raster stack
+# all_predictors_stack <- dropLayer(all_predictors_stack, 
+#                                   which(names(all_predictors_stack) == "sin_aspect_radians")
+# )
+names(all_predictors_stack)
+
+
+## List rasters for tile test in folder
+# files <- list.files(paste0(path_input, "covariates_10m/tiles/tile_142/"), 
+#                     pattern = "tiff$|tif$", full.names = TRUE)
+# 
+# ## Create a raster stack for the example tile
+# rstack <- stack(files)
+# rstack <- dropLayer(rstack, which(names(rstack) == "sin_aspect_radians"))
+# names(rstack)
+
+## ----Extracting data to the points----------------------------------------------------------------------------------
+## First, make all the point observations spatial
+coordinates(all_points) = ~SD_X_DJF + SD_Y_DJF
+
+## Add the projection of the rasters to the point observations
+crs(all_points) <- crs(all_predictors_stack)
+
+## Extract values from the covariates to the points
+DSM_data <- extract(all_predictors_stack, 
+                    all_points, 
+                    sp = TRUE, 
+                    method = "simple"
+)
+
+head(DSM_data)
+str(DSM_data)
+
+## Convert spatial dataframe to a non-spatial dataframe
+DSM_data <- as.data.frame(DSM_data)
+str(DSM_data)
+
+## Coordinates not needed for modelling
+DSM_data<-DSM_data[,-c(2,3)]
+
+## with cube root transform because skewed original distribution
+DSM_data$Modelled_A <- (as.numeric(DSM_data$Modelled_A)^(1/3))
+colnames(DSM_data)[colnames(DSM_data)=="Modelled_A"] <- "Modelled_A1_TOC"
+range(DSM_data$Modelled_A1_TOC)
+
+## Check missing values (NA's)
+## how many
+sum(is.na(DSM_data))
+## the lines containing them
+# DSM_data[!complete.cases(DSM_data),]
+## only keep the complete lines and check the dimension before and after
+dim(DSM_data)
+DSM_data <- DSM_data[complete.cases(DSM_data),]   #DSM_data <- na.omit(DSM_data)
+dim(DSM_data)
+
+## In the case we would be using categorical data, it would be necessary to turn 
+## them into factors, otherwise the model would consider them as numerical data:
+# DSM_data$geology <- as.factor(DSM_data$geology)
+# DSM_data$georeg <- as.factor(DSM_data$georeg)
+# DSM_data$landscape <- as.factor(DSM_data$landscape)
+# DSM_data$LU <- as.factor(DSM_data$LU)
+# DSM_data$dc <- as.factor(DSM_data$dc)
+## pb to fix more than 2 classes
+# DSM_data$river_valley_dk_30_4 <- as.factor(DSM_data$river_valley_dk_30_4) 
+str(DSM_data)
+
+
+#### Change the temporary file directory
+#tempdir <- function() "/home/data/ministry_lowland_mapping/predictions/30_4_m_cov/cubist_bootstrap/temp/"
+#unlockBinding("tempdir", baseenv())
+#assignInNamespace("tempdir", tempdir, ns = "base", envir = baseenv())
+#assign("tempdir", tempdir, baseenv())
+#lockBinding("tempdir", baseenv())
+
+
+
+## ----Splitting dataset----------------------------------------------------------------------------------------------
+
+set.seed(123)
+
+## Split the data into training/calibration and evaluation/validation sets
+index_cal <- sample(nrow(DSM_data), 0.7*nrow(DSM_data) )
+cal_data <- DSM_data[index_cal, ]
+val_data <- DSM_data[-index_cal, ]
+dim(cal_data)
+dim(val_data)
+
+
+## ----Cubist bootstrap model training, eval=FALSE, results="hide", message=FALSE, warning=FALSE----------------------
+
+## Number of bootstraps
+nbag <- 10
+
+
+## Number of columns in the dataset
+n_cal <- ncol(cal_data)
+
+
+## trainControl parameters for train::caret function
+ctrl<- trainControl(method = "cv",
+                    summaryFunction = defaultSummary, 
+                    selectionFunction = "best",
+                    savePredictions = "final"
+)
+
+
+setwd("/home/data8T/sinks2/modelisation/data_from_2009_2010_2020_2021/predictions/cubist/excl_S2/soc/incl_nirs/bst/feb_2024/")
+# setwd("/data/sinks2/modelisation/data_from_2009_2010_2020_2021/predictions/cubist/excl_S2/soc/incl_nirs/bst/feb_2024/")
+
+## Fit Cubist models for each bootstrap
+ncores<-detectCores()
+beginCluster(ncores-1)
+# cl <- makeCluster(ncores-1); registerDoParallel(cl)
+
+
+for (i in 1:nbag) {
+  ## Defining a random sample to take from the calibration data (here 100 %)
+  training_REP <- sample.int(nrow(cal_data),
+                             1.0 * nrow(cal_data),
+                             replace = TRUE
+  )
+  
+  # training_REP
+  # dim(cal_data[training_REP, 2:n_cal])
+  # head(cal_data$Modelled_A1_TOC[training_REP])
+  
+  ## Running the Cubist model
+  fit_cubist <- train(x = cal_data[training_REP, 2:n_cal],
+                      y = cal_data$Modelled_A1_TOC[training_REP],
+                      method = "cubist",
+                      trControl=ctrl
+  )
+  
+  
+  ## Defining the location (in directory /maps) and the name of the map to save
+  ## (bootMap_1.rds to bootMap_50.rds)
+  mapFile <- paste(paste(paste(paste(getwd(), "/maps/", sep = ""),
+                               "bootMap_", sep = ""),
+                         i, sep = ""),
+                   ".tif", sep = ""
+  )
+  
+  ## Applying the model to the covariate data
+  clusterR(all_predictors_stack,
+           predict, args = list(fit_cubist),
+           filename = mapFile,
+           format = "GTiff",
+           overwrite = T
+  )
+  
+  print(i)
+  
+  ## Defining the location (in directory /models) and the name of the model to save
+  ## (bootMod_1.rds to bootMod_50.rds)
+  modelFile <- paste(paste(paste(paste(getwd(), "/models/", sep = ""),
+                                 "bootMod_", sep = "" ),
+                           i, sep = ""),
+                     ".rds", sep = ""
+  )
+  
+  ## Saving the model
+  saveRDS(object = fit_cubist, file = modelFile)
+  
+  print(i)
+  
+}
+
+
+endCluster()
+# stopCluster(cl); registerDoSEQ()
+
+
+## ----Checking the created models, eval=FALSE------------------------------------------------------------------------
+
+## list all files in directory /models and /val
+c_models <- list.files(path = paste(getwd(), "/models", sep = ""),
+                       pattern = "\\.rds$",
+                       full.names = TRUE
+)
+
+head(c_models)
+
+
+
+#' ## Check bootstrap model performance
+
+## ----Cubist model evaluation, eval=FALSE----------------------------------------------------------------------------
+## goof (goodness of fit) function exported from package ithir to calculate
+## performance metrics
+goof <- function(observed,predicted, plot.it = FALSE, type = "DSM"){
+  # Coefficient of determination
+  rLM <- lm(predicted ~ observed)
+  R2 <- as.matrix(summary(rLM)$adj.r.squared)
+  
+  # Standard error of prediction ^2 or MSE
+  SEP2 <- mean((observed - predicted)^2)
+  
+  # Standard error of prediction or RMSE
+  SEP <- sqrt(SEP2)
+  
+  #Bias
+  bias <- mean(predicted) - mean(observed)
+  
+  # residual  variance
+  SEP2c <- sum(((predicted - bias - observed)^2) / length(observed))
+  SEPc <- sqrt(SEP2c)
+  
+  # ratio of performance to deviation
+  RPD <- sd(observed) / SEP
+  
+  # Ratio of performance to interquartile distance
+  IQ <- c(quantile(observed))[3] - c(quantile(observed))[2]
+  RPIQ <- IQ / SEP
+  
+  # Concordance
+  mx <- mean(observed)
+  my <- mean(predicted)
+  s2x <- var(observed)
+  s2y <- var(predicted)
+  sxy <- mean((observed-mx) * (predicted-my))
+  ccc <- 2 * sxy / (s2x + s2y + (mx - my)^2)
+  
+  if (plot.it==TRUE){
+    eqscplot(observed, predicted)
+    abline(a = 0, b = 1, col = "brown4")
+  }
+  
+  if (type == "DSM"){
+    gf <- data.frame(R2 = R2,                     
+                     concordance = ccc,
+                     MSE = SEP2,
+                     RMSE = SEP,
+                     bias = bias,
+                     row.names = NULL
+    )
+  }
+  
+  else if (type == "spec"){
+    gf <- data.frame(R2 = R2,
+                     concordance = ccc,
+                     MSE = SEP2,
+                     RMSE = SEP,
+                     bias = bias,
+                     MSEc = SEP2c,
+                     RMSEc = SEPc,
+                     RPD = RPD,
+                     RPIQ = RPIQ,
+                     row.names = NULL
+    )
+  }
+  
+  else {
+    stop("ERROR: Revise the type of output you require. Select from either DSM or spec")
+  }
+  
+  return(gf)
+  
+}
+
+
+
+## Creating an empty matrix where to store the metrics values for all models
+cubist_Mat <- matrix(NA, nrow = nbag, ncol = 5)
+
+
+## We use the Cubist models we trained to get predictions and
+## the goof function to calculate metrics
+## first, on the calibration dataset
+for (i in 1:nbag) {
+  ## Reading in one the 50 bootstrap models
+  fit_cubist <- readRDS(c_models[i])
+  
+  # ## Predicting on the calibration dataset - already done!
+  # predicted <- predict(fit_cubist,
+  #                      newdata = cal_data[, 2:n_cal]
+  # )
+  
+  ## Calculating metrics with the goof function
+  goof_res <- goof(observed = (fit_cubist$pred$obs)^3,
+                   predicted = (fit_cubist$pred$pred)^3
+  )
+  
+  ## Filling a line of the matrix with the metrics of the model
+  cubist_Mat[i, ] <- as.matrix(goof_res)
+  
+  print(i)
+  
+  # ## Check the variable importance of the model
+  # png(paste0(path, "predictions/cubist/excl_S2/soc/incl_nirs/var_imp.png"), width = 900, height = 900)
+  # mod_imp <- varImp(fit_cubist)
+  # plot(mod_imp, top = 20)
+  # dev.off()
+  # modelFile <- paste(paste(paste(paste(getwd(), "/var_imp/", sep = ""),
+  #                                "varImp_", sep = "" ),
+  #                          i, sep = ""),
+  #                    ".png", sep = ""
+  # )
+  
+}
+
+
+## Saving the matrix containing the metrics for all models as a dataframe
+cubist_Data <- as.data.frame(cubist_Mat)
+head(cubist_Data)
+
+## Naming the columns with the right metrics denomination
+names(cubist_Data) <- c("R2", "concordance", "MSE", "RMSE", "bias")
+head(cubist_Data)
+
+## Calculating the mean values of the 50 bootstrap models for each metrics
+colMeans(cubist_Data)
+
+
+
+## then, on the evaluation/validation dataset
+
+## Creating an empty matrix where to store the predictions for all models
+cub_pred_val <- matrix(NA, ncol = nbag, nrow = nrow(val_data))
+
+## Creating an empty matrix where to store the metrics values for all models
+cubist_Mat <- matrix(NA, nrow = nbag, ncol = 5)
+
+for (i in 1:nbag) {
+  ## Reading in one the 50 bootstrap models
+  fit_cubist <- readRDS(c_models[i])
+  
+  ## Predicting on the validation dataset
+  cub_pred_val[, i] <- predict(fit_cubist,
+                               newdata = val_data[, 2:n_cal]
+  )
+  ## Calculating metrics with the goof function
+  goof_res <- goof(observed = (val_data$Modelled_A1_TOC)^3,
+                   predicted = (cub_pred_val[, i])^3
+  )
+  
+  ## Filling a line of the matrix with the metrics of the model
+  cubist_Mat[i, ] <- as.matrix(goof_res)
+  
+  print(i)
+  
+}
+
+
+## Calculating the mean value of the 50 bootstrap models for each prediction
+cub_pred_val_mean <- rowMeans(cub_pred_val)
+head(cub_pred_val_mean)
+
+## Saving the matrix containing the metrics for all models as a dataframe
+cubist_Data <- as.data.frame(cubist_Mat)
+head(cubist_Data)
+
+## Naming the columns with the right metrics denomination
+names(cubist_Data) <- c("R2", "concordance", "MSE", "RMSE", "bias")
+head(cubist_Data)
+
+## Calculating the mean values of the 50 bootstrap models for each metrics
+colMeans(cubist_Data)
+
+
+## Saving the average validation MSE
+avg_MSE <- mean(cubist_Data[, 3])
+avg_MSE
+# avg_MSE = 83.27778
+
+
+#' ## Spatial mapping
+
+## ----Saving the predictions to a file, eval=FALSE, results="hide", message=FALSE, warning=FALSE---------------------
+## 
+## Saving the predictions to a file for the whole wetland areas!
+# ncores <- detectCores()
+# beginCluster(ncores-1)
+# 
+# for (i in 1:nbag) {
+#   ## First, reading in each model
+#   fit_cubist <- readRDS(c_models[i])
+# 
+#   ## Defining the location (in directory /maps) and the name of the map to save
+#   ## (bootMap_1.rds to bootMap_50.rds)
+#   mapFile <- paste(paste(paste(paste(getwd(), "/maps/", sep = ""),
+#                                "bootMap_", sep = ""),
+#                          i, sep = ""),
+#                    ".tif", sep = ""
+#   )
+# 
+#   ## Applying the model to the covariate data
+#   clusterR(all_predictors_stack,
+#            predict, args = list(fit_cubist),
+#            filename = mapFile,
+#            format = "GTiff",
+#            overwrite = T
+#   )
+# 
+#   print(i)
+# 
+# }
+# 
+# endCluster()
+
+
+
+## Saving the predictions for a tile test to a file
+# ncores <- detectCores()
+# beginCluster(ncores-1)
+# 
+# for (i in 1:nbag) {
+#   ## First, reading in each model
+#   fit_cubist <- readRDS(c_models[i])
+# 
+#   ## Defining the location (in directory /maps) and the name of the map to save
+#   ## (bootMap_1.rds to bootMap_50.rds)
+#   mapFile <- paste(paste(paste(paste(getwd(), "/maps/", sep = ""),
+#                                "bootMap_", sep = ""),
+#                          i, sep = ""),
+#                    ".tif", sep = ""
+#   )
+# 
+#   ## Applying the model to the covariate data
+#   clusterR(rstack,
+#            predict, args = list(fit_cubist),
+#            filename = mapFile,
+#            format = "GTiff",
+#            overwrite = T
+#   )
+# 
+#   print(i)
+# 
+# }
+# 
+# endCluster()
+
+
+
+## ----Calculating the mean prediction map, eval=FALSE, results="hide", message=FALSE, warning=FALSE------------------
+#
+## Defining the pathway to rasters
+files <- list.files(paste(getwd(), "/maps/", sep = ""),
+                    pattern = "\\.tif$",
+                    full.names = TRUE
+)
+
+length(files)
+
+## Stacking the prediction maps
+r1 <- raster(files[1])
+
+for (i in 2:length(files)) {
+  r1 <- stack(r1, files[i])
+}
+
+
+## Defining the location (in directory /maps) and the name of the mean prediction
+## not backtransformed! map to save
+meanFile_not_backtr <- paste(paste(getwd(), "/maps/res_maps/", sep = ""),
+                  "meanPred.tif"
+)
+
+## Calculating the mean values for each pixel of the raster stack and saving it
+## as a raster
+bootMap_mean_not_backtr <- writeRaster(mean(r1),
+                            filename = meanFile_not_backtr,
+                            format = "GTiff",
+                            overwrite = TRUE
+)
+
+
+
+## Defining the location (in directory /maps) and the name of the mean prediction
+## backtransformed! map to save
+meanFile <- paste(paste(getwd(), "/maps/res_maps/", sep = ""),
+                  "meanPred_back_tr.tif"
+)
+
+## Calculating the mean values for each pixel of the raster stack and saving it
+## as a raster
+bootMap_mean <- writeRaster(mean(r1^3),
+                            filename = meanFile,
+                            format = "GTiff",
+                            overwrite = TRUE
+)
+
+
+
+## ----Estimating the variance from the prediction maps, eval=FALSE, results="hide", message=FALSE, warning=FALSE-----
+
+## Calculating square differences and saving the maps to file
+for (i in 1:length(files)) {
+  ## Loading a bootstrap prediction map
+  r1 <- raster(files[i])
+
+  ## Defining the location (in directory /maps) and the name of the map to save
+  ## (bootAbsDif_1.rds to bootAbsDif_50.rds)
+  diffFile <- paste(paste(paste(paste(getwd(), "/maps/res_maps/", sep = ""),
+                                "bootAbsDif_", sep = ""),
+                          i, sep = ""),
+                    ".tif", sep = ""
+  )
+
+  ## Calculating the square differences between the backtransformed prediction map and the mean
+  ## prediction map
+  sqr_diff <- ((r1^3) - bootMap_mean)^2
+
+
+  ## Saving the square difference map
+  writeRaster(sqr_diff,
+              filename = diffFile,
+              format = "GTiff",
+              overwrite = TRUE
+  )
+
+  print(i)
+}
+
+
+
+## Calculating the sum of square differences
+
+## Looking for the square difference maps (i.e. files with the bootAbsDif
+## character string in file name)
+files2 <- list.files(paste(getwd(), "/maps/res_maps/", sep =""),
+                     pattern = "bootAbsDif",
+                     full.names = TRUE
+)
+
+## Stack the square difference maps
+r2 <- raster(files2[1])
+
+for (i in 2:length(files2)) {
+  r2 <- stack(r1, files2[i])
+}
+
+## Defining the location (in directory /maps) and the name of the sum of square
+## differences map to save
+sqDiffFile <- paste(paste(getwd(), "/maps/res_maps/", sep = ""),
+                    "sqDiffPred.tif"
+)
+
+
+## Calculating the sum for each pixel of the raster stack and saving it
+## as a raster
+bootMap_sqDiff <- writeRaster(sum(r2),
+                              filename = sqDiffFile,
+                              format = "GTiff",
+                              overwrite = TRUE
+)
+
+
+
+## Defining the location (in directory /maps) and the name of the prediction
+## variance map to save
+varFile <- paste(paste(getwd(), "/maps/res_maps/", sep=""),
+                 "varPred.tif"
+)
+
+
+## Deriving the prediction variance and saving it as a raster
+bootMap_var <- writeRaster(((1/(nbag - 1)) * bootMap_sqDiff),
+                           filename = varFile,
+                           format = "GTiff",
+                           overwrite = TRUE
+)
+
+## Defining the location (in directory /maps) and the name of the overall
+## prediction variance map to save
+varFile2 <- paste(paste(getwd(), "/maps/res_maps/", sep=""),
+                  "varPredOv.tif"
+)
+
+## Calculating the overall prediction variance
+bootMap_varOv <- writeRaster((bootMap_var + avg_MSE),
+                             filename = varFile2,
+                             format = "GTiff",
+                             overwrite = TRUE
+)
+
+
+
+## ----Deriving the 90% prediction interval, eval=FALSE, results="hide", message=FALSE, warning=FALSE-----------------
+
+## Defining the location (in directory /maps) and the name of the standard
+## deviation map to save
+sdFile <- paste(paste(getwd(), "/maps/res_maps/", sep = ""),
+                "sdPred.tif"
+)
+
+## Calculating standard deviation
+bootMap_sd <- writeRaster(sqrt(bootMap_varOv),
+                          filename = sdFile,
+                          format = "GTiff",
+                          overwrite = TRUE
+)
+
+
+
+## Defining the location (in directory /maps) and the name of the standard
+## error map to save
+seFile <- paste(paste(getwd(), "/maps/res_maps/", sep = ""),
+                "sePred.tif"
+)
+
+## Calculating standard error
+bootMap_se <- writeRaster((bootMap_sd * qnorm(0.95)),
+                          filename = seFile,
+                          format = "GTiff",
+                          overwrite = TRUE
+)
+
+
+
+## Defining the location (in directory /maps) and the name of the upper
+## prediction limit map to save
+uplFile <- paste(paste(getwd(), "/maps/res_maps/", sep = ""),
+                 "uplPred.tif"
+)
+
+## Calculating upper prediction limit
+bootMap_upl <- writeRaster((bootMap_mean + bootMap_se),
+                           filename = uplFile,
+                           format = "GTiff",
+                           overwrite = TRUE
+)
+
+
+
+## Defining the location (in directory /maps) and the name of the lower
+## prediction limit map to save
+lplFile <- paste(paste(getwd(), "/maps/res_maps/", sep = ""),
+                 "lplPred.tif"
+)
+
+## Calculating lower prediction limit
+bootMap_lpl <- writeRaster((bootMap_mean - bootMap_se),
+                           filename = lplFile,
+                           format = "GTiff",
+                           overwrite = TRUE
+)
+
+
+
+## Defining the location (in directory /maps) and the name of the prediction
+## interval range map to save
+pirFile <- paste(paste(getwd(), "/maps/res_maps/", sep = ""),
+                 "pirPred.tif"
+)
+
+
+## Calculating prediction interval range
+bootMap_pir <- writeRaster((bootMap_upl - bootMap_lpl),
+                           filename = pirFile,
+                           format = "GTiff",
+                           overwrite = TRUE
+)
+
+
+
+## ----Plotting maps, eval=FALSE, results="hide", message=FALSE, warning=FALSE----------------------------------------
+
+# library(viridis)
+#
+# ## Defining the break values for SOC
+# brk <- c(0: 56)
+#
+# ## Saving the figures in one png file
+# png(paste0(path, "/maps/res_maps/cubist_bootstrap_soc_pred.png"), width = 900, height = 900)
+# par(mfrow = c(2, 2))
+#
+# ## Plotting the lower prediction limit
+# plot(bootMap_lpl,
+#      main = "90% Lower prediction limit",
+#      breaks = brk,
+#      col = cividis(20)
+# )
+#
+# ## Plotting the mean prediction
+# plot(bootMap_mean,
+#      main = "Prediction",
+#      breaks = brk,
+#      col = cividis(20)
+# )
+#
+# ## Plotting the upper prediction limit
+# plot(bootMap_upl,
+#      main = "90% Upper prediction limit",
+#      breaks = brk,
+#      col = cividis(20)
+# )
+#
+# ## Plotting the prediction interval range
+# plot(bootMap_pir,
+#      main = "Prediction limit range",
+#      col = cividis(length(seq(0, 18, by = 2)) - 1),
+#      axes = FALSE,
+#      breaks = seq(0, 18, by = 2))
+#
+# dev.off()
+
+
+
+#' ## Validating the quantification of uncertainties
+
+## ----Estimating standard deviation, eval=FALSE, results="hide", message=FALSE, warning=FALSE------------------------
+
+## Creating an empty matrix where to store the standard deviation for model
+## predictions on the validation data
+val_sd <- matrix(NA, ncol = 1, nrow = nrow(cub_pred_val))
+
+## Calculating the standard deviation
+for (i in 1:nrow(cub_pred_val)) {
+  val_sd[i, 1] <- sqrt(var(cub_pred_val[i, ]) + avg_MSE)
+}
+
+
+## ----Expressing prediction limits at each level of confidence - 1, eval=FALSE, results="hide", message=FALSE, warning=FALSE----
+
+## Defining percentiles of normal distribution
+qp <- qnorm(c(0.995, 0.9875, 0.975, 0.95, 0.9, 0.8, 0.7, 0.6, 0.55, 0.525))
+
+## Creating an empty matrix where to store the results from the z factor
+## multiplication
+vMat <- matrix(NA, nrow = nrow(cub_pred_val), ncol = length(qp))
+
+## z factor multiplication
+for (i in 1:length(qp)) {
+  vMat[, i] <- val_sd * qp[i]
+}
+
+
+
+## ----Deriving prediction limits at each level of confidence - 2, eval=FALSE, results="hide", message=FALSE, warning=FALSE----
+
+## For upper prediction limit
+## Creating an empty matrix where to store the results of the addition
+uMat <- matrix(NA, nrow = nrow(cub_pred_val), ncol = length(qp))
+
+## Adding the limits to the averaged model predictions
+for (i in 1:length(qp)) {
+  uMat[, i] <- cub_pred_val_mean + vMat[, i]
+}
+
+
+## For lower prediction limit
+## Creating an empty matrix where to store the results of the substraction
+lMat <- matrix(NA, nrow = nrow(cub_pred_val), ncol = length(qp))
+
+## Substracting the limits from the averaged model predictions
+for (i in 1:length(qp)) {
+  lMat[, i] <- cub_pred_val_mean - vMat[, i]
+}
+
+
+
+## ----Assessing the prediction interval coverage probability, eval=FALSE, results="hide", message=FALSE, warning=FALSE----
+
+## Creating an empty matrix where to store the results of the assessment
+bMat <- matrix(NA, nrow = nrow(cub_pred_val), ncol = length(qp))
+
+## Assessing whether the observed value is encapsulated by the corresponding
+## prediction limits
+for (i in 1:ncol(bMat)) {
+  bMat[, i] <- as.numeric(val_data[, 2] <= uMat[,i] & val_data[, 2] >= lMat[, i])
+}
+
+as.numeric(val_data[, 2] <= uMat[,1] & val_data[, 2] >= lMat[, 1])
+
+## Calculating the proportion of agreement to total number of observations
+## PICP/100
+colSums(bMat)/nrow(bMat)
+
+
+
+## ----Plotting the prediction interval coverage probability, eval=FALSE, results="hide", message=FALSE, warning=FALSE----
+
+## Plotting PICP in function of confidence level
+##Defining confidence level
+cs <- c(99, 97.5, 95, 90, 80, 60, 40, 20, 10, 5)
+plot(cs, ((colSums(bMat)/nrow(bMat)) * 100), xlab="Confidence level", ylab = "PICP")
+abline(coef = c(0,1), lty = 2)
+
+
+
+## ----Checking the prediction interval coverage probability, eval=FALSE, results="hide", message=FALSE, warning=FALSE----
+
+cs <- c(99, 97.5, 95, 90, 80, 60, 40, 20, 10, 5)
+colnames(lMat) <- cs
+colnames(uMat) <- cs
+quantile(uMat[, "90"] - lMat[, "90"])

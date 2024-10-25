@@ -62,6 +62,176 @@ source("f_classify_soil_JB.R")
 SOC_levels <- c(3, 6, 12, 60)
 SOC_labels <- c("00_03", "03_06", "06_12", "12_60")
 
+# For peat probabilities and confidence intervals
+
+soc6pct_log <- log(6)
+
+prob_q_out <- c(0.5, 2.5, 5.0, 16.0, 84.0, 95.0, 97.5, 99.5)/100
+prob_q_out_chr <- prob_q_out %>%
+  multiply_by(1000) %>%
+  formatC(width = 4, flag = "0") %>%
+  paste0("p", .)
+
+# Calculate mean logSOC prediction and MSE for logsoc
+
+obs_texture <- paste0(dir_results, "/observations_texture.rds") %>%
+  readRDS()
+
+dir_boot <- dir_results %>%
+  paste0(., "/bootstrap/")
+
+models_boot_predictions_soc <- dir_boot %>%
+  paste0(., "/models_boot_predictions_SOC.rds") %>%
+  readRDS()
+
+models_weights_soc <- dir_results %>%
+  paste0(., "/models_weights_SOC.rds") %>%
+  readRDS()
+
+logsoc_mean_prediction <- models_boot_predictions_soc %>%
+  log() %>%
+  apply(., 1, mean)
+
+# Load combination raster showing parts covered by Tørv2022 and my own map.
+# Combination == 1 shows peat2022 extent
+SOC_combination_map <- root %>%
+  paste0(
+    ., "/Soil_maps_10m_new/Kulstof2022/SOC_000_030_cm/",
+    "SOC_combination_000_030_cm.tif") %>%
+  rast()
+
+# Extract combination
+
+SOC_combination <- obs_texture %>%
+  vect(geom = c("UTMX", "UTMY"), crs = mycrs) %>%
+  terra::extract(x = SOC_combination_map, y = .)
+
+breaks <- c(0, 30, 60, 100, 200)
+
+logSOC_df <- obs_texture %>%
+  select(c(ID_new, db, ID_old, upper, lower, SOC, imputed, fold)) %>%
+  mutate(
+    SOC = case_when(
+      SOC == 0 ~ 0.01831564,
+      .default = SOC
+    ),
+    observed = log(SOC),
+    predicted = logsoc_mean_prediction,
+    w = models_weights_soc,
+    combination = SOC_combination$Band_1,
+    indices = factor(!fold == 10, labels = c("CV", "Holdout")),
+    mean_d = (upper + lower)/2,
+    depth = cut(mean_d, breaks, include.lowest = TRUE)
+  ) %>%
+  filter(
+    is.finite(SOC),
+    is.finite(predicted),
+    is.finite(w),
+    imputed == FALSE,
+    is.finite(mean_d),
+    is.finite(depth)
+  )
+
+# MSE by depth - all samples
+
+library(MetricsWeighted)
+
+logsoc_mse_all <- logSOC_df %>%
+  group_by(
+    indices, depth
+  ) %>%
+  summarise(
+    # r2w = round(get_R2w(cbind(predicted, observed), w), digits = 3),
+    # rmsew = round(get_RMSEw(cbind(predicted, observed), w), digits = 3),
+    msew = MetricsWeighted::mse(observed, predicted, w = w)
+  )
+# indices   depth     msew
+# <fct>     <fct>     <dbl>
+# 1 CV      [0,30]    0.283
+# 2 CV      (30,60]   0.898
+# 3 CV      (60,100]  1.57 
+# 4 CV      (100,200] 2.10 
+# 5 Holdout [0,30]    0.247
+# 6 Holdout (30,60]   0.834
+# 7 Holdout (60,100]  1.81 
+# 8 Holdout (100,200] 1.73 
+
+logsoc_mse_splitpeat2022 <- logSOC_df %>%
+  group_by(
+    indices, depth, combination
+  ) %>%
+  summarise(
+    # r2w = round(get_R2w(cbind(predicted, observed), w), digits = 3),
+    # rmsew = round(get_RMSEw(cbind(predicted, observed), w), digits = 3),
+    msew = MetricsWeighted::mse(observed, predicted, w = w)
+  ) %>%
+  arrange(combination)
+# indices depth     combination  msew
+# <fct>   <fct>           <int> <dbl>
+# 1 CV       [0,30]              1 0.779
+# 2 CV       (30,60]             1 2.44 
+# 3 CV       (60,100]            1 2.85 
+# 4 CV       (100,200]           1 4.35 
+# 5 Holdout  [0,30]              1 0.656
+# 6 Holdout  (30,60]             1 1.92 
+# 7 Holdout  (60,100]            1 3.01 
+# 8 Holdout  (100,200]           1 2.59 
+# 9 CV       [0,30]              2 0.164
+# 10 CV      (30,60]             2 0.617
+# 11 CV      (60,100]            2 1.26 
+# 12 CV      (100,200]           2 1.69 
+# 13 Holdout [0,30]              2 0.150
+# 14 Holdout (30,60]             2 0.618
+# 15 Holdout (60,100]            2 1.57 
+# 16 Holdout (100,200]           2 1.61 
+# 17 Holdout [0,30]             NA 0.304
+# 18 Holdout (60,100]           NA 1.10 
+
+logsoc_mse_depths <- logsoc_mse_all %>%
+  ungroup() %>%
+  filter(indices == "CV") %>%
+  select(msew) %>%
+  unlist() %>%
+  unname()
+
+# Function for log mean and variance
+
+calc_log_mean_pse <- function(x, mse_log) {
+  x[x == 0] <- 0.01831564
+  x %<>% log()
+  out <- c(
+    mean(x, na.rm = TRUE),
+    sqrt(var(x, na.rm = TRUE) + mse_log)
+  )
+  return(out)
+}
+
+calc_prob_q <- function(x, q) {
+  out <- pnorm(
+    q = q,
+    mean = x[1],
+    sd = x[2],
+    lower.tail = FALSE
+  ) %>%
+    round(., digits = 3) %>%
+    multiply_by(100)
+  return(out)
+}
+
+calc_q_log <- function (x) {
+  out <- qnorm(
+    p = prob_q_out,
+    mean = x[1],
+    sd = x[2]
+  ) %>%
+    exp() %>%
+    round(., digits = 1) %>%
+    set_names(prob_q_out_chr)
+  out[out < 0] <- 0
+  out[out > 60] <- 60
+  return(out)
+}
+
 # Path for loading bootstrap models
 
 dir_boot <- dir_results %>%
@@ -153,8 +323,8 @@ boot_all_chr <- c(1:nboot) %>%
 
 # Force skip predictions (go to summary)
 
-force_skip_pred <- FALSE
-# force_skip_pred <- TRUE
+# force_skip_pred <- FALSE
+force_skip_pred <- TRUE
 
 # Set up loop for predicting each soil depth
 
@@ -212,166 +382,168 @@ for (j in j_depth) {
     dir.create(showWarnings = FALSE, recursive = TRUE)
   
   # Loop for predicting maps from bootstrap repetitions
-  for (bootr in 1:nboot) {
-    bootr_chr <- bootr %>%
-      str_pad(
-        .,
-        nchar(nboot_final),
-        pad = "0"
-      )
-    print(paste0("Bootstrap repetition ", bootr_chr))
-    
-    dir_pred_tiles_bootr <- dir_pred_tiles_depth %>%
-      paste0(., "/boot_", bootr_chr, "/") %T>%
-      dir.create(showWarnings = FALSE, recursive = TRUE)
-    
-    for (x in 1:length(tilenames)) {
-      dir_pred_tiles_bootr %>%
-        paste0(., "/", tilenames[x], "/") %T>%
+    for (bootr in 1:nboot) {
+      bootr_chr <- bootr %>%
+        str_pad(
+          .,
+          nchar(nboot_final),
+          pad = "0"
+        )
+      print(paste0("Bootstrap repetition ", bootr_chr))
+      
+      dir_pred_tiles_bootr <- dir_pred_tiles_depth %>%
+        paste0(., "/boot_", bootr_chr, "/") %T>%
         dir.create(showWarnings = FALSE, recursive = TRUE)
-    }
-    
-    n_outfiles_missing <- dir_pred_tiles_bootr %>%
-      paste0(., "/", tilenames, "/") %>%
-      rep(., each = length(fraction_names_underscore)) %>%
-      paste0(., fraction_names_underscore, ".tif") %>%
-      file.exists() %>%
-      not() %>%
-      sum()
-    
-    if (n_outfiles_missing > 0 & !force_skip_pred) {
-      # for (i in frac_ind_predict) {
-      for (i in 5) {  # Only SOC
-        frac <- fraction_names_underscore[i]
-        print(paste0("Mapping ", frac))
-        
-        model_i <- models_boot_files[[i]][bootr] %>% readRDS()
-        
-        cov_selected <- (varImp(model_i)$importance %>% row.names()) %>%
-          .[. %in% cov_cats$name]
-        
-        showConnections()
-        
-        cl <- makeCluster(numCores)
-        
-        clusterEvalQ(
-          cl,
-          {
-            library(terra)
-            library(caret)
-            library(xgboost)
-            library(magrittr)
-            library(dplyr)
-            library(tools)
-          }
-        )
-        
-        clusterExport(
-          cl,
-          c(
-            "i",
-            "model_i",
-            "subdir_tiles",
-            "dir_pred_tiles_bootr",
-            "dir_pred_tiles_tmp",
-            "frac",
-            "cov_selected",
-            "predict_passna",
-            "dir_dat",
-            "n_digits",
-            "breaks_j",
-            "breaks_j_chr",
-            "frac_ind_mineral",
-            "classify_SOC"
-          )
-        )
-        
-        parSapplyLB(
-          cl,
-          1:length(subdir_tiles),
-          function(x) {
-            tilename_x <- basename(subdir_tiles[x])
-            
-            outname_x_final <- dir_pred_tiles_bootr %>%
-              paste0(., "/", tilename_x, "/", frac, ".tif")
-            
-            const_i <- data.frame(
-              upper = breaks_j[1],
-              lower = breaks_j[2]
-            )
-            
-            # Write temporary files for the mineral fractions
-            if (i %in% frac_ind_mineral) {
-              outname_x_tmp <- dir_pred_tiles_tmp %>%
-                paste0(., "/", tilename_x, "/", frac, ".tif")
-
-              outname_x <- outname_x_tmp
-
-              const_i$SOM_removed <- 1
-            } else {
-              outname_x <- outname_x_final
-            }
-            
-            # Omit predictions if the output file already exists
-            if (!file.exists(outname_x_final)) {
-              tmpfolder <- paste0(dir_dat, "/Temp/")
-              
-              terraOptions(memfrac = 0.02, tempdir = tmpfolder)
-              
-              cov_x_files <- subdir_tiles[x] %>%
-                list.files(full.names = TRUE)
-              
-              cov_x_names <- cov_x_files %>%
-                basename() %>%
-                tools::file_path_sans_ext()
-              
-              cov_x <- cov_x_files %>% rast()
-              
-              names(cov_x) <- cov_x_names
-              
-              cov_x %<>% terra::subset(., cov_selected)
-              
-              predict(
-                cov_x,
-                model_i,
-                fun = predict_passna,
-                na.rm = FALSE,
-                const = const_i,
-                n_const = ncol(const_i),
-                n_digits = 1,
-                filename = outname_x,
-                overwrite = TRUE
-              )
-              
-              # Calculate SOC class for the given bootstrap repetition
-              
-              rs_s2 <- outname_x %>% rast()
-              
-              names(rs_s2) <- c("SOC")
-              
-              outname_x2_SOC_class <- dir_pred_tiles_bootr %>%
-                paste0(., "/", tilename_x, "/SOC_class.tif")
-              
-              lapp(
-                rs_s2,
-                classify_SOC,
-                filename = outname_x2_SOC_class,
-                overwrite = TRUE,
-                wopt = list(
-                  datatype = "INT1U",
-                  NAflag = 13
-                )
-              )
-            }
-          
-            return(NULL)
-          }
-        )
-        
-        stopCluster(cl)
-        foreach::registerDoSEQ()
-        rm(cl)
+      
+      for (x in 1:length(tilenames)) {
+        dir_pred_tiles_bootr %>%
+          paste0(., "/", tilenames[x], "/") %T>%
+          dir.create(showWarnings = FALSE, recursive = TRUE)
       }
+      
+      n_outfiles_missing <- dir_pred_tiles_bootr %>%
+        paste0(., "/", tilenames, "/") %>%
+        rep(., each = length(fraction_names_underscore)) %>%
+        paste0(., fraction_names_underscore, ".tif") %>%
+        file.exists() %>%
+        not() %>%
+        sum()
+      
+      if (n_outfiles_missing > 0 & !force_skip_pred) {
+        # for (i in frac_ind_predict) {
+        for (i in 5) {  # Only SOC
+          frac <- fraction_names_underscore[i]
+          print(paste0("Mapping ", frac))
+          
+          model_i <- models_boot_files[[i]][bootr] %>% readRDS()
+          
+          cov_selected <- (varImp(model_i)$importance %>% row.names()) %>%
+            .[. %in% cov_cats$name]
+          
+          showConnections()
+          
+          cl <- makeCluster(numCores)
+          
+          clusterEvalQ(
+            cl,
+            {
+              library(terra)
+              library(caret)
+              library(xgboost)
+              library(magrittr)
+              library(dplyr)
+              library(tools)
+            }
+          )
+          
+          clusterExport(
+            cl,
+            c(
+              "i",
+              "model_i",
+              "subdir_tiles",
+              "dir_pred_tiles_bootr",
+              "dir_pred_tiles_tmp",
+              "frac",
+              "cov_selected",
+              "predict_passna",
+              "dir_dat",
+              "n_digits",
+              "breaks_j",
+              "breaks_j_chr",
+              "frac_ind_mineral",
+              "classify_SOC"
+            )
+          )
+          
+          parSapplyLB(
+            cl,
+            1:length(subdir_tiles),
+            function(x) {
+              tilename_x <- basename(subdir_tiles[x])
+              
+              outname_x_final <- dir_pred_tiles_bootr %>%
+                paste0(., "/", tilename_x, "/", frac, ".tif")
+              
+              const_i <- data.frame(
+                upper = breaks_j[1],
+                lower = breaks_j[2]
+              )
+              
+              # Write temporary files for the mineral fractions
+              if (i %in% frac_ind_mineral) {
+                outname_x_tmp <- dir_pred_tiles_tmp %>%
+                  paste0(., "/", tilename_x, "/", frac, ".tif")
+                
+                outname_x <- outname_x_tmp
+                
+                const_i$SOM_removed <- 1
+              } else {
+                outname_x <- outname_x_final
+              }
+              
+              # Omit predictions if the output file already exists
+              if (!file.exists(outname_x_final)) {
+                tmpfolder <- paste0(dir_dat, "/Temp/")
+                
+                terraOptions(memfrac = 0.02, tempdir = tmpfolder)
+                
+                cov_x_files <- subdir_tiles[x] %>%
+                  list.files(full.names = TRUE)
+                
+                cov_x_names <- cov_x_files %>%
+                  basename() %>%
+                  tools::file_path_sans_ext()
+                
+                cov_x <- cov_x_files %>% rast()
+                
+                names(cov_x) <- cov_x_names
+                
+                cov_x %<>% terra::subset(., cov_selected)
+                
+                predict(
+                  cov_x,
+                  model_i,
+                  fun = predict_passna,
+                  na.rm = FALSE,
+                  const = const_i,
+                  n_const = ncol(const_i),
+                  n_digits = 1,
+                  filename = outname_x,
+                  overwrite = TRUE
+                )
+                
+                # Calculate SOC class for the given bootstrap repetition
+                
+                rs_s2 <- outname_x %>% rast()
+                
+                names(rs_s2) <- c("SOC")
+                
+                outname_x2_SOC_class <- dir_pred_tiles_bootr %>%
+                  paste0(., "/", tilename_x, "/SOC_class.tif")
+                
+                lapp(
+                  rs_s2,
+                  classify_SOC,
+                  filename = outname_x2_SOC_class,
+                  overwrite = TRUE,
+                  wopt = list(
+                    datatype = "INT1U",
+                    NAflag = 13
+                  )
+                )
+              }
+              
+              return(NULL)
+            }
+          )
+          
+          stopCluster(cl)
+          foreach::registerDoSEQ()
+          rm(cl)
+          
+        }
+  
       
       # # Standardize mineral texture predictions
       # print("Standardizing mineral fractions")
@@ -677,8 +849,10 @@ for (j in j_depth) {
   # Separate layers for each SOC class
   # Merge SOC class probability rasters
   
-  print("Summarizing SOC classes")
+  print("Summarizing SOC classes, peat probabilities, and confidence intervals")
   showConnections()
+  
+  logsoc_mse_depth_j <- logsoc_mse_depths[j]
 
   cl <- makeCluster(numCores)
 
@@ -707,7 +881,14 @@ for (j in j_depth) {
       "dir_pred_tiles_depth",
       "classify_soil_JB",
       "SOC_levels",
-      "SOC_labels"
+      "SOC_labels",
+      "calc_log_mean_pse",
+      "calc_prob_q",
+      "calc_q_log",
+      "soc6pct_log",
+      "logsoc_mse_depth_j",
+      "prob_q_out",
+      "prob_q_out_chr"
     )
   )
 
@@ -715,6 +896,10 @@ for (j in j_depth) {
     cl,
     1:length(subdir_tiles),
     function(x) {
+      tmpfolder <- paste0(dir_dat, "/Temp/")
+      
+      terraOptions(memfrac = 0.02, tempdir = tmpfolder)
+      
       tilename_x <- basename(subdir_tiles[x])
 
       r_SOC_class_tile_all <- paste0(
@@ -729,35 +914,100 @@ for (j in j_depth) {
       outfiles_SOC_class_probs <- dir_sum_depth_tiles %>%
         paste0(., "/", tilename_x, "/", outnames_SOC_class_probs, ".tif")
 
-      tmpfolder <- paste0(dir_dat, "/Temp/")
+      # # Calculate soil class probability
+      # SOC_class_prob <- app(
+      #   r_SOC_class_tile_all,
+      #   function(x) {
+      #     if (sum(is.na(x) == 0)) {
+      #       out <- factor(x, levels = SOC_levels) %>%
+      #         table() %>%
+      #         unname() %>%
+      #         as.numeric()
+      #     } else {
+      #       out <- rep_len(NA, length.out = length(SOC_levels))
+      #     }
+      #     return(out)
+      #   }
+      # )
+      # 
+      # names(SOC_class_prob) <- outnames_SOC_class_probs
+      # 
+      # for (k in 1:length(SOC_levels)) {
+      #   writeRaster(
+      #     SOC_class_prob[[k]],
+      #     filename = outfiles_SOC_class_probs[k],
+      #     overwrite = TRUE,
+      #     datatype = "INT1U",
+      #     NAflag = 101
+      #   )
+      # }
+      
+      # logsoc mean and variance
+      r_SOC_tile_all <- paste0(
+        dir_pred_tiles_depth, "/", boot_all_chr, "/", tilename_x,
+        "/SOC.tif") %>%
+        rast()
 
-      terraOptions(memfrac = 0.02, tempdir = tmpfolder)
-
-      # Calculate soil class probability
-      SOC_class_prob <- app(
-        r_SOC_class_tile_all,
-        function(x) {
-          if (sum(is.na(x) == 0)) {
-            out <- factor(x, levels = SOC_levels) %>%
-              table() %>%
-              unname() %>%
-              as.numeric()
-          } else {
-            out <- rep_len(NA, length.out = length(SOC_levels))
-          }
+      logsoc_mean_var <- app(
+        r_SOC_tile_all,
+        fun = function(x) {
+          out <- calc_log_mean_pse(x, mse_log = logsoc_mse_depth_j)
           return(out)
         }
       )
       
-      names(SOC_class_prob) <- outnames_SOC_class_probs
+      # Peat probability
+      outfile_basename <- "peat_probability"
       
-      for (k in 1:length(SOC_levels)) {
+      prob_peat_outfile_x <- dir_sum_depth_tiles %>%
+        paste0(., "/", tilename_x, "/peat_probability.tif")
+      
+      app(
+        logsoc_mean_var,
+        fun = function(x) {
+          out <- calc_prob_q(x, q = prob_q_out)
+          return(out)
+        },
+        filename = prob_peat_outfile_x,
+        overwrite = TRUE,
+        wopt = list(
+          gdal = "TILED=YES",
+          datatype = "FLT4S",
+          names = outfile_basename
+        )
+      )
+      
+      # SOC prediction quantiles
+      
+      outfile_tmp_x <- tmpfolder %>%
+        paste0(., "/soc_qs_tile", tile_numbers_chr[x], ".tif")
+      
+      app(
+        logsoc_mean_var,
+        fun = calc_q_log,
+        filename = outfile_tmp_x,
+        overwrite = TRUE,
+        wopt = list(
+          gdal = "TILED=YES",
+          datatype = "FLT4S"
+        )  
+      )
+      
+      my_qs <- outfile_tmp_x %>% rast()
+      
+      for (k in 1:nlyr(my_qs)) {
+        outname_base <- paste0("soc_", prob_q_out_chr[k])
+        
+        outfile_xk <- outdir_tile_x %>%
+          paste0(., outname_base, ".tif")
+        
         writeRaster(
-          SOC_class_prob[[k]],
-          filename = outfiles_SOC_class_probs[k],
+          my_qs[[k]],
+          filename = outfile_xk,
+          names = outname_base,
           overwrite = TRUE,
-          datatype = "INT1U",
-          NAflag = 101
+          gdal = "TILED=YES",
+          datatype = "FLT4S"
         )
       }
 
@@ -893,6 +1143,7 @@ for (j in j_depth) {
     naflag_i <- NAflag(tile1_i)
     
     if (dtyp_i == "INT1U") { naflag_i <- 101 }
+    if (!is.finite(naflag_i)) { naflag_i <- -1}
     
     outtiles_sprc <- summary_tiles_i %>% sprc()
     
