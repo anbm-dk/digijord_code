@@ -983,7 +983,7 @@ for (j in j_depth) {
       app(
         logsoc_mean_var,
         fun = function(x) {
-          out <- calc_prob_q(x, q = prob_q_out)
+          out <- calc_prob_q(x, q = soc6pct_log)
           return(out)
         },
         filename = prob_peat_outfile_x,
