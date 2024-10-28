@@ -460,6 +460,10 @@ outfile_peat_probability <- dir_new_maps %>%
 #   names = outfile_basename
 # )
 
+peat2022_probability <- dir_new_maps %>%
+  paste0(., "/peat_probability.tif") %>%
+  rast()
+
 
 # Calculate quantiles
 
@@ -493,88 +497,88 @@ calc_q_cbrt <- function (x) {
 numCores <- detectCores() - 1
 numCores
 
-showConnections()
+# showConnections()
+# 
+# cl <- makeCluster(numCores)
+# 
+# clusterEvalQ(
+#   cl,
+#   {
+#     library(terra)
+#     library(magrittr)
+#     library(dplyr)
+#     library(tools)
+#   }
+# )
+# 
+# clusterExport(
+#   cl,
+#   c("dir_tiles_prob_peat",
+#     "tile_numbers_chr",
+#     "prob_q_out",
+#     "calc_q_cbrt",
+#     "tiles_mean_pse_cbrt",
+#     "dir_dat",
+#     "prob_q_out_chr",
+#     "dir_tiles_peat_quantiles"
+#   )
+# )
+# 
+# parSapplyLB(
+#   cl,
+#   1:length(tiles_mean_pse_cbrt),
+#   function(x) {
+#     tmpfolder <- paste0(dir_dat, "/Temp/")
+#     terraOptions(memfrac = 0.02, tempdir = tmpfolder)
+#     
+#     mean_pse_cbrt_x <- tiles_mean_pse_cbrt[x] %>%
+#       rast()
+#     
+#     outfile_tmp_x <- tmpfolder %>%
+#       paste0(., "/peat_qs_tile", tile_numbers_chr[x], ".tif")
+#     
+#     app(
+#       mean_pse_cbrt_x,
+#       fun = calc_q_cbrt,
+#       filename = outfile_tmp_x,
+#       overwrite = TRUE,
+#       wopt = list(
+#         gdal = "TILED=YES",
+#         datatype = "FLT4S"
+#       )  
+#     )
+#     
+#     my_qs <- outfile_tmp_x %>% rast()
+#     
+#     outdir_tile_x <- dir_tiles_peat_quantiles %>%
+#       paste0(., "/tile_", tile_numbers_chr[x], "/") %T>%
+#       dir.create()
+#     
+#     for (i in 1:nlyr(my_qs)) {
+#       outname_base <- paste0("soc_", prob_q_out_chr[i])
+#       
+#       outfile_xi <- outdir_tile_x %>%
+#         paste0(., outname_base, ".tif")
+#       
+#       writeRaster(
+#         my_qs[[i]],
+#         filename = outfile_xi,
+#         names = outname_base,
+#         overwrite = TRUE,
+#         gdal = "TILED=YES",
+#         datatype = "FLT4S"
+#       )
+#     }
+#     
+#     return(NULL)
+#   }
+# )
+# 
+# stopCluster(cl)
+# foreach::registerDoSEQ()
+# rm(cl)
 
-cl <- makeCluster(numCores)
-
-clusterEvalQ(
-  cl,
-  {
-    library(terra)
-    library(magrittr)
-    library(dplyr)
-    library(tools)
-  }
-)
-
-clusterExport(
-  cl,
-  c("dir_tiles_prob_peat",
-    "tile_numbers_chr",
-    "prob_q_out",
-    "calc_q_cbrt",
-    "tiles_mean_pse_cbrt",
-    "dir_dat",
-    "prob_q_out_chr",
-    "dir_tiles_peat_quantiles"
-  )
-)
-
-parSapplyLB(
-  cl,
-  1:length(tiles_mean_pse_cbrt),
-  function(x) {
-    tmpfolder <- paste0(dir_dat, "/Temp/")
-    terraOptions(memfrac = 0.02, tempdir = tmpfolder)
-    
-    mean_pse_cbrt_x <- tiles_mean_pse_cbrt[x] %>%
-      rast()
-    
-    outfile_tmp_x <- tmpfolder %>%
-      paste0(., "/peat_qs_tile", tile_numbers_chr[x], ".tif")
-    
-    app(
-      mean_pse_cbrt_x,
-      fun = calc_q_cbrt,
-      filename = outfile_tmp_x,
-      overwrite = TRUE,
-      wopt = list(
-        gdal = "TILED=YES",
-        datatype = "FLT4S"
-      )  
-    )
-    
-    my_qs <- outfile_tmp_x %>% rast()
-    
-    outdir_tile_x <- dir_tiles_peat_quantiles %>%
-      paste0(., "/tile_", tile_numbers_chr[x], "/") %T>%
-      dir.create()
-    
-    for (i in 1:nlyr(my_qs)) {
-      outname_base <- paste0("soc_", prob_q_out_chr[i])
-      
-      outfile_xi <- outdir_tile_x %>%
-        paste0(., outname_base, ".tif")
-      
-      writeRaster(
-        my_qs[[i]],
-        filename = outfile_xi,
-        names = outname_base,
-        overwrite = TRUE,
-        gdal = "TILED=YES",
-        datatype = "FLT4S"
-      )
-    }
-    
-    return(NULL)
-  }
-)
-
-stopCluster(cl)
-foreach::registerDoSEQ()
-rm(cl)
-
-####
+# Merge tiles
 
 tilenames <- tile_numbers_chr %>%
   paste0("tile_", .)
@@ -585,37 +589,141 @@ outfiles_basenames <- paste0(
   basename() %>%
   tools::file_path_sans_ext()
 
-# dir_merged_depth <- dir_pred_boot %>%
-#   paste0(
-#     ., "/final_maps/depth_", breaks_j_chr[1], "_", breaks_j_chr[2], "_cm/"
-#   ) %T>%
-#   dir.create(showWarnings = FALSE, recursive = TRUE)
+# for (i in 1:length(outfiles_basenames)) {
+#   summary_tiles_i <- paste0(
+#     dir_tiles_peat_quantiles, "/", tilenames, "/",
+#     outfiles_basenames[i], ".tif"
+#   )
+#   
+#   tile1_i <- summary_tiles_i[1] %>% rast()
+#   
+#   dtyp_i <- datatype(tile1_i)
+#   naflag_i <- NAflag(tile1_i)
+#   
+#   if (dtyp_i == "INT1U") { naflag_i <- 101 }
+#   if (!is.finite(naflag_i)) { naflag_i <- -1}
+#   
+#   outtiles_sprc <- summary_tiles_i %>% sprc()
+#   
+#   merge(
+#     outtiles_sprc,
+#     filename = paste0(dir_new_maps, "/", outfiles_basenames[i], ".tif"),
+#     overwrite = TRUE,
+#     gdal = "TILED=YES",
+#     datatype = dtyp_i,
+#     NAflag = naflag_i,
+#     names = outfiles_basenames[i]
+#   )
+# }
 
-for (i in 1:length(outfiles_basenames)) {
-  summary_tiles_i <- paste0(
-    dir_tiles_peat_quantiles, "/", tilenames, "/",
-    outfiles_basenames[i], ".tif"
+# Load combination raster showing parts covered by Tørv2022 and my own map.
+# Combination == 1 shows peat2022 extent
+dir_final_maps_soc <- dir_peat %>%
+  paste0(., "/final_combined_soc_maps/") %T>%
+  dir.create()
+
+SOC_combination_map <- root %>%
+  paste0(
+    ., "/Soil_maps_10m_new/Kulstof2022/SOC_000_030_cm/",
+    "SOC_combination_000_030_cm.tif") %>%
+  rast() %>%
+  crop(
+    y = ext(peat2022_probability),
+    extend = TRUE,
+    filename = paste0(dir_final_maps_soc, "SOC_combination_000_030_cm.tif"),
+    overwrite = TRUE,
+    gdal = "TILED=YES",
+    datatype = "INT1U",
+    NAflag = 101,
+    names = "SOC_combination_000_030_cm"
+    )
+
+# Combine with Digijord probabilities and quantiles
+
+basenames_finalmaps <- c(
+  "peat_probability", "soc_p0005", "soc_p0025", "soc_p0050", "soc_p0160",
+  "soc_p0840", "soc_p0950", "soc_p0975", "soc_p0995"
   )
+
+dir_results <- dir_dat %>%
+  paste0(., "/results_test_", testn, "/")
+dir_boot <- dir_results %>%
+  paste0(., "/bootstrap/")
+dir_pred_boot <- dir_boot %>%
+  paste0(., "/predictions/")
+dir_merged_depth <- dir_pred_boot %>%
+  paste0(., "/final_maps/depth_000_030_cm/")
+    
+outmaps_peat2022 <- list()
+outmaps_digijord <- list()
+outmaps_complete <- list()
+
+tmpfolder <- paste0(dir_dat, "/Temp/")
+terraOptions(memfrac = 0.02, tempdir = tmpfolder)
+
+# for (i in 1:length(basenames_finalmaps)) {
+#   outmaps_peat2022[[i]] <- paste0(
+#     dir_new_maps, "/", basenames_finalmaps[i], ".tif"
+#   ) %>%
+#     rast()
+#   
+#   outmaps_digijord[[i]] <- paste0(
+#     dir_merged_depth, "/", basenames_finalmaps[i], ".tif"
+#     ) %>%
+#     rast()
+#   
+#   outmaps_complete[[i]] <- ifel(
+#     test = SOC_combination_map == 1,
+#     yes = outmaps_peat2022[[i]],
+#     no = outmaps_digijord[[i]]
+#   ) %>%
+#     mask(
+#       mask = SOC_combination_map,
+#       filename = paste0(dir_final_maps_soc, basenames_finalmaps[i], ".tif"),
+#       overwrite = TRUE,
+#       gdal = "TILED=YES",
+#       datatype = datatype(outmaps_digijord[[i]]),
+#       NAflag = -1,
+#       names = basenames_finalmaps[i]
+#     )
+# }
+
+# Re-mask previous Kulstof2022 maps (remove lakes)
+ 
+dir_old_SOC_maps <- root %>%
+  paste0(., "/Soil_maps_10m_new/Kulstof2022/SOC_000_030_cm/")
+
+list.files(
+  dir_old_SOC_maps,
+  pattern = ".tif"
+  )
+
+maps_to_crop <- c(
+  "SOC_class_000_030_cm_combined",  
+  "SOC_mean_000_030_cm_combined"
+)
+
+for (i in 1:length(maps_to_crop)) {
+  map_old <- dir_old_SOC_maps %>%
+    paste0(., maps_to_crop[i], ".tif") %>%
+    rast()
   
-  tile1_i <- summary_tiles_i[1] %>% rast()
-  
-  dtyp_i <- datatype(tile1_i)
-  naflag_i <- NAflag(tile1_i)
+  dtyp_i <- datatype(map_old)
+  naflag_i <- NAflag(map_old)
   
   if (dtyp_i == "INT1U") { naflag_i <- 101 }
   if (!is.finite(naflag_i)) { naflag_i <- -1}
   
-  outtiles_sprc <- summary_tiles_i %>% sprc()
-  
-  merge(
-    outtiles_sprc,
-    filename = paste0(dir_new_maps, "/", outfiles_basenames[i], ".tif"),
-    overwrite = TRUE,
-    gdal = "TILED=YES",
-    datatype = dtyp_i,
-    NAflag = naflag_i,
-    names = outfiles_basenames[i]
-  )
+  map_old %>%
+    mask(
+      mask = SOC_combination_map,
+      filename = paste0(dir_final_maps_soc, maps_to_crop[i], ".tif"),
+      overwrite = TRUE,
+      gdal = "TILED=YES",
+      datatype = dtyp_i,
+      NAflag = naflag_i,
+      names = maps_to_crop[i]
+    )
 }
 
 # END
