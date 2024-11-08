@@ -119,7 +119,7 @@ logSOC_df <- obs_texture %>%
     predicted = logsoc_mean_prediction,
     w = models_weights_soc,
     combination = SOC_combination$Band_1,
-    indices = factor(!fold == 10, labels = c("CV", "Holdout")),
+    indices = factor(!fold == 10, labels = c("Holdout", "CV")),  # NB
     mean_d = (upper + lower)/2,
     depth = cut(mean_d, breaks, include.lowest = TRUE)
   ) %>%
