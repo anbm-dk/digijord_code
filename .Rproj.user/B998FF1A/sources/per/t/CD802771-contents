@@ -661,69 +661,69 @@ outmaps_complete <- list()
 tmpfolder <- paste0(dir_dat, "/Temp/")
 terraOptions(memfrac = 0.02, tempdir = tmpfolder)
 
-# for (i in 1:length(basenames_finalmaps)) {
-#   outmaps_peat2022[[i]] <- paste0(
-#     dir_new_maps, "/", basenames_finalmaps[i], ".tif"
-#   ) %>%
-#     rast()
-#   
-#   outmaps_digijord[[i]] <- paste0(
-#     dir_merged_depth, "/", basenames_finalmaps[i], ".tif"
-#     ) %>%
-#     rast()
-#   
-#   outmaps_complete[[i]] <- ifel(
-#     test = SOC_combination_map == 1,
-#     yes = outmaps_peat2022[[i]],
-#     no = outmaps_digijord[[i]]
-#   ) %>%
-#     mask(
-#       mask = SOC_combination_map,
-#       filename = paste0(dir_final_maps_soc, basenames_finalmaps[i], ".tif"),
-#       overwrite = TRUE,
-#       gdal = "TILED=YES",
-#       datatype = datatype(outmaps_digijord[[i]]),
-#       NAflag = -1,
-#       names = basenames_finalmaps[i]
-#     )
-# }
+for (i in 1:length(basenames_finalmaps)) {
+  outmaps_peat2022[[i]] <- paste0(
+    dir_new_maps, "/", basenames_finalmaps[i], ".tif"
+  ) %>%
+    rast()
+
+  outmaps_digijord[[i]] <- paste0(
+    dir_merged_depth, "/", basenames_finalmaps[i], ".tif"
+    ) %>%
+    rast()
+
+  outmaps_complete[[i]] <- ifel(
+    test = SOC_combination_map == 1,
+    yes = outmaps_peat2022[[i]],
+    no = outmaps_digijord[[i]]
+  ) %>%
+    mask(
+      mask = SOC_combination_map,
+      filename = paste0(dir_final_maps_soc, basenames_finalmaps[i], ".tif"),
+      overwrite = TRUE,
+      gdal = "TILED=YES",
+      datatype = datatype(outmaps_digijord[[i]]),
+      NAflag = -1,
+      names = basenames_finalmaps[i]
+    )
+}
 
 # Re-mask previous Kulstof2022 maps (remove lakes)
  
-dir_old_SOC_maps <- root %>%
-  paste0(., "/Soil_maps_10m_new/Kulstof2022/SOC_000_030_cm/")
-
-list.files(
-  dir_old_SOC_maps,
-  pattern = ".tif"
-  )
-
-maps_to_crop <- c(
-  "SOC_class_000_030_cm_combined",  
-  "SOC_mean_000_030_cm_combined"
-)
-
-for (i in 1:length(maps_to_crop)) {
-  map_old <- dir_old_SOC_maps %>%
-    paste0(., maps_to_crop[i], ".tif") %>%
-    rast()
-  
-  dtyp_i <- datatype(map_old)
-  naflag_i <- NAflag(map_old)
-  
-  if (dtyp_i == "INT1U") { naflag_i <- 101 }
-  if (!is.finite(naflag_i)) { naflag_i <- -1}
-  
-  map_old %>%
-    mask(
-      mask = SOC_combination_map,
-      filename = paste0(dir_final_maps_soc, maps_to_crop[i], ".tif"),
-      overwrite = TRUE,
-      gdal = "TILED=YES",
-      datatype = dtyp_i,
-      NAflag = naflag_i,
-      names = maps_to_crop[i]
-    )
-}
+# dir_old_SOC_maps <- root %>%
+#   paste0(., "/Soil_maps_10m_new/Kulstof2022/SOC_000_030_cm/")
+# 
+# list.files(
+#   dir_old_SOC_maps,
+#   pattern = ".tif"
+#   )
+# 
+# maps_to_crop <- c(
+#   "SOC_class_000_030_cm_combined",  
+#   "SOC_mean_000_030_cm_combined"
+# )
+# 
+# for (i in 1:length(maps_to_crop)) {
+#   map_old <- dir_old_SOC_maps %>%
+#     paste0(., maps_to_crop[i], ".tif") %>%
+#     rast()
+#   
+#   dtyp_i <- datatype(map_old)
+#   naflag_i <- NAflag(map_old)
+#   
+#   if (dtyp_i == "INT1U") { naflag_i <- 101 }
+#   if (!is.finite(naflag_i)) { naflag_i <- -1}
+#   
+#   map_old %>%
+#     mask(
+#       mask = SOC_combination_map,
+#       filename = paste0(dir_final_maps_soc, maps_to_crop[i], ".tif"),
+#       overwrite = TRUE,
+#       gdal = "TILED=YES",
+#       datatype = dtyp_i,
+#       NAflag = naflag_i,
+#       names = maps_to_crop[i]
+#     )
+# }
 
 # END

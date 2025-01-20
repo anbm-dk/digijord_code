@@ -143,18 +143,20 @@ logsoc_mse_all <- logSOC_df %>%
   summarise(
     # r2w = round(get_R2w(cbind(predicted, observed), w), digits = 3),
     # rmsew = round(get_RMSEw(cbind(predicted, observed), w), digits = 3),
-    msew = MetricsWeighted::mse(observed, predicted, w = w)
+    msew = MetricsWeighted::mse(observed, predicted, w = w),
+    n = n()
   )
-# indices   depth     msew
-# <fct>     <fct>     <dbl>
-# 1 CV      [0,30]    0.283
-# 2 CV      (30,60]   0.898
-# 3 CV      (60,100]  1.57 
-# 4 CV      (100,200] 2.10 
-# 5 Holdout [0,30]    0.247
-# 6 Holdout (30,60]   0.834
-# 7 Holdout (60,100]  1.81 
-# 8 Holdout (100,200] 1.73 
+logsoc_mse_all
+#   indices depth     msew      n
+#   <fct>   <fct>     <dbl> <int>
+# 1 Holdout [0,30]    0.283  6081
+# 2 Holdout (30,60]   0.898  1118
+# 3 Holdout (60,100]  1.57    447
+# 4 Holdout (100,200] 2.10    409
+# 5 CV      [0,30]    0.247 56793
+# 6 CV      (30,60]   0.834 10542
+# 7 CV      (60,100]  1.81   4216
+# 8 CV      (100,200] 1.73   4081
 
 logsoc_mse_splitpeat2022 <- logSOC_df %>%
   group_by(
@@ -193,6 +195,8 @@ logsoc_mse_depths <- logsoc_mse_all %>%
   select(msew) %>%
   unlist() %>%
   unname()
+logsoc_mse_depths
+# [1] 0.2472204 0.8343481 1.8066069 1.7327846
 
 # Function for log mean and variance
 

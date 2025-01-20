@@ -185,11 +185,15 @@ logsoc_mse_depths <- logsoc_mse_all %>%
 logsoc_mse_depths
 
 # Accidentally used these values, when creating the prob and q maps for the
-# topsoil
+# topsoil (discovered 2024-11-08):
 # [1] 0.2830142 0.8975956 1.5693857 2.1013693
 
-# Should have used these ones
+# Should have used these ones:
 # [1] 0.2472204 0.8343481 1.8066069 1.7327846
+
+# Follow-up (2024-11-11): I re-ran the analyses, and apparently this difference
+# is so small that the maps do not change (at least within the specified 
+# number of decimal places)
 
 # Function for log mean and variance
 

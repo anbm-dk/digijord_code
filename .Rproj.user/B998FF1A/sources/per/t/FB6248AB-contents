@@ -2739,7 +2739,7 @@ for (i in 1:length(somrem_names)) {
       width = 16,
       height = 14,
       units = "cm",
-      res = 300
+      res = 600
     )
     
     print(myplot)
